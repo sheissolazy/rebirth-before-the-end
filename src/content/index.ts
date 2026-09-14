@@ -8,29 +8,27 @@ import { bases, modules } from './bases'
 import { factions } from './factions'
 import { pets } from './pets'
 import { powers } from './powers'
+import { endings } from './endings'
+import { survivorTraits, survivorNames } from './survivors'
+import { lootTables, affixes } from './loot'
 
 /** 当前内容包。空数组的部分按 docs/tasks 逐步填。 */
 export const content: ContentPack = {
   locations,
   events,
   cards,
-  affixes: [],
-  lootTables: [
-    { id: 'loot_market', affixChance: 0, entries: [
-      { cardId: 'supply_rice_5kg', weight: 30 }, { cardId: 'supply_water_box', weight: 30 },
-      { cardId: 'supply_compressed_biscuit', weight: 10 }, { cardId: 'supply_battery', weight: 20 }, { cardId: 'supply_winter_clothes', weight: 10 },
-    ] },
-  ],
+  affixes,
+  lootTables,
   npcs,
-  survivorTraits: [],
-  survivorNames: [],
+  survivorTraits,
+  survivorNames,
   powers,
   pets,
   bases,
   modules,
   factions,
   memories: memoriesYear1,
-  endings: [],
+  endings,
   rebirthShop: [
     { id: 'shop_weeks', name: { zh: '更早醒来' }, desc: { zh: '序章 +4 周，最多到 48 周。' }, cost: [10, 20, 40, 80, 120, 160, 200, 250, 300, 350, 400], effect: { type: 'prologueWeeks', delta: 4 } },
     { id: 'shop_money', name: { zh: '一笔意外之财' }, desc: { zh: '开局 +5 万。' }, cost: [10, 20, 40, 80], effect: { type: 'money', delta: 50000 } },

@@ -1,4 +1,5 @@
 import type { CardDef } from '../engine/types'
+import { crises } from './crises'
 
 /**
  * 卡牌。当前只有样例，正式内容按 docs/tasks/T-003 填。
@@ -6,12 +7,12 @@ import type { CardDef } from '../engine/types'
  */
 export const cards: CardDef[] = [
   // 物资
-  { id: 'supply_rice_5kg', kind: 'supply', rarity: 'fine', supplyKind: 'food', size: 1, shelfLifeWeeks: 48, basePrice: 45, buyable: true, icon: '🍚', name: { zh: '大米 5kg' }, desc: { zh: '囤货的起点。' } },
-  { id: 'supply_veg', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, shelfLifeWeeks: 2, basePrice: 10, buyable: true, icon: '🥬', name: { zh: '新鲜蔬菜' }, desc: { zh: '两周就蔫。' } },
-  { id: 'supply_eggs', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, shelfLifeWeeks: 4, basePrice: 15, buyable: true, icon: '🥚', name: { zh: '鸡蛋' }, desc: { zh: '畜栏产的。' } },
-  { id: 'supply_water_box', kind: 'supply', rarity: 'fine', supplyKind: 'water', size: 1, shelfLifeWeeks: 96, basePrice: 30, buyable: true, icon: '💧', name: { zh: '一箱矿泉水' }, desc: { zh: '24 瓶。' } },
-  { id: 'supply_well_water', kind: 'supply', rarity: 'common', supplyKind: 'water', size: 1, basePrice: 0, buyable: false, icon: '🚰', name: { zh: '井水' }, desc: { zh: '基地产的。' } },
-  { id: 'supply_compressed_biscuit', kind: 'supply', rarity: 'rare', supplyKind: 'food', size: 1, shelfLifeWeeks: 144, basePrice: 120, buyable: true, icon: '🍪', name: { zh: '压缩饼干（军用）' }, desc: { zh: '难吃，但能活。' } },
+  { id: 'supply_rice_5kg', kind: 'supply', rarity: 'fine', supplyKind: 'food', size: 1, units: 5, shelfLifeWeeks: 48, basePrice: 45, buyable: true, icon: '🍚', name: { zh: '大米 5kg' }, desc: { zh: '囤货的起点。' } },
+  { id: 'supply_veg', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 1, shelfLifeWeeks: 2, basePrice: 10, buyable: true, icon: '🥬', name: { zh: '新鲜蔬菜' }, desc: { zh: '两周就蔫。' } },
+  { id: 'supply_eggs', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 2, shelfLifeWeeks: 4, basePrice: 15, buyable: true, icon: '🥚', name: { zh: '鸡蛋' }, desc: { zh: '畜栏产的。' } },
+  { id: 'supply_water_box', kind: 'supply', rarity: 'fine', supplyKind: 'water', size: 1, units: 4, shelfLifeWeeks: 96, basePrice: 30, buyable: true, icon: '💧', name: { zh: '一箱矿泉水' }, desc: { zh: '24 瓶。' } },
+  { id: 'supply_well_water', kind: 'supply', rarity: 'common', supplyKind: 'water', size: 1, units: 2, basePrice: 0, buyable: false, icon: '🚰', name: { zh: '井水' }, desc: { zh: '基地产的。' } },
+  { id: 'supply_compressed_biscuit', kind: 'supply', rarity: 'rare', supplyKind: 'food', size: 1, units: 8, shelfLifeWeeks: 144, basePrice: 120, buyable: true, icon: '🍪', name: { zh: '压缩饼干（军用）' }, desc: { zh: '难吃，但能活。' } },
   { id: 'supply_antibiotics', kind: 'supply', rarity: 'rare', supplyKind: 'medicine', size: 1, shelfLifeWeeks: 72, basePrice: 90, buyable: true, icon: '💊', name: { zh: '广谱抗生素' }, desc: { zh: '药店限购一盒。' } },
   { id: 'supply_battery', kind: 'supply', rarity: 'common', supplyKind: 'energy', size: 1, basePrice: 20, buyable: true, icon: '🔋', name: { zh: '充满的电池组' }, desc: { zh: '一周的灯和收音机。' } },
   { id: 'supply_generator', kind: 'supply', rarity: 'legendary', supplyKind: 'energy', size: 3, basePrice: 3200, buyable: true, icon: '⚡', name: { zh: '小型汽油发电机' }, desc: { zh: '吵，但停电时它就是神。' } },
@@ -34,9 +35,7 @@ export const cards: CardDef[] = [
   { id: 'skill_jiangye_guard', kind: 'skill', rarity: 'rare', ownerId: 'jiangye', counters: 'human', icon: '🛡️', name: { zh: '江野：护卫' }, desc: { zh: '代替硬顶一次人祸。' } },
   { id: 'skill_aji_command', kind: 'skill', rarity: 'legendary', ownerId: 'aji', counters: 'horde', icon: '🧟', name: { zh: '阿寂：号令' }, desc: { zh: '解除一次尸潮。' } },
   { id: 'trouble_loan', kind: 'trouble', rarity: 'fine', size: 0, weeklyMoneyDelta: -2000, icon: '📜', resolvedByEventIds: ['ev_bank_repay'], name: { zh: '网贷催收' }, desc: { zh: '序章每周扣 2000。末日后自动消失。' } },
-  // 危机（样例 1 张，正式 20 张见 T-003）
-  { id: 'crisis_horde_common', kind: 'crisis', rarity: 'common', crisisKind: 'horde', icon: '🧟', name: { zh: '游尸' }, desc: { zh: '零星游荡的丧尸。' },
-    onDraw: { zh: '楼下多了几个不走直线的人影。' },
-    onSurvive: { zh: '它们撞了几天门，走了。' },
-    onFail: { zh: '门被撞开了。你丢了一批东西，也差点丢了命。' } },
+  { id: 'core_rare', kind: 'core', rarity: 'rare', icon: '💎', name: { zh: '稀有晶核' }, desc: { zh: '异能丧尸掉的。' } },
+  { id: 'core_legendary', kind: 'core', rarity: 'legendary', icon: '💎', name: { zh: '传说晶核' }, desc: { zh: '丧尸王级别。' } },
+  ...crises,
 ]

@@ -1,10 +1,10 @@
 import type { BaseDef, ModuleDef } from '../engine/types'
 
 export const bases: BaseDef[] = [
-  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 12, population: 3 },
-  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '带院子的独栋。' }, icon: '🏡', price: 3_000_000, baseDefense: 5, storage: 30, population: 6 },
-  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '有地，有井，离城远。' }, icon: '🌾', price: 1_500_000, baseDefense: 6, storage: 50, population: 12 },
-  { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 100, population: 20 },
+  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 30, population: 3 },
+  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '带院子的独栋。' }, icon: '🏡', price: 3_000_000, baseDefense: 5, storage: 60, population: 6 },
+  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '有地，有井，离城远。' }, icon: '🌾', price: 1_500_000, baseDefense: 6, storage: 100, population: 12 },
+  { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 200, population: 20 },
 ]
 
 /** 每种基地独立的模块表（首版 31 个）。cost.materialPoints 按物资分算。 */

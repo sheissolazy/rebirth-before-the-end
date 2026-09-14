@@ -39,12 +39,27 @@ export interface GameEngine {
   discard(state: GameState, instanceId: string): GameState
   /** 一世结束后结算重生点 */
   settle(state: GameState, meta: MetaProgress): MetaProgress
+  /** UI 展示用的派生数据（防御、仓库占用、危机分、检定预览） */
+  stats(state: GameState): DerivedStats
+  /** 某事件在给定放卡下会掷几个骰子 */
+  previewDice(state: GameState, eventId: string, assignments: Record<string, string>): number
+}
+
+export interface DerivedStats {
+  defense: number
+  storageUsed: number
+  storageCap: number
+  spaceUsed: number
+  spaceCap: number
+  crisisHave: number
+  crisisNeed: number
+  corePoints: number
 }
 
 export class EngineError extends Error {
   code: string
   constructor(code: string, message: string) {
-    super(message)
+    super(`${code}: ${message}`)
     this.code = code
   }
 }

@@ -2,9 +2,9 @@ import type { PowerDef } from '../engine/types'
 
 export const powers: PowerDef[] = [
   { id: 'power_space', kind: 'space', name: { zh: '空间' }, desc: { zh: '女主的随身空间。里面的东西抢不走。' }, levels: [
-    { rarity: 'common', desc: { zh: '6 格' }, upgradeCorePoints: 0 },
-    { rarity: 'fine', desc: { zh: '30 格的小房间' }, upgradeCorePoints: 8 },
-    { rarity: 'rare', desc: { zh: '100 格仓库，可放活物' }, upgradeCorePoints: 24 },
+    { rarity: 'common', desc: { zh: '10 格' }, upgradeCorePoints: 0 },
+    { rarity: 'fine', desc: { zh: '40 格的小房间' }, upgradeCorePoints: 8 },
+    { rarity: 'rare', desc: { zh: '120 格仓库，可放活物' }, upgradeCorePoints: 24 },
     { rarity: 'legendary', desc: { zh: '灵泉、时间 1:3（第一版不做）' }, upgradeCorePoints: 64 },
   ] },
   { id: 'power_lightning', kind: 'lightning', name: { zh: '雷电' }, desc: { zh: '顾沉。' }, levels: [

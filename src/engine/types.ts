@@ -95,6 +95,8 @@ export interface SupplyCardDef extends CardDefBase {
   size: number
   /** 保质期（周）。undefined = 不过期 */
   shelfLifeWeeks?: number
+  /** 份数：食物/水按"人·周"计，一张卡能供几人周。默认 1。其它维度不消耗份数 */
+  units?: number
   /** 序章价格（钱）。末日后按晶核/物资汇率换算 */
   basePrice: number
   /** 序章是否能买到（枪 = false，只能黑市/门路） */
@@ -474,6 +476,8 @@ export interface ContentPack {
 export interface CardInstance {
   instanceId: string
   defId: string
+  /** 剩余份数（食物/水） */
+  unitsLeft?: number
   expiresAtTurn?: Turn
   /** 过期次数（0 正常，1 降档，2 垃圾） */
   spoiled?: number
@@ -529,6 +533,9 @@ export interface PetState {
   alive: boolean
 }
 
+/** 空间容量（格）按档位 */
+export const SPACE_CAPACITY: Record<Rarity, number> = { common: 10, fine: 40, rare: 120, legendary: 300 }
+
 export interface ActiveCrisis {
   cardDefId: string
   crisisKind: CrisisKind
@@ -570,6 +577,8 @@ export interface WeekReport {
 export interface GameState {
   seed: string
   rngState: number
+  /** 本世序章长度（周） */
+  prologueWeeks: number
   turn: Turn
   time: GameTime
   hero: HeroState

@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc -b",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sim": "tsx scripts/sim.ts"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -23,6 +24,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.0"
