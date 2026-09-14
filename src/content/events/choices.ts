@@ -59,7 +59,7 @@ export const choiceEvents: EventDef[] = [
   {
     id: 'ch_burglary', locationId: 'home', instant: true, weight: 12, icon: '🔓',
     title: { zh: '有人撬门' }, text: { zh: '你囤的东西太显眼了（暴露 ≥60）。半夜，门锁在响。' },
-    conditions: [P, { type: 'statAtLeast', stat: 'exposure', value: 60 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    conditions: [P, { type: 'statAtLeast', stat: 'exposure', value: 60 }, { type: 'defenseAtMost', value: 3 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
       { id: 'shout', label: { zh: '大喊报警' }, check: { attrs: ['charm'] }, outcomes: {
         fail: { text: { zh: '他们不怕。搬走了两箱。' }, effects: [{ type: 'loseCard', cardId: 'supply_water_box' }, { type: 'loseCard', cardId: 'supply_rice_5kg' }] },
@@ -80,8 +80,8 @@ export const choiceEvents: EventDef[] = [
     choices: [
       { id: 'go', label: { zh: '下去看' }, check: { attrs: ['strength', 'mind'] }, outcomes: {
         fail: { text: { zh: '是诱饵。你挨了一棍，跑回来时少了一箱东西。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }, { type: 'loseCard', cardId: 'supply_canned' }] },
-        fine: { text: { zh: '真是个孩子。她妈妈在旁边，已经不动了。你带她上了楼。' }, effects: [{ type: 'recruitRandom', rarityWeights: { common: 70, fine: 30 } }, { type: 'stat', stat: 'butterfly', delta: 3 }] },
-        rare: { text: { zh: '是个孩子，和她还能动的妈妈。她妈妈是护士。' }, effects: [{ type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }] },
+        fine: { text: { zh: '真是个孩子。她妈妈在旁边，已经不动了。楼下一个躲着的女人说她可以照顾孩子，想跟你回去。' }, effects: [{ type: 'recruitRandom', rarityWeights: { common: 70, fine: 30 } }, { type: 'stat', stat: 'butterfly', delta: 3 }] },
+        rare: { text: { zh: '是个孩子，和她还能动的妈妈。她妈妈是护士，想带着孩子跟你回去。' }, effects: [{ type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }] },
       } },
       { id: 'ignore', label: { zh: '塞上耳朵' }, outcomes: { fine: { text: { zh: '哭声在凌晨三点停了。' }, effects: [{ type: 'loyalty', target: 'all', delta: -3 }] } } },
     ],
@@ -102,8 +102,8 @@ export const choiceEvents: EventDef[] = [
   },
   {
     id: 'ch_kidnap', locationId: 'home', instant: true, weight: 15, icon: '⛓️',
-    title: { zh: '黑鸦的绑票' }, text: { zh: '你太出名了（暴露 ≥80）。黑鸦绑走了你的一个伙伴，留了话：三天内送十份物资到旧网吧，不然人就没了。' },
-    conditions: [A, { type: 'statAtLeast', stat: 'exposure', value: 80 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    title: { zh: '黑鸦的绑票' }, text: { zh: '你太出名了（暴露 ≥80），基地又不够硬（防御 ≤8）。黑鸦趁外出时绑走了你的一个伙伴，留了话：三天内送十份物资到旧网吧，不然人就没了。' },
+    conditions: [A, { type: 'statAtLeast', stat: 'exposure', value: 80 }, { type: 'defenseAtMost', value: 8 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
       { id: 'pay', label: { zh: '交赎金（丢一批物资）' }, outcomes: { fine: { text: { zh: '人回来了，瘦了一圈。黑鸦知道你会交钱，下次还会来。' }, effects: [{ type: 'loseCard', cardId: 'supply_rice_5kg', count: 2 }, { type: 'loseCard', cardId: 'supply_water_box', count: 2 }, { type: 'loseCard', cardId: 'supply_canned' }, { type: 'stat', stat: 'exposure', delta: 5 }, { type: 'relation', factionId: 'crow', delta: 5 }] } } },
       { id: 'raid', label: { zh: '带人去抢回来' }, check: { attrs: ['strength', 'mind'] }, outcomes: {
@@ -154,9 +154,22 @@ export const choiceEvents: EventDef[] = [
     title: { zh: '受伤的狗' }, text: { zh: '它拖着一条腿走到你门口，没叫。' },
     conditions: [A, { type: 'not', cond: { type: 'hasPet', species: 'dog' } }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
-      { id: 'treat', label: { zh: '用绷带给它包扎' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'medicine', minPoints: 1 }], outcomes: { fine: { text: { zh: '三天后它能走了。它没走。' }, effects: [{ type: 'loseCard', cardId: 'supply_bandage' }, { type: 'adoptPet', petId: 'pet_dog' }] } } },
-      { id: 'feed', label: { zh: '给它点吃的，让它走' }, outcomes: { fine: { text: { zh: '它吃完，看了你一眼，走了。' }, effects: [{ type: 'loseCard', cardId: 'supply_veg' }] } } },
+      { id: 'treat', label: { zh: '用绷带给它包扎（需要药品）' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'medicine', minPoints: 1 }], outcomes: { fine: { text: { zh: '三天后它能走了。它没走。' }, effects: [{ type: 'loseCard', cardId: 'supply_bandage' }, { type: 'adoptPet', petId: 'pet_dog' }] } } },
+      { id: 'feedkeep', label: { zh: '喂它，让它留下（需要食物）' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'food', minPoints: 1 }], check: { attrs: ['charm'] }, outcomes: {
+        fail: { text: { zh: '它吃完就走了。伤没好，你有点担心。' }, effects: [{ type: 'loseCard', cardId: 'supply_veg' }, { type: 'setFlag', flag: 'dog_fed' }] },
+        fine: { text: { zh: '它吃完趴在了你脚边。腿是瘸的，但它是你的了。' }, effects: [{ type: 'loseCard', cardId: 'supply_veg' }, { type: 'adoptPet', petId: 'pet_dog' }] },
+      } },
+      { id: 'feed', label: { zh: '给它点吃的，让它走' }, outcomes: { fine: { text: { zh: '它吃完，看了你一眼，走了。' }, effects: [{ type: 'loseCard', cardId: 'supply_veg' }, { type: 'setFlag', flag: 'dog_fed' }] } } },
       { id: 'shut', label: { zh: '关门' }, outcomes: { fine: { text: { zh: '第二天门口没有狗，只有一滩血。' }, effects: [] } } },
+    ],
+  },
+  {
+    id: 'ch_dog_returns', locationId: 'home', instant: true, weight: 6, icon: '🐕',
+    title: { zh: '那条狗回来了' }, text: { zh: '你喂过的那条瘸腿狗，叼着一个塑料袋站在门口。袋子里是一盒没开封的药。它身后还跟着一只小的。' },
+    conditions: [A, { type: 'flag', flag: 'dog_fed' }, { type: 'not', cond: { type: 'hasPet', species: 'dog' } }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    choices: [
+      { id: 'keep', label: { zh: '把它们都留下' }, outcomes: { fine: { text: { zh: '两条狗，一盒药。这次它不走了。' }, effects: [{ type: 'adoptPet', petId: 'pet_dog' }, { type: 'gainCard', cardId: 'supply_antibiotics' }, { type: 'setFlag', flag: 'dog_fed', value: false }] } } },
+      { id: 'thanks', label: { zh: '收下药，让它们自由' }, outcomes: { fine: { text: { zh: '它把袋子放下，带着小的走了。以后你出门，总觉得有东西在远处跟着。' }, effects: [{ type: 'gainCard', cardId: 'supply_antibiotics' }, { type: 'setFlag', flag: 'dog_fed', value: false }, { type: 'setFlag', flag: 'dog_guardian' }] } } },
     ],
   },
   {

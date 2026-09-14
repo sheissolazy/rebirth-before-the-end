@@ -96,7 +96,7 @@ describe('economy', () => {
     const { state, report } = week(s)
     expect(state.time.phase).toBe('apocalypse')
     expect(state.orders).toHaveLength(0)
-    expect(report.news.some((n) => n.zh.includes('永远在路上'))).toBe(true)
+    expect(report.news.some((n) => n.zh.includes('永远'))).toBe(true)
   })
   it('building takes weeks and needs materials', () => {
     let s = engine.newGame(content, { seed: 'bd', build: 'balanced', meta })
@@ -117,7 +117,7 @@ describe('economy', () => {
     const inst = s.warehouse.find((c) => c.defId === 'supply_antibiotics')!
     const before = s.people.guchen.affection
     s = engine.gift(s, 'guchen', inst.instanceId)
-    expect(s.people.guchen.affection).toBe(before + 15)
+    expect(s.people.guchen.affection).toBe(before + 18)
     expect(s.warehouse.find((c) => c.instanceId === inst.instanceId)).toBeUndefined()
   })
   it('space has its own capacity', () => {

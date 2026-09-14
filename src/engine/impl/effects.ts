@@ -2,7 +2,7 @@ import type { Effect, GameState, CardInstance, Rarity, SupplyKind, PersonState, 
 import { RARITY_POINTS, RARITY_ORDER } from '../types'
 import type { ContentIndex } from './content'
 import { Rng } from './rng'
-import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName, hasCold } from './helpers'
+import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName, hasCold, affectionCap } from './helpers'
 
 export interface EffectCtx {
   ci: ContentIndex
@@ -30,6 +30,7 @@ export function grantCard(ctx: EffectCtx, defId: string, opts: { affix?: boolean
   const size = cardSize(ci, inst)
   if (hasRoom(ci, state, size, false)) { state.warehouse.push(inst); return inst }
   if (hasRoom(ci, state, size, true)) { inst.inSpace = true; state.warehouse.push(inst); return inst }
+  if (ctx.report && !ctx.report.news.some((n) => n.zh.startsWith('仓库和空间都满了'))) ctx.report.news.push({ zh: `仓库和空间都满了，${def.name.zh}等东西放不下，只能丢在原地。去仓库页丢掉没用的，或者扩容。` })
   return null
 }
 
@@ -94,7 +95,10 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     }
     case 'attr': {
       const target = ef.target === 'hero' ? h : (ef.target === 'self' && ctx.actorId && ctx.actorId !== 'hero' ? findPerson(state, ctx.actorId) : findPerson(state, ef.target))
-      if (target) target.attrs[ef.attr] = clamp(target.attrs[ef.attr] + ef.delta, 1, 10)
+      if (!target) break
+      // 越高越难涨：3 以下必涨，之后概率 3/当前值（4→75%，6→50%，9→33%）
+      if (ef.delta > 0 && !rng.chance(Math.min(1, 3 / target.attrs[ef.attr]))) break
+      target.attrs[ef.attr] = clamp(target.attrs[ef.attr] + ef.delta, 1, 10)
       break
     }
     case 'gainCard': for (let i = 0; i < (ef.count ?? 1); i++) grantCard(ctx, ef.cardId, { affix: true }); break
@@ -107,7 +111,13 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
       }
       break
     }
-    case 'affection': { const p = findPerson(state, ef.npcId); if (p) p.affection = clamp(p.affection + ef.delta, 0, 100); break }
+    case 'affection': {
+      const p = findPerson(state, ef.npcId)
+      if (!p) break
+      const cap = affectionCap(state, ef.npcId)
+      p.affection = ef.delta > 0 ? Math.max(p.affection, Math.min(cap, p.affection + ef.delta)) : clamp(p.affection + ef.delta, 0, 100)
+      break
+    }
     case 'loyalty': {
       const targets = ef.target === 'all' ? Object.values(state.people).filter((p) => p.alive && p.inBase && isCompanion(ci, p)) : [findPerson(state, ef.target)]
       for (const p of targets) if (p) p.loyalty = clamp(p.loyalty + ef.delta, 0, 100)

@@ -190,7 +190,13 @@ export function hasCold(ci: ContentIndex, state: GameState): boolean {
   return false
 }
 
-/** 精力上限 = 2 + 体力/2 + 永久加成 */
+/** 好感上限：序章男主不信你，最多到朋友（39）；江野例外到暧昧（59）。末日后 100 */
+export function affectionCap(state: GameState, npcId: string): number {
+  if (state.time.phase !== 'prologue') return 100
+  return npcId === 'jiangye' ? 59 : 39
+}
+
+/** 精力上限 = 3 + 体力/2 + 永久加成 */
 export function energyMax(state: GameState): number {
-  return Math.max(1, 2 + Math.floor(state.hero.attrs.strength / 2) + state.hero.energyBonus)
+  return Math.max(1, 3 + Math.floor(state.hero.attrs.strength / 2) + state.hero.energyBonus)
 }

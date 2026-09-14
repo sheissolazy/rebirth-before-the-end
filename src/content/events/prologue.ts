@@ -41,7 +41,7 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_supermarket_haggle', locationId: 'supermarket', icon: '🗣️', weight: 6,
+    id: 'ev_supermarket_haggle', energy: 1, locationId: 'supermarket', icon: '🗣️', weight: 6,
     title: { zh: '跟理货员套近乎' }, text: { zh: '听说仓库里还有没上架的军用压缩饼干。' },
     conditions: [P], durationWeeks: 1, slots: [HERO, GIFT('daily', '递根烟/送点东西')], check: { attrs: ['charm'] },
     outcomes: {
@@ -53,7 +53,7 @@ export const prologueEvents: EventDef[] = [
   },
   // ---- 药店 ----
   {
-    id: 'ev_pharmacy_limit', locationId: 'pharmacy', icon: '💊', repeatable: true, weight: 10,
+    id: 'ev_pharmacy_limit', energy: 1, locationId: 'pharmacy', icon: '💊', repeatable: true, weight: 10,
     title: { zh: '买药' }, text: { zh: '抗生素限购一盒。你跑了三家。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 300 }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['mind', 'charm'] },
     outcomes: {
@@ -177,7 +177,7 @@ export const prologueEvents: EventDef[] = [
   },
   // ---- 家 ----
   {
-    id: 'ev_home_workout', kind: 'routine', locationId: 'home', icon: '🏋️', repeatable: true, weight: 0,
+    id: 'ev_home_workout', kind: 'routine', energy: 1, locationId: 'home', icon: '🏋️', repeatable: true, weight: 0,
     title: { zh: '练体力' }, text: { zh: '跑步、深蹲、搬米袋。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['strength'] },
     outcomes: {
@@ -188,7 +188,7 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_read', kind: 'routine', locationId: 'home', icon: '📚', repeatable: true, weight: 0,
+    id: 'ev_home_read', kind: 'routine', energy: 1, locationId: 'home', icon: '📚', repeatable: true, weight: 0,
     title: { zh: '看书' }, text: { zh: '急救、电工、种植。你上一世后悔没学的。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
     outcomes: {
@@ -245,13 +245,13 @@ export const prologueEvents: EventDef[] = [
   },
   {
     id: 'ev_home_call_parents', energy: 1, locationId: 'home', icon: '☎️', once: true, weight: 0,
-    title: { zh: '跟爸妈说清楚' }, text: { zh: '你不能说实话。但你可以让他们也囤点东西。' },
-    conditions: [P, { type: 'npcInBase', npcId: 'dad', value: false }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
+    title: { zh: '跟爸妈说清楚' }, text: { zh: '他们就住在你隔壁屋。你没法说实话，但你得让他们信你、帮你囤。' },
+    conditions: [P], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {
-      fail: { text: { zh: '妈妈哭了。她觉得你被骗了。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 3 }] },
-      common: { text: { zh: '他们答应买点米。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }] },
-      fine: { text: { zh: '爸爸说"你从小就有主意"。第二天他们提着行李来了，还带了三万块。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 30000 }] },
-      rare: { text: { zh: '爸爸转了你十万，然后和妈妈一起搬了过来。"别问，拿着。"' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 100000 }] },
+      fail: { text: { zh: '妈妈哭了。她觉得你被骗了。爸爸一晚上没说话。' }, effects: [{ type: 'loyalty', target: 'dad', delta: -10 }, { type: 'loyalty', target: 'mom', delta: -10 }, { type: 'stat', stat: 'butterfly', delta: 3 }] },
+      common: { text: { zh: '他们半信半疑，但答应帮你搬东西。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'loyalty', target: 'dad', delta: 5 }, { type: 'loyalty', target: 'mom', delta: 5 }] },
+      fine: { text: { zh: '爸爸说"你从小就有主意"。他把存折拿了出来。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'money', delta: 30000 }, { type: 'loyalty', target: 'dad', delta: 15 }, { type: 'loyalty', target: 'mom', delta: 15 }] },
+      rare: { text: { zh: '爸爸转了你十万。"别问，拿着。"妈妈开始列清单。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'money', delta: 100000 }, { type: 'loyalty', target: 'dad', delta: 20 }, { type: 'loyalty', target: 'mom', delta: 20 }, { type: 'attr', target: 'mom', attr: 'mind', delta: 1 }] },
     },
   },
   {

@@ -6,7 +6,7 @@ const A = { type: 'phase', phase: 'apocalypse' } as const
 export const apocalypseEvents: EventDef[] = [
   // ---- 基地内 ----
   {
-    id: 'ev_home_kill_zombies', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    id: 'ev_home_kill_zombies', energy: 1, locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
     title: { zh: '清理楼道的丧尸' }, text: { zh: '它们卡在楼梯口。一只一只来。' },
     conditions: [A, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
     outcomes: {
@@ -17,7 +17,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_kill_zombies_villa', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    id: 'ev_home_kill_zombies_villa', energy: 1, locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
     title: { zh: '清理院墙外的丧尸' }, text: { zh: '它们贴着围墙转。从墙头用长矛捅最安全。' },
     conditions: [A, { type: 'baseType', baseType: 'villa' }], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
     outcomes: {
@@ -28,7 +28,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_kill_zombies_farm', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    id: 'ev_home_kill_zombies_farm', energy: 1, locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
     title: { zh: '清理围栏边的丧尸' }, text: { zh: '郊区人少，丧尸也少，但每一只都是顺着路来的。' },
     conditions: [A, { type: 'baseType', baseType: 'farmhouse' }], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
     outcomes: {
@@ -39,7 +39,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_kill_zombies_bunker', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    id: 'ev_home_kill_zombies_bunker', energy: 1, locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
     title: { zh: '清理入口的丧尸' }, text: { zh: '它们知道下面有人。' },
     conditions: [A, { type: 'baseType', baseType: 'bunker' }], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
     outcomes: {
@@ -50,9 +50,9 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_neighbors_apoc', locationId: 'home', icon: '🏘️', repeatable: true, weight: 4,
+    id: 'ev_home_neighbors_apoc', energy: 1, locationId: 'home', icon: '🏘️', repeatable: true, weight: 4,
     title: { zh: '跟楼里的幸存者打交道' }, text: { zh: '还活着的几户人，谁有什么、谁缺什么，得摸清。' },
-    conditions: [A, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, energy: 1, slots: [HERO], check: { attrs: ['charm'] },
+    conditions: [A, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '有人怀疑你囤了很多。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] },
       common: { text: { zh: '换了点东西。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 1 }, { type: 'relation', factionId: 'alliance', delta: 3 }] },
@@ -83,7 +83,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_train_all', kind: 'routine', locationId: 'home', icon: '🎯', repeatable: true, weight: 0,
+    id: 'ev_home_train_all', kind: 'routine', energy: 1, locationId: 'home', icon: '🎯', repeatable: true, weight: 0,
     title: { zh: '带大家训练' }, text: { zh: '沙袋、木刀、绕楼跑。' },
     conditions: [A], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['strength', 'charm'] },
     outcomes: {
@@ -248,7 +248,7 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 农场 ----
   {
-    id: 'ev_farm_trade', locationId: 'farm', icon: '🌾', repeatable: true, weight: 8,
+    id: 'ev_farm_trade', energy: 1, locationId: 'farm', icon: '🌾', repeatable: true, weight: 8,
     title: { zh: '跟农场换粮' }, text: { zh: '老农还活着。他要药和电池。' },
     conditions: [A], durationWeeks: 1, slots: [LEADER, GIFT('medicine', '带药去换'), { id: 'gift2', label: { zh: '带电池去换' }, required: false, accepts: { kind: 'supply', supplyKind: 'energy' }, consumes: true, bonusDice: 2 }], check: { attrs: ['charm'] },
     outcomes: {
@@ -280,7 +280,7 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 军区基地 ----
   {
-    id: 'ev_army_trade', kind: 'routine', locationId: 'armygate', icon: '🪖', repeatable: true, weight: 0,
+    id: 'ev_army_trade', kind: 'routine', energy: 1, locationId: 'armygate', icon: '🪖', repeatable: true, weight: 0,
     title: { zh: '跟军区交易' }, text: { zh: '晶核换东西。他们的价公道，但规矩多。' },
     conditions: [A, { type: 'relationAtLeast', factionId: 'army', value: 0 }], durationWeeks: 1, slots: [HERO, { id: 'core', label: { zh: '晶核' }, required: true, accepts: { kind: 'core' }, consumes: true }], check: { attrs: ['charm', 'mind'] },
     outcomes: {
@@ -360,7 +360,7 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 黑鸦地盘 ----
   {
-    id: 'ev_crow_pay', locationId: 'crow_turf', icon: '💰', repeatable: true, weight: 6,
+    id: 'ev_crow_pay', energy: 1, locationId: 'crow_turf', icon: '💰', repeatable: true, weight: 6,
     title: { zh: '交保护费' }, text: { zh: '丢脸，但便宜。' },
     conditions: [A, { type: 'relationAtLeast', factionId: 'crow', value: -80 }], durationWeeks: 1, slots: [HERO, { id: 'pay', label: { zh: '交出去的东西' }, required: true, accepts: { kind: 'supply' }, consumes: true }],
     outcomes: { fine: { text: { zh: '他们收了。这个月不会来。' }, effects: [{ type: 'relation', factionId: 'crow', delta: 15 }, { type: 'stat', stat: 'exposure', delta: 3 }] } },

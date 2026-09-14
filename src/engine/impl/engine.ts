@@ -10,7 +10,7 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap,
 } from './helpers'
 import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
@@ -45,9 +45,9 @@ export function createEngine(content: ContentPack): GameEngine {
     const people: Record<string, PersonState> = {}
     for (const n of content.npcs) {
       people[n.id] = {
-        id: n.id, defId: n.id, attrs: { ...n.attrs }, alive: true, injury: 0, inBase: false,
+        id: n.id, defId: n.id, attrs: { ...n.attrs }, alive: true, injury: 0, inBase: n.id === 'dad' || n.id === 'mom',
         affection: n.initialAffection + (n.romanceable && options.bonusNpcId === n.id ? 20 * bought('shop_affection') : 0),
-        loyalty: 50, job: 'idle', harmony: false, equipment: {}, powerRarity: n.powerId ? (n.rarity === 'legendary' ? 'rare' : 'fine') : undefined,
+        loyalty: n.id === 'dad' || n.id === 'mom' ? 70 : 50, job: 'idle', harmony: false, equipment: {}, powerRarity: n.powerId ? (n.rarity === 'legendary' ? 'rare' : 'fine') : undefined,
       }
     }
     const state: GameState = {
@@ -70,7 +70,7 @@ export function createEngine(content: ContentPack): GameEngine {
     }
     const ctx: EffectCtx = { ci, state, rng }
     // 开局手里有点东西
-    for (const id of ['supply_rice_5kg', 'supply_water_box', 'supply_veg']) if (ci.cards.has(id)) grantCard(ctx, id)
+    for (const id of ['supply_rice_5kg', 'supply_water_box', 'supply_veg', 'trouble_parents']) if (ci.cards.has(id)) grantCard(ctx, id)
     if (bought('shop_dog') > 0 && ci.pets.has('pet_dog')) state.pets.push({ id: rng.id('pet'), defId: 'pet_dog', alive: true })
     // 开局特质
     const traits = (options.traits ?? []).map((id) => content.startTraits.find((t) => t.id === id)).filter((t): t is NonNullable<typeof t> => !!t)
@@ -120,11 +120,16 @@ export function createEngine(content: ContentPack): GameEngine {
     const rarity = effectiveRarity(ci, inst) ?? 'common'
     const needs = p.generated?.needs ?? ci.npcs.get(p.defId ?? '')?.needs
     let amount = 0
-    if (def.kind === 'supply') amount = (def.supplyKind === needs ? 5 : 2) * (rarityIndex(rarity) + 1)
-    else if (def.kind === 'equipment') amount = 3 * (rarityIndex(rarity) + 1)
-    else if (def.kind === 'core') amount = 2 * (rarityIndex(rarity) + 1)
+    if (def.kind === 'supply') amount = 3 * (rarityIndex(rarity) + 1) * (def.supplyKind === needs ? 2 : 1)
+    else if (def.kind === 'equipment') amount = 4 * (rarityIndex(rarity) + 1)
+    else if (def.kind === 'core') amount = 3 * (rarityIndex(rarity) + 1)
     else return 0
-    return isRomanceable(ci, p) ? amount : amount * 2
+    if (isRomanceable(ci, p)) {
+      // 暧昧以上收益减半；序章有上限
+      if (p.affection >= 60) amount = Math.max(1, Math.floor(amount / 2))
+      return Math.max(0, Math.min(amount, affectionCap(s, personId) - p.affection))
+    }
+    return amount * 2
   }
 
   function notice(s: GameState, zh: string): void { s.lastNotice = { zh }; s.noticeSeq += 1 }

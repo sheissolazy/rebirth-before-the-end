@@ -67,5 +67,5 @@ export const cardsBatch2: CardDef[] = [
   { id: 'intel_memory_fix', kind: 'intel', rarity: 'fine', icon: '🧠', effect: { type: 'fixMemory' }, name: { zh: '静下来回忆' }, desc: { zh: '蝴蝶效应 -20。' } },
   { id: 'trouble_ex', kind: 'trouble', rarity: 'fine', size: 0, weeklyExposureDelta: 2, icon: '📱', resolvedByEventIds: ['ev_home_block_ex'], name: { zh: '周明宇的消息' }, desc: { zh: '他一直在打听你囤了多少。每周暴露 +2。' } },
   { id: 'trouble_relatives', kind: 'trouble', rarity: 'rare', size: 0, weeklyMoneyDelta: -5000, weeklyExposureDelta: 3, icon: '🧧', resolvedByEventIds: ['ev_home_change_number'], name: { zh: '借钱的亲戚' }, desc: { zh: '中奖上了新闻。八竿子打不着的亲戚都来了。序章每周 -5000，暴露 +3。' } },
-  { id: 'trouble_parents', kind: 'trouble', rarity: 'common', size: 0, weeklyMoneyDelta: -800, icon: '☎️', resolvedByEventIds: ['ev_home_call_parents'], name: { zh: '爸妈的电话' }, desc: { zh: '你没法解释为什么突然买这么多东西。序章每周 -800。' } },
+  { id: 'trouble_parents', kind: 'trouble', rarity: 'common', size: 0, weeklyMoneyDelta: -800, icon: '☎️', resolvedByEventIds: ['ev_home_call_parents'], name: { zh: '爸妈的唠叨' }, desc: { zh: '他们看不懂你为什么突然买这么多东西，天天念。序章每周 -800。做「跟爸妈说清楚」解决。' } },
 ]

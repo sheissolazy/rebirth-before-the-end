@@ -214,6 +214,8 @@ export interface NpcDef {
   initialAffection: number
   /** 所属势力（男主/领袖用） */
   factionId?: string
+  /** 暧昧以上每周有几率触发的关怀：送东西 + 一句话 */
+  care?: Array<{ text: LocalizedText; cardId: string }>
 }
 
 /** 随机幸存者生成模板 */
@@ -332,6 +334,8 @@ export type Condition =
   | { type: 'employed'; value: boolean }
   | { type: 'hasPet'; species: 'dog' | 'cat' }
   | { type: 'hasCard'; cardId: string }
+  | { type: 'defenseAtMost'; value: number }
+  | { type: 'defenseAtLeast'; value: number }
   | { type: 'not'; cond: Condition }
   | { type: 'random'; chance: number }
 

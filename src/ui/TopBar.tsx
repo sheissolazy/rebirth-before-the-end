@@ -17,6 +17,7 @@ export function TopBar({ state }: { state: GameState }) {
         <span title={t('legend.health')}>❤️ {state.hero.health}/10</span>
         <span title={t('legend.exposure')}>👁 {state.hero.exposure}</span>
         <span title={t('legend.defense')}>🛡 {st.defense}</span>
+        {state.time.phase === 'apocalypse' && <span title={t('legend.supply')} className={st.foodUnits < st.weeklyFood * 2 || st.waterUnits < st.weeklyWater * 2 ? 'text-red-400' : ''}>🍚{Math.floor(st.foodUnits / Math.max(1, st.weeklyFood))}周 💧{Math.floor(st.waterUnits / Math.max(1, st.weeklyWater))}周</span>}
         <button className="rounded-full border border-zinc-700 px-2 text-xs text-zinc-400" onClick={() => setLegend(!legend)} aria-label="legend">{t('legend.toggle')}</button>
       </div>
       {legend && (

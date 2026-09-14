@@ -86,7 +86,10 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
             if (!items.length) return null
             return (
           <div key={k} className="mt-3">
-          <h4 className="text-xs font-semibold text-zinc-300">{groupLabel(k)}</h4>
+          <h4 className="text-xs font-semibold text-zinc-300">{groupLabel(k)}
+            {(k === 'food' || k === 'water') && <span className="ml-2 font-normal text-zinc-500">{t('shop.groupFood', { units: k === 'food' ? st.foodUnits : st.waterUnits, weekly: k === 'food' ? st.weeklyFood : st.weeklyWater, weeks: Math.floor((k === 'food' ? st.foodUnits : st.waterUnits) / Math.max(1, k === 'food' ? st.weeklyFood : st.weeklyWater)) })}</span>}
+            {k === 'material' && <span className="ml-2 font-normal text-zinc-500">{t('shop.groupMaterial', { have: st.materialPoints, needs: content.modules.filter((m) => m.baseType === state.base.type && !state.base.modules.some((b) => b.moduleId === m.id && !b.damaged)).map((m) => `${lt(m.name)} ${m.cost.materialPoints}`).join('、') })}</span>}
+          </h4>
           <ul className="mt-1 grid gap-1 sm:grid-cols-2">
             {items.map((c) => {
               const price = state.time.phase === 'prologue' ? Math.round(c.basePrice * state.priceMultiplier * 1.1) : ({ common: 1, fine: 2, rare: 4, legendary: 8 }[c.rarity] * (content.factions.find((f) => f.id === faction)?.tradeRate ?? 2))

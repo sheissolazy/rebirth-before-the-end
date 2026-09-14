@@ -8,6 +8,8 @@ import {
   attrSum, equipmentDice, effectiveRarity, rarityIndex, affectionRank, rankIndex, isRomanceable, isCompanion, findCard, removeCard,
 } from './helpers'
 import { EngineError } from '../api'
+import { describeEffectsZh } from './describe'
+import { personName } from './helpers'
 
 const DRAWS_PER_LOCATION = 3
 
@@ -58,7 +60,8 @@ export function resolveChoice(ci: ContentIndex, state: GameState, rng: Rng, choi
   applyEffects({ ci, state, rng, actorId: 'hero' }, picked.branch.effects)
   if (e.once) state.usedOnceEvents.push(e.id)
   state.pendingChoice = null
-  state.diary.push({ turn: state.turn, text: picked.branch.text })
+  const desc = describeEffectsZh(ci, picked.branch.effects)
+  state.diary.push({ turn: state.turn, text: { zh: `【${e.title.zh}】${picked.branch.text.zh}${desc ? `（${desc}）` : ''}` } })
   return { eventId: e.id, outcome: picked.outcome, successes, diceCount: dice, text: picked.branch.text, effects: picked.branch.effects }
 }
 
@@ -203,9 +206,9 @@ export function unplace(ci: ContentIndex, state: GameState, eventId: string): vo
 
 /** 每次检定固定加的基础骰（常识和运气），让低属性也有成长机会 */
 export const BASE_DICE = 2
-/** 成功数分档：0 失败 / 1~2 普通 / 3~5 优良 / 6~7 稀有 / 8+ 传说（事件可自定传说线） */
-export const RARE_AT = 6
-export const LEGENDARY_AT = 8
+/** 成功数分档：0 失败 / 1~2 普通 / 3~6 优良 / 7~8 稀有 / 9+ 传说（事件可自定传说线） */
+export const RARE_AT = 7
+export const LEGENDARY_AT = 9
 
 export function outcomeFromSuccesses(s: number, legendaryAt?: number): Outcome {
   if (s >= (legendaryAt ?? LEGENDARY_AT)) return 'legendary'
@@ -303,6 +306,9 @@ export function resolvePlacement(ci: ContentIndex, state: GameState, rng: Rng, p
   }
   if (e.once) state.usedOnceEvents.push(e.id)
   if (e.id === 'ev_office_work') state.hero.skippedWorkStreak = 0
+  const actorName = actor ? personName(ci, state.people[actor]).zh : undefined
+  const desc = describeEffectsZh(ci, picked.branch.effects, actorName)
+  state.diary.push({ turn: state.turn, text: { zh: `【${e.title.zh}·${{ fail: '失败', common: '普通', fine: '优良', rare: '稀有', legendary: '传说' }[picked.outcome]}】${picked.branch.text.zh}${desc ? `（${desc}）` : ''}` } })
   return { eventId: e.id, outcome: picked.outcome, successes, diceCount: dice, text: picked.branch.text, effects: picked.branch.effects }
 }
 

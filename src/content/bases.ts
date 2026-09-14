@@ -1,17 +1,17 @@
 import type { BaseDef, ModuleDef } from '../engine/types'
 
 export const bases: BaseDef[] = [
-  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 30, population: 4 },
-  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '带院子的独栋。' }, icon: '🏡', price: 3_000_000, baseDefense: 5, storage: 60, population: 6 },
-  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '有地，有井，离城远。' }, icon: '🌾', price: 1_500_000, baseDefense: 6, storage: 100, population: 12 },
-  { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 200, population: 20 },
+  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 5 },
+  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '带院子的独栋。' }, icon: '🏡', price: 3_000_000, baseDefense: 5, storage: 120, population: 6 },
+  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '有地，有井，离城远。' }, icon: '🌾', price: 1_500_000, baseDefense: 6, storage: 200, population: 12 },
+  { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 400, population: 20 },
 ]
 
 /** 每种基地独立的模块表（首版 31 个）。cost.materialPoints 按物资分算。 */
 export const modules: ModuleDef[] = [
   // 出租屋
   { id: 'apt_windows', baseType: 'apartment', name: { zh: '加固门窗' }, desc: { zh: '钢条和木板。' }, icon: '🪟', cost: { materialPoints: 4, labor: 1, weeks: 1 }, provides: [{ type: 'defense', value: 2 }] },
-  { id: 'apt_storage', baseType: 'apartment', name: { zh: '储物间' }, desc: { zh: '清空杂物间。' }, icon: '📦', cost: { materialPoints: 2, labor: 1, weeks: 1 }, provides: [{ type: 'storage', value: 6 }] },
+  { id: 'apt_storage', baseType: 'apartment', name: { zh: '储物间' }, desc: { zh: '清空杂物间。' }, icon: '📦', cost: { materialPoints: 2, labor: 1, weeks: 1 }, provides: [{ type: 'storage', value: 15 }] },
   { id: 'apt_balcony', baseType: 'apartment', name: { zh: '阳台菜箱' }, desc: { zh: '种点葱和青菜。' }, icon: '🥬', cost: { materialPoints: 2, labor: 1, weeks: 1, requires: [{ cardId: 'supply_seed_veg', count: 1 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 1 }] },
   { id: 'apt_solar', baseType: 'apartment', name: { zh: '太阳能板' }, desc: { zh: '晴天能充电。' }, icon: '☀️', cost: { materialPoints: 6, labor: 1, weeks: 1, money: 8000 }, provides: [{ type: 'produce', supplyKind: 'energy', cardId: 'supply_battery', perWeek: 1 }] },
   { id: 'apt_rain', baseType: 'apartment', name: { zh: '接雨水' }, desc: { zh: '阳台上摆满桶，屋顶接一根管。每周 2 份水，下雨看天。' }, icon: '🪣', cost: { materialPoints: 2, labor: 1, weeks: 1 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 2 }] },

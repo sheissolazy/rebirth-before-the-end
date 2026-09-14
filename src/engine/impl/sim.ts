@@ -68,7 +68,8 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
     }
     // 派工
     for (const p of Object.values(s.people)) {
-      if (!p.alive || !p.inBase || p.busyWithEventId || p.defId) continue
+      if (!p.alive || !p.inBase || p.busyWithEventId) continue
+      if (p.defId && content.npcs.find((n) => n.id === p.defId)?.romanceable) continue
       const job = s.crisis?.crisisKind === 'horde' ? 'guard' : (i % 3 === 0 ? 'scavenge' : i % 3 === 1 ? 'guard' : 'train')
       try { s = engine.assignJob(s, p.id, job) } catch { /* ignore */ }
     }

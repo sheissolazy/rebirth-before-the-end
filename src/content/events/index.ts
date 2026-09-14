@@ -3,5 +3,6 @@ import { prologueEvents } from './prologue'
 import { apocalypseEvents } from './apocalypse'
 import { storyEvents } from './story'
 import { choiceEvents } from './choices'
+import { moreEvents } from './more'
 
-export const events: EventDef[] = [...prologueEvents, ...apocalypseEvents, ...storyEvents, ...choiceEvents]
+export const events: EventDef[] = [...prologueEvents, ...apocalypseEvents, ...storyEvents, ...choiceEvents, ...moreEvents]

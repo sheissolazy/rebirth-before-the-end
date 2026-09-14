@@ -50,8 +50,8 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   state.placements = state.placements.filter((p) => p.resolvesAtTurn > state.turn)
   for (const p of due) track(ci, state, report, `事件「${ci.event(p.eventId).title.zh}」`, () => { report.eventResults.push(resolvePlacement(ci, state, rng, p, report)) })
 
-  // 3b. 网购到货（序章）与建造进度
-  deliverOrders(ci, state, rng, report)
+  // 3b. 网购到货（序章；末日当周先到货再断）与建造进度
+  deliverOrders(ci, state, rng, report, wasPrologue)
   state.orderedThisWeek = {}
   if (state.base.building) {
     state.base.building.weeksLeft -= 1
@@ -98,9 +98,23 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   // 11. 伙伴叛逃
   desertions(ci, state, rng, report)
 
-  // 11b. 多线：两位男主同时 ≥ 暧昧 → 触发修罗场标记
-  const crushes = Object.values(state.people).filter((p) => p.alive && isRomanceable(ci, p) && p.affection >= 60)
+  // 11b. 多线：两位男主都住进基地且都 ≥ 暧昧 → 触发修罗场标记
+  const crushes = Object.values(state.people).filter((p) => p.alive && p.inBase && isRomanceable(ci, p) && p.affection >= 60)
   if (crushes.length >= 2 && !state.flags.two_crushes) state.flags.two_crushes = true
+
+  // 11c. 男主关怀：暧昧以上、末日后，每周 25% 送点东西
+  if (state.time.phase === 'apocalypse') {
+    for (const p of Object.values(state.people)) {
+      if (!p.alive || !isRomanceable(ci, p) || p.affection < 60 || !p.defId) continue
+      const def = ci.npcs.get(p.defId)
+      if (!def?.care?.length || !rng.chance(0.25)) continue
+      const care = rng.pick(def.care)
+      const c = grantCard({ ci, state, rng, report }, care.cardId)
+      report.news.push({ zh: `${def.name.zh}：${care.text.zh}${c ? `（收到 ${ci.card(care.cardId).name.zh}）` : '（仓库满了，没收下）'}` })
+      p.affection = Math.min(100, p.affection + 1)
+      report.changes.push({ label: { zh: `${def.name.zh} 好感` }, delta: 1, reason: { zh: '他的关怀' } })
+    }
+  }
 
   // 12. 生存点与死亡/结局
   state.rebirthPointsEarned += 1
@@ -114,7 +128,6 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
 
   // 13. 精力恢复、日记、抽新事件与突发选择
   state.hero.energy = state.hero.incapacitatedWeeks > 0 ? 0 : energyMax(state)
-  if (report.eventResults.length) state.diary.push({ turn: state.turn, text: report.eventResults[0].text })
   if (!state.ending) { drawEvents(ci, state, rng); drawChoice(ci, state, rng) }
   else { state.drawnEvents = {}; state.pendingChoice = null }
   state.lastReport = report
@@ -219,9 +232,9 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
   for (const p of Object.values(state.people)) if (p.alive && p.injury > 0 && rng.chance(0.3)) p.injury--
 }
 
-function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport): void {
+function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport, wasPrologue: boolean): void {
   if (!state.orders.length) return
-  if (state.time.phase === 'apocalypse') {
+  if (state.time.phase === 'apocalypse' && !wasPrologue) {
     const n = state.orders.reduce((t, o) => t + o.count, 0)
     state.orders = []
     report.news.push({ zh: `你还有 ${n} 件快递在路上。它们永远在路上了。` })
@@ -241,6 +254,12 @@ function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: Wee
     if (left > 0) { keep.push({ ...o, count: left, arrivesAtTurn: state.turn + 1 }); report.news.push({ zh: '仓库放不下，快递员把剩下的先带回站点了。' }) }
   }
   state.orders = keep
+  // 末日当周：到货的到了，没到的永远到不了
+  if (state.time.phase === 'apocalypse' && state.orders.length) {
+    const n = state.orders.reduce((t, o) => t + o.count, 0)
+    state.orders = []
+    report.news.push({ zh: `最后一批快递赶在城市失守前送到了。还有 ${n} 件在路上的，永远到不了了。` })
+  }
 }
 
 function spoil(ci: ContentIndex, state: GameState, report: WeekReport): void {
