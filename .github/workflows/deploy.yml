@@ -2,7 +2,8 @@ name: Deploy to GitHub Pages
 
 # 同一个站点部署两个版本：
 #   /       ← main 分支（稳定测试版）
-#   /next/  ← next 分支（开发版，存档前缀不同，互不影响）
+#   /next/  ← next 分支（测试版二，存档前缀 rbte-next）
+#   /dev/   ← dev 分支（最新开发版，存档前缀 rbte-dev）
 # 只在 main 上运行（github-pages 环境只允许 main 部署）；next 推送时由 trigger-deploy.yml 触发这里。
 on:
   push:
@@ -30,6 +31,10 @@ jobs:
         with:
           ref: next
           path: next
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -47,11 +52,20 @@ jobs:
           npm ci
           npm test
           npm run build
+      - name: Build dev
+        working-directory: dev
+        env:
+          VITE_SAVE_PREFIX: rbte-dev
+        run: |
+          npm ci
+          npm test
+          npm run build
       - name: Assemble site
         run: |
-          mkdir -p site/next
+          mkdir -p site/next site/dev
           cp -r main/dist/. site/
           cp -r next/dist/. site/next/
+          cp -r dev/dist/. site/dev/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
