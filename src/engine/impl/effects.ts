@@ -13,6 +13,14 @@ export interface EffectCtx {
   actorId?: string
   /** 女主是否在场；不在场时 target 'hero' 的伤害/属性效果落到 actor 头上 */
   heroPresent?: boolean
+  /** 来自男主剧情事件：允许好感跨档。其它来源（送礼、同行、关怀）只能推到下一档门槛前一格 */
+  fromStory?: boolean
+}
+
+/** 好感下一档门槛（20/40/60/80），已满 100 */
+export function nextAffectionBoundary(a: number): number {
+  for (const th of [20, 40, 60, 80]) if (a < th) return th
+  return 101
 }
 
 /** 生成一张卡的实例并放进仓库/手牌；仓库满则丢弃并返回 null */
@@ -114,7 +122,8 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     case 'affection': {
       const p = findPerson(state, ef.npcId)
       if (!p) break
-      const cap = affectionCap(state, ef.npcId)
+      let cap = affectionCap(state, ef.npcId)
+      if (!ctx.fromStory) cap = Math.min(cap, nextAffectionBoundary(p.affection) - 1)
       p.affection = ef.delta > 0 ? Math.max(p.affection, Math.min(cap, p.affection + ef.delta)) : clamp(p.affection + ef.delta, 0, 100)
       break
     }

@@ -12,7 +12,7 @@ import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
   baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap, reservedStorage,
 } from './helpers'
-import { applyEffects } from './effects'
+import { applyEffects, nextAffectionBoundary } from './effects'
 import { CRISIS_POINTS } from '../types'
 
 const BUILDS: Record<NewGameOptions['build'], { strength: number; mind: number; charm: number }> = {
@@ -114,8 +114,17 @@ export function createEngine(content: ContentPack): GameEngine {
     }
   }
 
-  /** 送礼价值：他缺的维度 5×档位，否则 2×档位；装备按档位 3×；伙伴翻倍算忠诚 */
-  function giftValue(s: GameState, personId: string, instanceId: string): number {
+  function giftPreview(s: GameState, personId: string, instanceId: string): { raw: number; effective: number; cap: number } {
+    const p = s.people[personId]
+    const raw = giftRaw(s, personId, instanceId)
+    if (!p) return { raw: 0, effective: 0, cap: 100 }
+    if (!isRomanceable(ci, p)) return { raw, effective: raw, cap: 100 }
+    const cap = Math.min(affectionCap(s, personId), nextAffectionBoundary(p.affection) - 1)
+    return { raw, effective: Math.max(0, Math.min(raw, cap - p.affection)), cap }
+  }
+
+  /** 送礼价值：他缺的维度翻倍；装备 4×档位；晶核 3×档位；伙伴翻倍算忠诚（未截断） */
+  function giftRaw(s: GameState, personId: string, instanceId: string): number {
     const p = s.people[personId]
     const inst = findCard(s, instanceId)
     if (!p || !inst) return 0
@@ -128,11 +137,15 @@ export function createEngine(content: ContentPack): GameEngine {
     else if (def.kind === 'core') amount = 3 * (rarityIndex(rarity) + 1)
     else return 0
     if (isRomanceable(ci, p)) {
-      // 暧昧以上收益减半；序章有上限
+      // 暧昧以上收益减半
       if (p.affection >= 60) amount = Math.max(1, Math.floor(amount / 2))
-      return Math.max(0, Math.min(amount, affectionCap(s, personId) - p.affection))
+      return amount
     }
     return amount * 2
+  }
+
+  function giftValue(s: GameState, personId: string, instanceId: string): number {
+    return giftPreview(s, personId, instanceId).effective
   }
 
   function notice(s: GameState, zh: string): void { s.lastNotice = { zh }; s.noticeSeq += 1 }
@@ -255,6 +268,7 @@ export function createEngine(content: ContentPack): GameEngine {
       else { p.loyalty = clamp(p.loyalty + amount, 0, 100); notice(s, `送了${cardName}给${pname}：忠诚 +${amount}（现在 ${p.loyalty}）`) }
     }),
     giftValue: (state, personId, instanceId) => giftValue(state, personId, instanceId),
+    giftPreview: (state, personId, instanceId) => giftPreview(state, personId, instanceId),
     equip: (state, personId, instanceId) => mutate(state, (s) => {
       const inst = findCard(s, instanceId)
       if (!inst) throw new EngineError('NO_CARD', instanceId)

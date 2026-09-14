@@ -90,7 +90,7 @@ export const storyEvents: EventDef[] = [
   {
     id: 'ev_shenyan_04', kind: 'story', energy: 1, locationId: 'home', icon: '🩺', once: true, weight: 0, storylineNpcId: 'shenyan',
     title: { zh: '实验室搬进你家' }, text: { zh: '他需要一个稳定的地方。你有。' },
-    conditions: [A, { type: 'affectionAtLeast', npcId: 'shenyan', rank: 'crush' }], durationWeeks: 1, slots: [HERO, GIFT('energy', '给实验室供电')],
+    conditions: [A, { type: 'affectionAtLeast', npcId: 'shenyan', rank: 'friend' }], durationWeeks: 1, slots: [HERO, GIFT('energy', '给实验室供电')],
     check: { attrs: ['charm', 'mind'] },
     outcomes: {
       fail: { text: { zh: '他去了军区。' }, effects: [{ type: 'affection', npcId: 'shenyan', delta: 3 }] },
@@ -124,7 +124,7 @@ export const storyEvents: EventDef[] = [
   {
     id: 'ev_xielin_02', kind: 'story', energy: 1, locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
     title: { zh: '交换记忆' }, text: { zh: '他知道第三年以后的事。你知道他不知道的细节。谁先说？' },
-    conditions: [A, { type: 'month', from: 1, to: 5 }, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'acquaintance' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
+    conditions: [A, { type: 'month', from: 1, to: 6 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
     outcomes: {
       fail: { text: { zh: '他套走了你的话，什么都没给。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 2 }, { type: 'stat', stat: 'exposure', delta: 5 }] },
       common: { text: { zh: '他告诉了你四月的事。是真的。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 8 }, { type: 'revealCrisis', monthsAhead: 1 }] },
@@ -135,7 +135,7 @@ export const storyEvents: EventDef[] = [
   {
     id: 'ev_xielin_03', kind: 'story', locationId: 'factory', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
     title: { zh: '他的时间' }, text: { zh: '工厂里尸群围了上来。他抓住你的手腕，世界慢了下来。' },
-    conditions: [A, { type: 'month', from: 4, to: 10 }, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'friend' }], durationWeeks: 1, slots: [HERO, WEAPON], check: { attrs: ['strength', 'mind'] },
+    conditions: [A, { type: 'month', from: 3, to: 10 }, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'acquaintance' }], durationWeeks: 1, slots: [HERO, WEAPON], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '你们逃出来了。他用完异能吐了血。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 8 }, { type: 'injure', target: 'xielin', severity: 1 }] },
       common: { text: { zh: '"这个我上一世第二年才觉醒。"他说，"因为你。"' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 12 }, { type: 'gainCard', cardId: 'skill_xielin_slow' }] },
@@ -146,11 +146,26 @@ export const storyEvents: EventDef[] = [
   {
     id: 'ev_xielin_04', kind: 'story', energy: 1, locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
     title: { zh: '两个重生者的基地' }, text: { zh: '"分开囤，两边都不够。"他说，"合起来。"' },
-    conditions: [A, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'crush' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
+    conditions: [A, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'friend' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
     outcomes: {
       fail: { text: { zh: '你们谈崩了。他带走了一半东西。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: -10 }, { type: 'loseCard', cardId: 'supply_compressed_biscuit', count: 2 }] },
       common: { text: { zh: '他把仓库搬了过来，人没来。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 8 }, { type: 'gainCard', cardId: 'supply_compressed_biscuit', count: 3 }, { type: 'gainCard', cardId: 'supply_gasoline', count: 2 }] },
       fine: { text: { zh: '他搬进来了。带着两世的东西。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 15 }, { type: 'npcJoin', npcId: 'xielin' }, { type: 'gainCard', cardId: 'supply_compressed_biscuit', count: 3 }, { type: 'gainCard', cardId: 'supply_gasoline', count: 2 }, { type: 'gainCard', cardId: 'core_rare' }] },
+    },
+  },
+  {
+    id: 'ev_shenyan_05', kind: 'story', energy: 1, locationId: 'home', icon: '🩺', once: true, weight: 0, storylineNpcId: 'shenyan',
+    title: { zh: '第一支' }, text: { zh: '他做出了疫苗的第一支原型。他没先给军区，也没先给自己。' },
+    conditions: [A, { type: 'affectionAtLeast', npcId: 'shenyan', rank: 'crush' }, { type: 'month', from: 8, to: 12 }], durationWeeks: 1, slots: [HERO],
+    outcomes: { fine: { text: { zh: '"我不知道有没有用。"他说，"但我想先知道你会不会有事。"' }, effects: [{ type: 'affection', npcId: 'shenyan', delta: 20 }, { type: 'setFlag', flag: 'vaccine_3' }, { type: 'npcJoin', npcId: 'shenyan' }] } },
+  },
+  {
+    id: 'ev_xielin_05', kind: 'story', energy: 1, locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
+    title: { zh: '第三年的地铁站' }, text: { zh: '他终于说了那件事：上一世你死的那天，他在，他来晚了。这一世他提前了两年。' },
+    conditions: [A, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'crush' }, { type: 'month', from: 7, to: 12 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    outcomes: {
+      fail: { text: { zh: '你没说话。他也没再说。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 5 }] },
+      fine: { text: { zh: '"这一世你不用赶。"你说。他笑了，两世第一次。' }, effects: [{ type: 'affection', npcId: 'xielin', delta: 20 }, { type: 'setFlag', flag: 'xielin_truth' }] },
     },
   },
   // ================= 江野 =================
@@ -174,6 +189,15 @@ export const storyEvents: EventDef[] = [
       common: { text: { zh: '他留下两个人守你的楼。' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 8 }, { type: 'recruitRandom' }] },
       fine: { text: { zh: '他自己留下了。' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 12 }, { type: 'npcJoin', npcId: 'jiangye' }, { type: 'gainCard', cardId: 'skill_jiangye_guard' }, { type: 'recruitRandom' }] },
       rare: { text: { zh: '他留下了，还带来了一箱弩箭和一条狗。' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 15 }, { type: 'npcJoin', npcId: 'jiangye' }, { type: 'gainCard', cardId: 'skill_jiangye_guard' }, { type: 'recruitRandom' }, { type: 'gainCard', cardId: 'supply_bolts', count: 3 }, { type: 'adoptPet', petId: 'pet_dog' }] },
+    },
+  },
+  {
+    id: 'ev_jiangye_03', kind: 'story', energy: 1, locationId: 'home', icon: '🔥', once: true, weight: 0, storylineNpcId: 'jiangye',
+    title: { zh: '"这次换我站你后面"' }, text: { zh: '他说他记得那一下——不是上一世的，是小时候你替他挨的那一巴掌。' },
+    conditions: [A, { type: 'affectionAtLeast', npcId: 'jiangye', rank: 'crush' }, { type: 'month', from: 5, to: 12 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    outcomes: {
+      fail: { text: { zh: '你笑着岔开了话题。他没追。' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 5 }] },
+      fine: { text: { zh: '"以后你站我后面。"你说。"不。"他说，"并排。"' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 20 }, { type: 'npcJoin', npcId: 'jiangye' }] },
     },
   },
   // ================= 阿寂 =================

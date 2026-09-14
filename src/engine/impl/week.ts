@@ -5,7 +5,7 @@ import { turnToTime } from '../api'
 import { drawEvents, resolvePlacement, drawChoice } from './events'
 import { energyMax, hasCold } from './helpers'
 import { drawCrisis, resolveCrisis } from './crisis'
-import { grantCard, grantFromLoot, loseRandomCards, type EffectCtx } from './effects'
+import { grantCard, grantFromLoot, loseRandomCards, applyEffects, type EffectCtx } from './effects'
 import { isCompanion, isRomanceable, baseDefense, supplyPoints, cardPoints, personName, clamp } from './helpers'
 import { checkAll } from './conditions'
 import { EngineError } from '../api'
@@ -111,8 +111,9 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
       const care = rng.pick(def.care)
       const c = grantCard({ ci, state, rng, report }, care.cardId)
       report.news.push({ zh: `${def.name.zh}：${care.text.zh}${c ? `（收到 ${ci.card(care.cardId).name.zh}）` : '（仓库满了，没收下）'}` })
-      p.affection = Math.min(100, p.affection + 1)
-      report.changes.push({ label: { zh: `${def.name.zh} 好感` }, delta: 1, reason: { zh: '他的关怀' } })
+      const a0 = p.affection
+      applyEffects({ ci, state, rng, report, fromStory: false }, [{ type: 'affection', npcId: p.id, delta: 1 }])
+      if (p.affection !== a0) report.changes.push({ label: { zh: `${def.name.zh} 好感` }, delta: p.affection - a0, reason: { zh: '他的关怀' } })
     }
   }
 

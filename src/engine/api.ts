@@ -38,8 +38,10 @@ export interface GameEngine {
   /** 退货：在路上的网购全额退款 */
   cancelOrder(state: GameState, orderIndex: number): GameState
   gift(state: GameState, personId: string, instanceId: string): GameState
-  /** 送这张卡会涨多少好感/忠诚（UI 预览用） */
+  /** 送这张卡会涨多少好感/忠诚（UI 预览用，已按档位上限截断） */
   giftValue(state: GameState, personId: string, instanceId: string): number
+  /** 送礼预览：原始价值、实际能涨、以及本档上限 */
+  giftPreview(state: GameState, personId: string, instanceId: string): { raw: number; effective: number; cap: number }
   equip(state: GameState, personId: 'hero' | string, instanceId: string): GameState
   /** 借力：用男主/伙伴的技能卡代替硬顶本月危机 */
   useSkill(state: GameState, instanceId: string): GameState

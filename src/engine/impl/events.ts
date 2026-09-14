@@ -302,13 +302,13 @@ export function resolvePlacement(ci: ContentIndex, state: GameState, rng: Rng, p
   const leaderSlot = e.slots.find((s) => s.accepts.kind === 'person' || s.accepts.kind === 'hero')
   const leader = leaderSlot ? p.assignments[leaderSlot.id] : undefined
   const actor = (leader && leader !== 'hero' && state.people[leader]) ? leader : Object.values(p.assignments).find((v) => v !== 'hero' && state.people[v])
-  const ctx: EffectCtx = { ci, state, rng, report, actorId: actor ?? 'hero', heroPresent }
+  const ctx: EffectCtx = { ci, state, rng, report, actorId: actor ?? 'hero', heroPresent, fromStory: !!e.storylineNpcId }
   applyEffects(ctx, picked.branch.effects)
-  // 同行涨好感/忠诚
+  // 同行涨好感/忠诚（好感不跨档）
   for (const v of Object.values(p.assignments)) {
     const person = state.people[v]
     if (!person) continue
-    if (isRomanceable(ci, person)) person.affection = Math.min(100, person.affection + 2)
+    if (isRomanceable(ci, person)) applyEffects({ ...ctx, fromStory: false }, [{ type: 'affection', npcId: person.id, delta: 2 }])
     else person.loyalty = Math.min(100, person.loyalty + 1)
   }
   if (e.once) state.usedOnceEvents.push(e.id)
