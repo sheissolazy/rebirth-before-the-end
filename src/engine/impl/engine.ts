@@ -102,7 +102,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (size > free) throw new EngineError('NO_ROOM', `仓库放不下：还剩 ${free} 格（含在路上的），这单要 ${size} 格。丢掉没用的、建储物间，或换更大的房子`)
       s.money -= price
       s.orderedThisWeek[cardDefId] = already + count
-      s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) + (ci.bases.get(s.base.type)?.deliveryDelay ?? 0) })
+      s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) + (ci.bases.get(s.base.type)?.deliveryDelay ?? 0), paid: price })
     } else {
       const f = factionId ? ci.factions.get(factionId) : undefined
       if (!f) throw new EngineError('NO_FACTION', 'trade needs a faction')
@@ -216,6 +216,15 @@ export function createEngine(content: ContentPack): GameEngine {
       return { state: r.state, report: r.result as WeekReport }
     },
     buy: (state, cardDefId, count, factionId) => mutate(state, (s, rng) => buyImpl(s, rng, cardDefId, count, factionId)),
+    cancelOrder: (state, orderIndex) => mutate(state, (s) => {
+      const o = s.orders[orderIndex]
+      if (!o) throw new EngineError('NO_ORDER', String(orderIndex))
+      if (s.time.phase !== 'prologue') throw new EngineError('NO_REFUND', '末日了，没人退款')
+      s.orders.splice(orderIndex, 1)
+      s.money += o.paid ?? 0
+      s.orderedThisWeek[o.cardDefId] = Math.max(0, (s.orderedThisWeek[o.cardDefId] ?? 0) - o.count)
+      notice(s, `退了 ${ci.card(o.cardDefId).name.zh}×${o.count}，退款 ￥${o.paid ?? 0}`)
+    }),
     sell: (state, instanceId, factionId) => mutate(state, (s, rng) => {
       const inst = findCard(s, instanceId)
       if (!inst) throw new EngineError('NO_CARD', instanceId)

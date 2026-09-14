@@ -48,6 +48,7 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
 
       <section className="rounded-lg border border-zinc-800 p-3">
         <h3 className="font-semibold">{t('upkeep.title')}</h3>
+        {state.time.phase === 'prologue' && <p className="text-sm text-amber-200">{t('upkeep.prologueLine', { items: [`吃饭 ${st.mouths} 人 ￥${Math.round(500 * st.mouths * state.priceMultiplier)}`, ...state.hand.filter((c) => cardDefs.get(c.defId)?.kind === 'trouble').map((c) => { const d = cardDefs.get(c.defId)!; return d.kind === 'trouble' && d.weeklyMoneyDelta ? `${lt(d.name)} ￥${d.weeklyMoneyDelta}` : '' }).filter(Boolean)].join(' · ') })}</p>}
         <p className="text-sm text-zinc-300">{state.time.phase === 'prologue' ? t('upkeep.prologue') : t('upkeep.line', { mouths: st.mouths, pets: st.petMouths, food: st.weeklyFood, water: st.weeklyWater, foodUnits: st.foodUnits, foodWeeks: Math.floor(st.foodUnits / Math.max(1, st.weeklyFood)), waterUnits: st.waterUnits, waterWeeks: Math.floor(st.waterUnits / Math.max(1, st.weeklyWater)) })}</p>
       </section>
 

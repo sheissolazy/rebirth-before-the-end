@@ -2,8 +2,8 @@ import type { BaseDef, ModuleDef } from '../engine/types'
 
 export const bases: BaseDef[] = [
   { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。在城里，去哪都近。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 4 },
-  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '城里带院子的独栋，两米围墙。贵在地段：去哪都近，网购当周到。' }, icon: '🏡', price: 3_000_000, baseDefense: 6, storage: 120, population: 8 },
-  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '离城四十公里，有地有井，能种能养。便宜在偏远：进城做事每次多耗 1 精力，序章网购多等 1 周，围栏一开始挡不住什么。' }, icon: '🌾', price: 1_500_000, baseDefense: 4, storage: 200, population: 12, travelPenalty: 1, deliveryDelay: 1 },
+  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '城里带院子的独栋，两米围墙，前后院能种。贵，但样样都好：去哪都近，网购当周到。' }, icon: '🏡', price: 3_000_000, baseDefense: 6, storage: 200, population: 10 },
+  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '离城四十公里，有地有井。便宜在偏远：进城做事每次多耗 1 精力，序章网购多等 1 周，围栏一开始挡不住什么。' }, icon: '🌾', price: 1_500_000, baseDefense: 4, storage: 150, population: 8, travelPenalty: 1, deliveryDelay: 1 },
   { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 400, population: 20 },
 ]
 
@@ -20,7 +20,9 @@ export const modules: ModuleDef[] = [
   // 别墅
   { id: 'villa_wall', baseType: 'villa', name: { zh: '围墙' }, desc: { zh: '加高加刺。' }, icon: '🧱', cost: { materialPoints: 10, labor: 3, weeks: 2 }, provides: [{ type: 'defense', value: 4 }] },
   { id: 'villa_gate', baseType: 'villa', name: { zh: '铁门' }, desc: { zh: '双层。' }, icon: '🚪', cost: { materialPoints: 6, labor: 2, weeks: 1 }, provides: [{ type: 'defense', value: 2 }] },
-  { id: 'villa_garden', baseType: 'villa', name: { zh: '院子菜地' }, desc: { zh: '够两个人吃。' }, icon: '🥕', cost: { materialPoints: 3, labor: 2, weeks: 2, requires: [{ cardId: 'supply_seed_veg', count: 2 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 2 }] },
+  { id: 'villa_garden', baseType: 'villa', name: { zh: '前后院菜地' }, desc: { zh: '前院后院都翻了，够三个人吃。' }, icon: '🥕', cost: { materialPoints: 3, labor: 2, weeks: 2, requires: [{ cardId: 'supply_seed_veg', count: 2 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 3 }] },
+  { id: 'villa_greenhouse', baseType: 'villa', name: { zh: '阳光房温室' }, desc: { zh: '阳光房改的温室，冬天也能种。' }, icon: '🏡', cost: { materialPoints: 10, labor: 3, weeks: 3, requires: [{ cardId: 'supply_seed_sapling', count: 1 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 3 }, { type: 'counters', crisisKind: 'climate', points: 2 }] },
+  { id: 'villa_clinic', baseType: 'villa', name: { zh: '客房医务室' }, desc: { zh: '一间客房改医务室。' }, icon: '🏥', cost: { materialPoints: 8, labor: 2, weeks: 2 }, provides: [{ type: 'heal', perWeek: 1 }, { type: 'counters', crisisKind: 'plague', points: 2 }] },
   { id: 'villa_well', baseType: 'villa', name: { zh: '水井' }, desc: { zh: '打井队最后一单。' }, icon: '🕳️', cost: { materialPoints: 12, labor: 3, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 3 }] },
   { id: 'villa_genroom', baseType: 'villa', name: { zh: '发电机房' }, desc: { zh: '隔音，安全。' }, icon: '⚡', cost: { materialPoints: 8, labor: 2, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'energy', cardId: 'supply_battery', perWeek: 2 }] },
   { id: 'villa_workshop', baseType: 'villa', name: { zh: '车库工坊' }, desc: { zh: '修东西、造弩箭。' }, icon: '🛠️', cost: { materialPoints: 8, labor: 2, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'weapon', cardId: 'supply_bolts', perWeek: 1 }] },
@@ -28,7 +30,7 @@ export const modules: ModuleDef[] = [
   // 郊区自建房
   { id: 'farm_fence', baseType: 'farmhouse', name: { zh: '围栏' }, desc: { zh: '铁丝网加木桩。' }, icon: '🪵', cost: { materialPoints: 10, labor: 4, weeks: 2 }, provides: [{ type: 'defense', value: 3 }] },
   { id: 'farm_tower', baseType: 'farmhouse', name: { zh: '瞭望塔' }, desc: { zh: '提前一天看到尸潮。' }, icon: '🗼', cost: { materialPoints: 8, labor: 3, weeks: 2 }, provides: [{ type: 'defense', value: 2 }, { type: 'counters', crisisKind: 'horde', points: 2 }] },
-  { id: 'farm_field', baseType: 'farmhouse', name: { zh: '大田' }, desc: { zh: '土豆和玉米。' }, icon: '🌽', cost: { materialPoints: 4, labor: 4, weeks: 3, requires: [{ cardId: 'supply_seed_potato', count: 2 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 4 }] },
+  { id: 'farm_field', baseType: 'farmhouse', name: { zh: '大田' }, desc: { zh: '土豆和玉米。' }, icon: '🌽', cost: { materialPoints: 4, labor: 4, weeks: 3, requires: [{ cardId: 'supply_seed_potato', count: 2 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 3 }] },
   { id: 'farm_greenhouse', baseType: 'farmhouse', name: { zh: '温室' }, desc: { zh: '冬天也能种。' }, icon: '🏡', cost: { materialPoints: 12, labor: 3, weeks: 3, requires: [{ cardId: 'supply_seed_sapling', count: 1 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 2 }, { type: 'counters', crisisKind: 'climate', points: 2 }] },
   { id: 'farm_pen', baseType: 'farmhouse', name: { zh: '畜栏' }, desc: { zh: '鸡和羊。' }, icon: '🐔', cost: { materialPoints: 6, labor: 3, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_eggs', perWeek: 2 }] },
   { id: 'farm_watertower', baseType: 'farmhouse', name: { zh: '水塔' }, desc: { zh: '存雨水和井水。' }, icon: '🚰', cost: { materialPoints: 10, labor: 3, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 4 }] },

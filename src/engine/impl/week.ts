@@ -89,7 +89,7 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   // 10. 序章物价、贷款利息
   if (state.time.phase === 'prologue') {
     state.priceMultiplier = +(state.priceMultiplier * 1.05).toFixed(3)
-    if (state.hero.debt > 0) state.hero.debt = Math.round(state.hero.debt * 1.02)
+    if (state.hero.debt > 0) { const before = state.hero.debt; state.hero.debt = Math.round(state.hero.debt * 1.02); report.changes.push({ label: { zh: '负债' }, delta: state.hero.debt - before, reason: { zh: '贷款利息 2%/周' } }) }
   }
 
   // 10b. 不出风头就慢慢被遗忘：暴露每周 -1
@@ -216,15 +216,16 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
       if (state.hero.health < 10) { state.hero.health++; report.changes.push({ label: { zh: '健康' }, delta: 1, reason: { zh: '吃饱休息' } }) }
     }
   } else {
-    // 序章：吃饭花钱，麻烦卡扣钱
+    // 序章：吃饭花钱，麻烦卡扣钱（逐项记录）
     const cost = Math.round(500 * mouths * state.priceMultiplier)
     state.money = Math.max(0, state.money - cost)
     report.upkeep.money -= cost
+    report.changes.push({ label: { zh: '钱' }, delta: -cost, reason: { zh: `吃饭（${mouths} 人 × 500 × 物价 ${state.priceMultiplier}）` } })
   }
   for (const c of state.hand) {
     const d = ci.card(c.defId)
     if (d.kind !== 'trouble') continue
-    if (d.weeklyMoneyDelta && state.time.phase === 'prologue') { state.money = Math.max(0, state.money + d.weeklyMoneyDelta); report.upkeep.money += d.weeklyMoneyDelta }
+    if (d.weeklyMoneyDelta && state.time.phase === 'prologue') { state.money = Math.max(0, state.money + d.weeklyMoneyDelta); report.upkeep.money += d.weeklyMoneyDelta; report.changes.push({ label: { zh: '钱' }, delta: d.weeklyMoneyDelta, reason: { zh: `麻烦卡「${d.name.zh}」` } }) }
     if (d.weeklyLoyaltyDelta) for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) { const l0 = p.loyalty; p.loyalty = clamp(p.loyalty + d.weeklyLoyaltyDelta, 0, 100); if (p.loyalty !== l0) report.changes.push({ label: { zh: `${personName(ci, p).zh} 忠诚` }, delta: p.loyalty - l0, reason: { zh: `麻烦卡「${d.name.zh}」` } }) }
     if (d.weeklyExposureDelta) state.hero.exposure = clamp(state.hero.exposure + d.weeklyExposureDelta, 0, 100)
   }

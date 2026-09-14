@@ -35,6 +35,8 @@ export interface GameEngine {
   /** 序章买东西 / 末日后向势力换东西 */
   buy(state: GameState, cardDefId: string, count: number, factionId?: string): GameState
   sell(state: GameState, instanceId: string, factionId?: string): GameState
+  /** 退货：在路上的网购全额退款 */
+  cancelOrder(state: GameState, orderIndex: number): GameState
   gift(state: GameState, personId: string, instanceId: string): GameState
   /** 送这张卡会涨多少好感/忠诚（UI 预览用） */
   giftValue(state: GameState, personId: string, instanceId: string): number

@@ -165,13 +165,13 @@ export const prologueEvents: EventDef[] = [
   },
   {
     id: 'ev_bank_buy_villa', energy: 1, locationId: 'bank', icon: '🏡', once: true, weight: 0,
-    title: { zh: '首付买别墅' }, text: { zh: '城里带院子的独栋，围墙两米。总价三百万，首付三成九十万，剩下的贷款。末日之后，没有银行会来收房。防御 6、仓库 120 格、住 8 人，去哪都近、网购当周到；能建 7 个模块（围墙、铁门、菜地、水井、发电机房、车库工坊、犬舍），全建完要材料 46 分。' },
+    title: { zh: '首付买别墅' }, text: { zh: '城里带院子的独栋，围墙两米。总价三百万，首付三成九十万，剩下的贷款。末日之后，没有银行会来收房。防御 6、仓库 200 格、住 10 人，去哪都近、网购当周到；能建 9 个模块（围墙、铁门、前后院菜地、阳光房温室、水井、发电机房、车库工坊、客房医务室、犬舍），全建完要材料 64 分。贵，但样样比自建房好。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 900000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '你签了三十年的贷款合同，心里知道只用还三周。中介说你是他见过最痛快的客户。' }, effects: [{ type: 'money', delta: -900000 }, { type: 'moveBase', baseType: 'villa' }, { type: 'stat', stat: 'exposure', delta: 5 }] } },
   },
   {
     id: 'ev_bank_buy_farm', energy: 1, locationId: 'bank', icon: '🌾', once: true, weight: 0,
-    title: { zh: '首付买郊区自建房' }, text: { zh: '离城四十公里，有地有井。总价一百五十万，首付三成四十五万，剩下的贷款，末日后没人来收。防御只有 4（靠围栏和瞭望塔补）、仓库 200 格、住 12 人；能种能养，但进城做事每次多耗 1 精力，序章网购多等 1 周。能建 10 个模块（围栏、瞭望塔、大田、温室、畜栏、水塔、柴油发电、仓库、医务室、训练场），全建完要材料 82 分，大田和温室还要种子。' },
+    title: { zh: '首付买郊区自建房' }, text: { zh: '离城四十公里，有地有井。总价一百五十万，首付三成四十五万，剩下的贷款，末日后没人来收。防御只有 4（靠围栏和瞭望塔补）、仓库 150 格、住 8 人；有大田和畜栏，但进城做事每次多耗 1 精力，序章网购多等 1 周。能建 10 个模块（围栏、瞭望塔、大田、温室、畜栏、水塔、柴油发电、仓库、医务室、训练场），全建完要材料 82 分，大田和温室还要种子。便宜，各方面都不如别墅。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 450000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '房主是个老太太。她说"你一个女孩子住这么远做什么"。' }, effects: [{ type: 'money', delta: -450000 }, { type: 'moveBase', baseType: 'farmhouse' }] } },
   },

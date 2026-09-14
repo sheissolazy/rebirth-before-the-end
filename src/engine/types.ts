@@ -591,6 +591,8 @@ export interface Order {
   cardDefId: string
   count: number
   arrivesAtTurn: Turn
+  /** 付了多少钱（退货全额退） */
+  paid?: number
 }
 
 export interface PetState {

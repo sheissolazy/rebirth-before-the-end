@@ -84,7 +84,16 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
           <p className={`mt-1 text-xs ${st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < 5 ? 'text-red-400' : 'text-amber-200'}`}>{t('shop.storage', { used: st.storageUsed + st.spaceUsed, cap: st.storageCap + st.spaceCap, reserved: st.storageReserved, free: st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved })}</p>
           {state.time.phase === 'prologue' && <p className="mt-1 text-xs text-zinc-500">{t('shop.onlineHint')}</p>}
           {state.orders.length > 0 && (
-            <p className="mt-1 text-xs text-amber-300">{t('shop.orders')}：{state.orders.map((o) => `${lt(cardDefs.get(o.cardDefId)?.name ?? { zh: o.cardDefId })}×${o.count}（${t('shop.arrives', { n: Math.max(0, o.arrivesAtTurn - state.turn) })}）`).join('、')}</p>
+            <div className="mt-1 text-xs text-amber-300">{t('shop.orders')}：
+              <ul className="mt-1 space-y-0.5">
+                {state.orders.map((o, i) => (
+                  <li key={i} className="flex items-center justify-between rounded border border-amber-900/50 px-2 py-0.5">
+                    <span>{lt(cardDefs.get(o.cardDefId)?.name ?? { zh: o.cardDefId })}×{o.count}（{t('shop.arrives', { n: Math.max(0, o.arrivesAtTurn - state.turn) })}{o.paid ? ` · ￥${o.paid}` : ''}）</span>
+                    {state.time.phase === 'prologue' && <button className="rounded bg-zinc-700 px-2 py-0.5 text-zinc-200" onClick={() => store.act((s) => engine.cancelOrder(s, i))}>{t('shop.refund')}</button>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {[...KINDS, 'equipment'].map((k) => {
             const items = content.cards.filter((c) => c.kind === 'supply' || c.kind === 'equipment').filter((c) => state.time.phase === 'apocalypse' || c.buyable).filter((c) => groupOf(c) === k)
