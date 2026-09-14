@@ -15,7 +15,7 @@ export function StartScreen({ store }: { store: Store }) {
   const toggle = (id: string) => setTraits(traits.includes(id) ? traits.filter((x) => x !== id) : [...traits, id])
   return (
     <main className="mx-auto max-w-lg space-y-6 p-6">
-      <h1 className="text-3xl font-bold">{t('app.title')} <span className="text-xs font-normal text-zinc-500">{import.meta.env.VITE_SAVE_PREFIX === 'rbte-next' ? 'next 开发版' : '测试版'}</span></h1>
+      <h1 className="text-3xl font-bold">{t('app.title')} <span className="text-xs font-normal text-zinc-500">{import.meta.env.VITE_SAVE_PREFIX === 'rbte-dev' ? 'dev 最新开发版' : import.meta.env.VITE_SAVE_PREFIX === 'rbte-next' ? 'next 测试版' : '测试版'}</span></h1>
       <p className="text-zinc-400">你死在末日第三年。睁开眼，是末日前四周。</p>
       {m.rebirths > 0 && <p className="text-sm text-zinc-400">这是第 {m.rebirths + 1} 世 · {t('shop.title')} {m.rebirthPoints} · 特质预算 {budget}</p>}
 
