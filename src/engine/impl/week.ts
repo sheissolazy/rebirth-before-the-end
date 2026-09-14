@@ -100,7 +100,7 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
 
   // 11b. 多线：两位男主都住进基地且都 ≥ 暧昧 → 触发修罗场标记
   const crushes = Object.values(state.people).filter((p) => p.alive && p.inBase && isRomanceable(ci, p) && p.affection >= 60)
-  if (crushes.length >= 2 && !state.flags.two_crushes) state.flags.two_crushes = true
+  state.flags.two_crushes = crushes.length >= 2
 
   // 11c. 男主关怀：暧昧以上、末日后，每周 25% 送点东西
   if (state.time.phase === 'apocalypse') {
@@ -233,7 +233,10 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
 }
 
 function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport, wasPrologue: boolean): void {
-  if (!state.orders.length) return
+  if (!state.orders.length) {
+    if (state.time.phase === 'apocalypse' && state.parcels.length) { report.news.push({ zh: `快递站里还有 ${state.parcels.length} 件没取的东西。快递站被抢了。` }); state.parcels = [] }
+    return
+  }
   if (state.time.phase === 'apocalypse' && !wasPrologue) {
     const n = state.orders.reduce((t, o) => t + o.count, 0)
     state.orders = []
@@ -251,14 +254,30 @@ function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: Wee
       report.delivered.push(c)
       left--
     }
-    if (left > 0) { keep.push({ ...o, count: left, arrivesAtTurn: state.turn + 1 }); report.news.push({ zh: `仓库满了，${ci.card(o.cardDefId).name.zh}×${left} 被快递员带回站点，下周再送（末日后就送不到了）。丢掉没用的东西腾地方。` }) }
+    if (left > 0) {
+      // 放不下的进快递站待取区
+      for (let i = 0; i < left; i++) {
+        const def = ci.card(o.cardDefId)
+        const inst = { instanceId: rng.id('c'), defId: o.cardDefId } as (typeof state.parcels)[number]
+        if (def.kind === 'supply' && def.shelfLifeWeeks) inst.expiresAtTurn = state.turn + def.shelfLifeWeeks
+        if (def.kind === 'supply' && (def.supplyKind === 'food' || def.supplyKind === 'water' || def.units !== undefined)) inst.unitsLeft = def.units ?? 1
+        state.parcels.push(inst)
+      }
+      report.news.push({ zh: `仓库放不下，${ci.card(o.cardDefId).name.zh}×${left} 放在快递站待取。去仓库页"快递站"取回或丢弃；末日一到就取不到了。` })
+    }
   }
   state.orders = keep
-  // 末日当周：到货的到了，没到的永远到不了
-  if (state.time.phase === 'apocalypse' && state.orders.length) {
-    const n = state.orders.reduce((t, o) => t + o.count, 0)
-    state.orders = []
-    report.news.push({ zh: `最后一批快递赶在城市失守前送到了。还有 ${n} 件在路上的，永远到不了了。` })
+  // 末日当周：到货的到了，没到的永远到不了；快递站里没取的也没了
+  if (state.time.phase === 'apocalypse') {
+    if (state.orders.length) {
+      const n = state.orders.reduce((t, o) => t + o.count, 0)
+      state.orders = []
+      report.news.push({ zh: `最后一批快递赶在城市失守前送到了。还有 ${n} 件在路上的，永远到不了了。` })
+    }
+    if (state.parcels.length) {
+      report.news.push({ zh: `快递站里还有 ${state.parcels.length} 件没取的东西。快递站被抢了。` })
+      state.parcels = []
+    }
   }
 }
 

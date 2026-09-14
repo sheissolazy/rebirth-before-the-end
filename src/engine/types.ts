@@ -334,6 +334,8 @@ export type Condition =
   | { type: 'employed'; value: boolean }
   | { type: 'hasPet'; species: 'dog' | 'cat' }
   | { type: 'hasCard'; cardId: string }
+  /** 住在基地且好感 ≥ 暧昧的男主人数 */
+  | { type: 'crushesInBase'; min: number }
   | { type: 'defenseAtMost'; value: number }
   | { type: 'defenseAtLeast'; value: number }
   | { type: 'not'; cond: Condition }
@@ -667,6 +669,8 @@ export interface GameState {
   pendingRecruits: PersonState[]
   /** 在路上的网购（序章）。末日一到全部丢失 */
   orders: Order[]
+  /** 快递站待取：到了但仓库放不下的东西。随时取回或丢弃；末日一到全部丢失 */
+  parcels: CardInstance[]
   /** 本周各商品已下单件数（限购） */
   orderedThisWeek: Record<string, number>
   placements: Placement[]

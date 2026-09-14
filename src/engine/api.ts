@@ -20,6 +20,9 @@ export interface GameEngine {
   eligibleCards(state: GameState, eventId: string, slotId: string): string[]
   place(state: GameState, placement: Omit<Placement, 'startedTurn' | 'resolvesAtTurn'>): GameState
   unplace(state: GameState, eventId: string): GameState
+  /** 快递站：取回 / 丢弃 */
+  pickupParcel(state: GameState, instanceId: string): GameState
+  discardParcel(state: GameState, instanceId: string): GameState
   /** 接受 / 拒绝候选幸存者 */
   recruit(state: GameState, personId: string): GameState
   dismissRecruit(state: GameState, personId: string): GameState

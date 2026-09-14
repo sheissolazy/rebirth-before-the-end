@@ -121,6 +121,26 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
         </section>
       )}
 
+      {state.parcels.length > 0 && (
+        <section className="rounded-lg border border-amber-800 p-3">
+          <h3 className="font-semibold">{t('parcel.title', { n: state.parcels.length })}</h3>
+          <p className="text-xs text-zinc-500">{t('parcel.hint')}</p>
+          <ul className="mt-2 space-y-1">
+            {state.parcels.map((c) => {
+              const d = cardDefs.get(c.defId)!
+              return (
+                <li key={c.instanceId} className={`flex items-center justify-between rounded border px-2 py-1 text-xs ${RARITY_CLASS[d.rarity]}`}>
+                  <span>{cardName(c)}</span>
+                  <span className="flex gap-1">
+                    <button className="rounded bg-emerald-800 px-2 py-0.5" onClick={() => store.act((s) => engine.pickupParcel(s, c.instanceId))}>{t('parcel.pickup')}</button>
+                    <button className="rounded bg-zinc-700 px-2 py-0.5" onClick={() => store.act((s) => engine.discardParcel(s, c.instanceId))}>{t('action.discard')}</button>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
       <Section title={t('warehouse.capacity', { used: st.storageUsed, cap: st.storageCap })} inSpace={false} />
       <Section title={t('space.capacity', { used: st.spaceUsed, cap: st.spaceCap })} inSpace={true} />
 

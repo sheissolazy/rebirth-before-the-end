@@ -192,7 +192,7 @@ export const storyEvents: EventDef[] = [
   {
     id: 'ev_home_confrontation', kind: 'main', energy: 1, locationId: 'home', icon: '💔', once: true, weight: 0,
     title: { zh: '他们在同一张桌子上' }, text: { zh: '谁都没说话。你知道他们都知道。' },
-    conditions: [A, { type: 'flag', flag: 'two_crushes' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
+    conditions: [A, { type: 'crushesInBase', min: 2 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {
       fail: { text: { zh: '有人摔门走了。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: -20 }, { type: 'affection', npcId: 'shenyan', delta: -20 }, { type: 'affection', npcId: 'xielin', delta: -20 }, { type: 'affection', npcId: 'jiangye', delta: -20 }] },
       common: { text: { zh: '这顿饭很难吃。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: -5 }, { type: 'affection', npcId: 'shenyan', delta: -5 }, { type: 'affection', npcId: 'xielin', delta: -5 }, { type: 'affection', npcId: 'jiangye', delta: -5 }] },

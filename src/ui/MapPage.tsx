@@ -14,13 +14,21 @@ export function MapPage({ state, store }: { state: GameState; store: Store }) {
   const kindOf = (e: EventDef) => e.kind ?? (e.storylineNpcId ? 'story' : 'random')
   const mains = events.filter((e) => kindOf(e) === 'main')
   const locs = content.locations.filter((l) => (l.phase === 'both' || l.phase === state.time.phase) && events.some((e) => e.locationId === l.id && kindOf(e) !== 'main'))
+  const timeLeft = (e: EventDef) => {
+    if (e.resolvesCrisis && state.crisis && state.crisis.crisisKind === e.resolvesCrisis) return ` · ${t('event.weeksLeft', { n: Math.max(0, state.crisis.dueTurn - state.turn + 1) })}`
+    const m = e.conditions.find((c) => c.type === 'month')
+    if (m && m.type === 'month' && kindOf(e) !== 'random') return ` · ${t('event.months', { from: m.from, to: m.to })}`
+    const w = e.conditions.find((c) => c.type === 'weeksBeforeEnd')
+    if (w && w.type === 'weeksBeforeEnd') return ` · 末日前 ${w.to}~${w.from} 周`
+    return ''
+  }
   const order = (e: EventDef) => ({ story: 0, routine: 1, random: 2, main: 3 } as Record<string, number>)[kindOf(e)] ?? 2
   const Card = ({ e }: { e: EventDef }) => (
     <button onClick={() => setOpen(e)} className={`w-full rounded-lg border p-2 text-left text-sm ${placedIds.has(e.id) ? 'border-amber-500 bg-amber-950/30' : kindOf(e) === 'main' ? 'border-red-900 bg-zinc-900' : 'border-zinc-800 bg-zinc-900'}`}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{e.icon} {lt(e.title)} {placedIds.has(e.id) && <span className="text-xs text-amber-400">进行中</span>}</span>
         <span className="shrink-0 text-xs text-zinc-500">
-          <span className={`mr-1 rounded px-1 ${KIND_TAG[kindOf(e)]}`}>{t(`event.${kindOf(e)}` as 'event.main')}</span>
+          <span className={`mr-1 rounded px-1 ${KIND_TAG[kindOf(e)]}`}>{t(`event.${kindOf(e)}` as 'event.main')}{timeLeft(e)}</span>
           {e.slots.some((sl) => sl.accepts.kind === 'hero') ? `⚡${e.energy ?? 2}` : `👥⚡${e.energy ?? 2}`}
         </span>
       </div>

@@ -9,13 +9,17 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
   const placed = state.placements.find((p) => p.eventId === event.id)
   const [assign, setAssign] = useState<Record<string, string>>(placed?.assignments ?? {})
   const options = useMemo(() => Object.fromEntries(event.slots.map((s) => [s.id, engine.eligibleCards(state, event.id, s.id)])), [state, event])
-  const dice = event.check ? engine.previewDice(state, event.id, assign) : 0
+  const personSlot = event.slots.find((sl) => sl.accepts.kind === 'hero' || sl.accepts.kind === 'person')
+  const assumed = personSlot && !assign[personSlot.id] ? { ...assign, [personSlot.id]: 'hero' } : assign
+  const assuming = personSlot && !assign[personSlot.id]
+  const dice = event.check ? engine.previewDice(state, event.id, Object.fromEntries(Object.entries(assumed).filter(([, v]) => v))) : 0
   const canPlace = event.slots.every((s) => !s.required || assign[s.id])
   const clean = (a: Record<string, string>) => Object.fromEntries(Object.entries(a).filter(([, v]) => v))
   const optionDice = (slotId: string, id: string) => {
     if (!event.check) return 0
-    const without = engine.previewDice(state, event.id, clean({ ...assign, [slotId]: '' }))
-    const withIt = engine.previewDice(state, event.id, clean({ ...assign, [slotId]: id }))
+    const base = personSlot && slotId !== personSlot.id && !assign[personSlot.id] ? { ...assign, [personSlot.id]: 'hero' } : assign
+    const without = engine.previewDice(state, event.id, clean({ ...base, [slotId]: '' }))
+    const withIt = engine.previewDice(state, event.id, clean({ ...base, [slotId]: id }))
     return withIt - without
   }
   // 二项分布：每骰 50%
@@ -38,7 +42,7 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-900 p-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold">{event.icon} {lt(event.title)}</h3>
         <p className="mt-1 text-sm text-zinc-300">{lt(event.text)}</p>
-        {event.check && <p className="mt-1 text-xs text-amber-200">{t('event.odds', odds)}</p>}
+        {event.check && <p className="mt-1 text-xs text-amber-200">{t('event.odds', odds)}{assuming ? t('event.oddsAssume') : ''}</p>}
         {event.check && <p className="text-xs text-zinc-600">{t('event.diceNote')}</p>}
         {leaderSlot && <p className="mt-1 text-xs text-zinc-500">{t('event.leaderHint')}</p>}
         <p className="mt-1 text-xs text-zinc-500">

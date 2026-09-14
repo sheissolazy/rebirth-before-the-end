@@ -35,6 +35,7 @@ export function checkCondition(ci: ContentIndex, state: GameState, c: Condition,
     case 'hasPet': return state.pets.some((p) => p.alive && ci.pets.get(p.defId)?.species === c.species)
     case 'defenseAtMost': return baseDefense(ci, state) <= c.value
     case 'defenseAtLeast': return baseDefense(ci, state) >= c.value
+    case 'crushesInBase': return Object.values(state.people).filter((p) => p.alive && p.inBase && p.defId && ci.npcs.get(p.defId)?.romanceable && p.affection >= 60).length >= c.min
     case 'hasCard': return state.warehouse.some((x) => x.defId === c.cardId) || state.hand.some((x) => x.defId === c.cardId)
     case 'not': return !checkCondition(ci, state, c.cond, rng)
     case 'random': return rng ? rng.chance(c.chance) : c.chance >= 1

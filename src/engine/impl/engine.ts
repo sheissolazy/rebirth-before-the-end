@@ -64,7 +64,7 @@ export function createEngine(content: ContentPack): GameEngine {
       factions: Object.fromEntries(content.factions.map((f) => [f.id, { relation: f.initialRelation }])),
       crisis: null,
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
-      drawnEvents: {}, pendingChoice: null, pendingRecruits: [], orders: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
+      drawnEvents: {}, pendingChoice: null, pendingRecruits: [], orders: [], parcels: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
       lastReport: null, lastNotice: null, noticeSeq: 0, rebirthPointsEarned: 0, ending: null,
     }
@@ -152,6 +152,21 @@ export function createEngine(content: ContentPack): GameEngine {
     eligibleCards: (state, eventId, slotId) => eligibleCards(ci, state, eventId, slotId),
     place: (state, placement) => mutate(state, (s) => place(ci, s, placement)),
     unplace: (state, eventId) => mutate(state, (s) => unplace(ci, s, eventId)),
+    pickupParcel: (state, instanceId) => mutate(state, (s) => {
+      const i = s.parcels.findIndex((c) => c.instanceId === instanceId)
+      if (i < 0) throw new EngineError('NO_CARD', instanceId)
+      const inst = s.parcels[i]
+      const size = cardSize(ci, inst)
+      if (hasRoom(ci, s, size, false)) { s.parcels.splice(i, 1); s.warehouse.push(inst) }
+      else if (hasRoom(ci, s, size, true)) { s.parcels.splice(i, 1); inst.inSpace = true; s.warehouse.push(inst) }
+      else throw new EngineError('NO_ROOM', '仓库和空间都满了，先丢掉点东西')
+      notice(s, `取回了${ci.card(inst.defId).name.zh}`)
+    }),
+    discardParcel: (state, instanceId) => mutate(state, (s) => {
+      const i = s.parcels.findIndex((c) => c.instanceId === instanceId)
+      if (i < 0) throw new EngineError('NO_CARD', instanceId)
+      s.parcels.splice(i, 1)
+    }),
     recruit: (state, personId) => mutate(state, (s) => {
       const i = s.pendingRecruits.findIndex((p) => p.id === personId)
       if (i < 0) throw new EngineError('NO_PERSON', personId)
