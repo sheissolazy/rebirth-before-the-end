@@ -1,8 +1,11 @@
 name: Deploy to GitHub Pages
 
+# 同一个站点部署两个版本：
+#   /       ← main 分支（稳定测试版）
+#   /next/  ← next 分支（开发版，存档前缀不同，互不影响）
 on:
   push:
-    branches: [main]
+    branches: [main, next]
   workflow_dispatch:
 
 permissions:
@@ -19,16 +22,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v4
+        with:
+          ref: next
+          path: next
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
+      - name: Build main
+        working-directory: main
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Build next
+        working-directory: next
+        env:
+          VITE_SAVE_PREFIX: rbte-next
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Assemble site
+        run: |
+          mkdir -p site/next
+          cp -r main/dist/. site/
+          cp -r next/dist/. site/next/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
   deploy:
     needs: build
     runs-on: ubuntu-latest
