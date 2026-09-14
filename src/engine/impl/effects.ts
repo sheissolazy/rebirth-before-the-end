@@ -109,7 +109,7 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     case 'recruitRandom': { const p = generateSurvivor(ctx, ef.rarityWeights); state.people[p.id] = p; break }
     case 'injure': {
       if (ef.target === 'hero') {
-        h.health = clamp(h.health - ef.severity * 2, 0, 10)
+        h.health = clamp(h.health - [0, 1, 3, 5][ef.severity], 0, 10)
         h.incapacitatedWeeks = Math.max(h.incapacitatedWeeks, ef.severity - 1)
       } else {
         const p = ef.target === 'self' && ctx.actorId ? findPerson(state, ctx.actorId) : findPerson(state, ef.target)

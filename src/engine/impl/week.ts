@@ -63,6 +63,10 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   // 11. 伙伴叛逃
   desertions(ci, state, rng, report)
 
+  // 11b. 多线：两位男主同时 ≥ 暧昧 → 触发修罗场标记
+  const crushes = Object.values(state.people).filter((p) => p.alive && isRomanceable(ci, p) && p.affection >= 60)
+  if (crushes.length >= 2 && !state.flags.two_crushes) state.flags.two_crushes = true
+
   // 12. 生存点与死亡/结局
   state.rebirthPointsEarned += 1
   if (state.hero.health <= 0) {
@@ -153,7 +157,7 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
       if (foodShort > 0) for (const pet of state.pets) if (pet.alive && rng.chance(0.2)) { pet.alive = false; report.news.push({ zh: `${ci.pets.get(pet.defId)?.name.zh ?? '宠物'}饿死了。` }) }
     } else {
       for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) p.loyalty = clamp(p.loyalty + 1, 0, 100)
-      if (state.hero.health < 10 && rng.chance(0.3)) state.hero.health++
+      if (state.hero.health < 10) state.hero.health++
     }
   } else {
     // 序章：吃饭花钱，麻烦卡扣钱

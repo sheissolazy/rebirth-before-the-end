@@ -322,6 +322,7 @@ export type Condition =
   | { type: 'powerAtLeast'; powerId: string; rarity: Rarity }
   | { type: 'employed'; value: boolean }
   | { type: 'hasPet'; species: 'dog' | 'cat' }
+  | { type: 'hasCard'; cardId: string }
   | { type: 'not'; cond: Condition }
   | { type: 'random'; chance: number }
 

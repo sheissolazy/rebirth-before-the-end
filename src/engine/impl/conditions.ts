@@ -33,6 +33,7 @@ export function checkCondition(ci: ContentIndex, state: GameState, c: Condition,
     }
     case 'employed': return state.hero.employed === c.value
     case 'hasPet': return state.pets.some((p) => p.alive && ci.pets.get(p.defId)?.species === c.species)
+    case 'hasCard': return state.warehouse.some((x) => x.defId === c.cardId) || state.hand.some((x) => x.defId === c.cardId)
     case 'not': return !checkCondition(ci, state, c.cond, rng)
     case 'random': return rng ? rng.chance(c.chance) : c.chance >= 1
   }

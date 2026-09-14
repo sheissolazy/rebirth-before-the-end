@@ -8,11 +8,16 @@ React 19 + Vite + TypeScript + Tailwind v4 + Vitest。纯静态，部署 GitHub 
 ## 命令
 ```bash
 npm install
-npm run dev        # 本地
+npm run dev        # 本地玩
 npm run build      # tsc -b && vite build（提交前必须通过）
-npm test           # vitest
-npm run typecheck
+npm test           # 引擎单测 + 内容校验（提交前必须通过）
+npm run sim 500    # 机器人跑 500 局，看通关率和死亡分布
+node scripts/e2e.mjs   # 无头浏览器走一周（先 npm run build && npx vite preview --port 4173）
 ```
+
+## 现状（给新来的协作者）
+- 引擎 `src/engine/impl/` 已完成并有测试；UI `src/ui/` 有一套朴素但能玩通的版本；内容 `src/content/` 有 45 个事件、40+ 张卡、20 张危机卡、3 条男主线各 4 段。
+- Codex 当前任务：`docs/tasks/T-002.md`（视觉优化）、T-003/004/005（内容扩充）。
 
 ## 铁律
 1. **接口契约在 `src/engine/types.ts` 和 `src/engine/api.ts`。** UI 只读 `GameState`，只通过 `GameEngine` 方法改状态。需要改契约：先改 `docs/DESIGN.md` 对应小节，再改类型，并在提交信息里写 `contract:` 前缀。

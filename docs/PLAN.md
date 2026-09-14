@@ -11,34 +11,38 @@
 | **Claude**（后上） | `src/engine/impl/` 引擎实现与单元测试、平衡模拟脚本、代码评审、逻辑优化 | `src/ui/` 的视觉决策 |
 | **你** | 拍板、把任务 ID 分给 Codex、验收 | |
 
-接口契约：`src/engine/types.ts` + `src/engine/api.ts`。**UI 只读 `GameState`、只调 `GameEngine` 的方法**。引擎实现没到位之前，UI 用 `src/engine/mock.ts`（Codex 自己写一个返回固定状态的 mock engine，T-002）。
+接口契约：`src/engine/types.ts` + `src/engine/api.ts`。**UI 只读 `GameState`、只调 `GameEngine` 的方法**。引擎已实现在 `src/engine/impl/`，UI 通过 `src/ui/store.ts` 的 `engine` 单例调用。
+
+常用命令：`npm run dev` 本地玩；`npm test` 单测 + 内容校验；`npm run sim 500` 机器人跑 500 局看通关率；`node scripts/e2e.mjs` 无头浏览器走一遍流程（需先 `npm run build && npx vite preview --port 4173`）。
 
 ## 里程碑
 
 | 阶段 | 内容 | 谁 | 验收 |
 |---|---|---|---|
 | **M0 契约** ✅ | 设计文档、类型契约、i18n 骨架、样例内容、脚手架 | Claude | `npm run build && npm test` 通过 |
-| **M1 UI 骨架** | 地图 / 事件弹窗 / 卡槽放卡 / 基地与模块 / 仓库与空间 / 人物与派工 / 危机面板 / 周结算 / 日记 / 重生点商店，全部对 mock engine | Codex | 用 mock 数据能把一周的操作流走完 |
-| **M2 引擎** | `GameEngine` 全部方法：事件抽牌、检定、危机结算、过期、通胀、忠诚、好感、建造、派工、掉落、随机幸存者、暴露、结局、重生点；seeded RNG；单测 | Claude | `npm test` 全绿；命令行模拟能跑完 52 回合 |
-| **M3 内容** | 120 事件 / 50 物资 / 20 装备 / 20 危机 / 3 条男主线 / 7 结局 / 随机幸存者模板 | Codex（主）+ Claude（审） | 内容校验脚本通过；能从序章玩到 12 月 |
-| **M4 手感与平衡** | 自动跑 1000 局调数值；存档；多周目；过场；音效占位 | Claude（平衡）+ Codex（表现） | 通关率 30~50%，三条恋爱线都能走到底 |
-| **M5 发布** | GitHub Pages + PWA；5 人试玩 | 两人 | 手机能玩 |
+| **M1 引擎** ✅ | `GameEngine` 全部方法：事件抽牌、检定、危机结算、过期、生产、派工、掉落、随机幸存者、忠诚、好感、建造、交易、异能、暴露、结局、重生点；seeded RNG；单测；模拟器 | Claude | `npm test` 全绿；`npm run sim` 能跑完 52 回合 |
+| **M2 朴素可玩 UI** ✅ | 开局 / 地图 / 事件放卡 / 基地 / 仓库与商店 / 人物与派工 / 日记 / 周结算 / 结局 / 重生点商店 / 存档 / PWA，对真引擎 | Claude | 浏览器 e2e 脚本走通一周 |
+| **M3 UI 视觉优化** | 在真引擎和真内容上重做视觉：地图布局、卡面、拖拽放卡、动效、移动端手感 | Codex | 手机上顺手；不改引擎 |
+| **M4 内容** | 事件扩到 120 / 男主线每人 10 / 物资 50 / 装备 20 / 文案润色 | Codex（主）+ Claude（审） | `npm test` 内容校验通过 |
+| **M5 平衡** | `npm run sim` 跑 1000 局调数值；多周目手感 | Claude | 认真玩的通关率 40~60%，三条男主线都能走到底 |
+| **M6 发布** | GitHub Pages 上线；5 人试玩；Tauri 桌面包（可选） | 两人 | 手机能玩 |
 | **之后** | 第 2~10 年逐年加系统 | | |
 
 ## 任务清单（`docs/tasks/`）
 
 | ID | 标题 | 谁 | 状态 |
 |---|---|---|---|
-| T-001 | 项目脚手架与契约 | Claude | ✅ 完成 |
-| T-002 | UI 骨架 + mock engine | Codex | 待领 |
-| T-003 | 物资 50 / 装备 20 / 词缀 8 / 晶核 4 / 危机 20 / 情报 麻烦 技能 | Codex | 待领 |
-| T-004 | 120 个事件（序章 30 + 末日后 90，按地点分文件）+ 掉落表 + 随机幸存者模板 | Codex | 待领 |
-| T-005 | 3 条男主线（顾沉 / 沈砚 / 谢临）各 10 个事件 + 7 个结局 | Codex | 待领 |
-| T-006 | 引擎实现 + 单测 | Claude | 待 T-002 后 |
-| T-007 | 内容校验脚本（id 引用、条件合法、每月事件数量） | Claude | 待 T-003/004 后 |
-| T-008 | 平衡模拟器（自动策略跑 N 局） | Claude | 待 T-006 后 |
-| T-009 | 存档 / 多周目 / 记忆碎片 | Claude | 待 T-006 后 |
-| T-010 | GitHub Pages 部署 + PWA | Codex | 待 M1 后 |
+| T-001 | 项目脚手架与契约 | Claude | ✅ |
+| T-006 | 引擎实现 + 单测 + 模拟器 | Claude | ✅ |
+| T-007 | 内容校验（`src/content/content.test.ts`） | Claude | ✅ |
+| T-009 | 存档 / 重生点商店 / PWA | Claude | ✅ |
+| T-011 | 朴素可玩 UI（`src/ui/`） | Claude | ✅ |
+| **T-002** | **UI 视觉优化**（在 T-011 基础上重做视觉，不改引擎） | Codex | 待领 |
+| T-003 | 物资扩到 50 / 装备 20 / 词缀 8 / 危机文案润色 | Codex | 待领 |
+| T-004 | 事件扩到 120（现有 45）+ 掉落表补全 + 幸存者特质 15 | Codex | 待领 |
+| T-005 | 男主线每人扩到 10（现有顾沉 4 / 沈砚 4 / 谢临 4 / 江野 2 / 阿寂 1） | Codex | 待领 |
+| T-008 | 平衡调数值（当前机器人通关率约 16%） | Claude | 待 T-004 后 |
+| T-010 | GitHub Pages 上线检查 + Tauri 桌面包 | Codex | 待 M3 后 |
 
 ## 目录约定
 
@@ -47,13 +51,12 @@ src/
   engine/
     types.ts      契约（改前先改 DESIGN.md）
     api.ts        GameEngine 接口 + 时间工具
-    mock.ts       UI 开发用假引擎（Codex 写）
-    impl/         真引擎（Claude 写）
+    impl/         真引擎（Claude 写）：rng / content / helpers / conditions / effects / events / crisis / week / engine / sim
   content/
     locations.ts npcs.ts memories.ts cards.ts bases.ts factions.ts pets.ts powers.ts endings.ts
     events/       按地点分文件：home.ts office.ts ... story_guchen.ts ...
     index.ts      组装 ContentPack
-  ui/             页面与组件（Codex）
+  ui/             页面与组件（Claude 写了朴素版，Codex 做视觉）
   i18n/           zh.ts（en.ts 之后加）
   save/           localStorage 存档
 docs/

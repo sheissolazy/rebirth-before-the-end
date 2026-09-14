@@ -2,8 +2,8 @@ import type { ContentPack } from '../engine/types'
 import { locations } from './locations'
 import { npcs } from './npcs'
 import { memoriesYear1 } from './memories'
-import { cards } from './cards'
-import { events } from './events'
+import { cards, cardsBatch2 } from './cards'
+import { events } from './events/index'
 import { bases, modules } from './bases'
 import { factions } from './factions'
 import { pets } from './pets'
@@ -16,7 +16,7 @@ import { lootTables, affixes } from './loot'
 export const content: ContentPack = {
   locations,
   events,
-  cards,
+  cards: [...cards, ...cardsBatch2],
   affixes,
   lootTables,
   npcs,
