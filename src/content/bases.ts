@@ -1,7 +1,7 @@
 import type { BaseDef, ModuleDef } from '../engine/types'
 
 export const bases: BaseDef[] = [
-  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。在城里，去哪都近。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 5 },
+  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。在城里，去哪都近。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 4 },
   { type: 'villa', name: { zh: '别墅' }, desc: { zh: '城里带院子的独栋，两米围墙。贵在地段：去哪都近，网购当周到。' }, icon: '🏡', price: 3_000_000, baseDefense: 6, storage: 120, population: 8 },
   { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '离城四十公里，有地有井，能种能养。便宜在偏远：进城做事每次多耗 1 精力，序章网购多等 1 周，围栏一开始挡不住什么。' }, icon: '🌾', price: 1_500_000, baseDefense: 4, storage: 200, population: 12, travelPenalty: 1, deliveryDelay: 1 },
   { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 400, population: 20 },
@@ -12,15 +12,16 @@ export const modules: ModuleDef[] = [
   // 出租屋
   { id: 'apt_windows', baseType: 'apartment', name: { zh: '加固门窗' }, desc: { zh: '钢条和木板。' }, icon: '🪟', cost: { materialPoints: 4, labor: 1, weeks: 1 }, provides: [{ type: 'defense', value: 2 }] },
   { id: 'apt_storage', baseType: 'apartment', name: { zh: '储物间' }, desc: { zh: '清空杂物间。' }, icon: '📦', cost: { materialPoints: 2, labor: 1, weeks: 1 }, provides: [{ type: 'storage', value: 15 }] },
+  { id: 'apt_bunks', baseType: 'apartment', name: { zh: '客厅通铺' }, desc: { zh: '两室一厅只能睡 4 个。客厅打地铺，再挤 2 个。' }, icon: '🛏️', cost: { materialPoints: 3, labor: 1, weeks: 1 }, provides: [{ type: 'population', value: 2 }] },
   { id: 'apt_balcony', baseType: 'apartment', name: { zh: '阳台菜箱' }, desc: { zh: '种点葱和青菜。' }, icon: '🥬', cost: { materialPoints: 2, labor: 1, weeks: 1, requires: [{ cardId: 'supply_seed_veg', count: 1 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 1 }] },
-  { id: 'apt_solar', baseType: 'apartment', name: { zh: '太阳能板' }, desc: { zh: '晴天能充电。' }, icon: '☀️', cost: { materialPoints: 6, labor: 1, weeks: 1, money: 8000 }, provides: [{ type: 'produce', supplyKind: 'energy', cardId: 'supply_battery', perWeek: 1 }] },
+  { id: 'apt_solar', baseType: 'apartment', name: { zh: '太阳能板' }, desc: { zh: '晴天能充电。' }, icon: '☀️', cost: { materialPoints: 8, labor: 1, weeks: 1 }, provides: [{ type: 'produce', supplyKind: 'energy', cardId: 'supply_battery', perWeek: 1 }] },
   { id: 'apt_rain', baseType: 'apartment', name: { zh: '接雨水' }, desc: { zh: '阳台上摆满桶，屋顶接一根管。每周 2 份水，下雨看天。' }, icon: '🪣', cost: { materialPoints: 2, labor: 1, weeks: 1 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 2 }] },
   { id: 'apt_barricade', baseType: 'apartment', name: { zh: '楼道路障' }, desc: { zh: '把整层楼封起来。' }, icon: '🚧', cost: { materialPoints: 6, labor: 2, weeks: 2 }, provides: [{ type: 'defense', value: 3 }, { type: 'counters', crisisKind: 'horde', points: 2 }] },
   // 别墅
   { id: 'villa_wall', baseType: 'villa', name: { zh: '围墙' }, desc: { zh: '加高加刺。' }, icon: '🧱', cost: { materialPoints: 10, labor: 3, weeks: 2 }, provides: [{ type: 'defense', value: 4 }] },
   { id: 'villa_gate', baseType: 'villa', name: { zh: '铁门' }, desc: { zh: '双层。' }, icon: '🚪', cost: { materialPoints: 6, labor: 2, weeks: 1 }, provides: [{ type: 'defense', value: 2 }] },
   { id: 'villa_garden', baseType: 'villa', name: { zh: '院子菜地' }, desc: { zh: '够两个人吃。' }, icon: '🥕', cost: { materialPoints: 3, labor: 2, weeks: 2, requires: [{ cardId: 'supply_seed_veg', count: 2 }] }, provides: [{ type: 'produce', supplyKind: 'food', cardId: 'supply_veg', perWeek: 2 }] },
-  { id: 'villa_well', baseType: 'villa', name: { zh: '水井' }, desc: { zh: '打井队最后一单。' }, icon: '🕳️', cost: { materialPoints: 8, labor: 3, weeks: 2, money: 30000 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 3 }] },
+  { id: 'villa_well', baseType: 'villa', name: { zh: '水井' }, desc: { zh: '打井队最后一单。' }, icon: '🕳️', cost: { materialPoints: 12, labor: 3, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 3 }] },
   { id: 'villa_genroom', baseType: 'villa', name: { zh: '发电机房' }, desc: { zh: '隔音，安全。' }, icon: '⚡', cost: { materialPoints: 8, labor: 2, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'energy', cardId: 'supply_battery', perWeek: 2 }] },
   { id: 'villa_workshop', baseType: 'villa', name: { zh: '车库工坊' }, desc: { zh: '修东西、造弩箭。' }, icon: '🛠️', cost: { materialPoints: 8, labor: 2, weeks: 2 }, provides: [{ type: 'produce', supplyKind: 'weapon', cardId: 'supply_bolts', perWeek: 1 }] },
   { id: 'villa_kennel', baseType: 'villa', name: { zh: '犬舍' }, desc: { zh: '狗的家。' }, icon: '🐕', cost: { materialPoints: 3, labor: 1, weeks: 1 }, provides: [{ type: 'defense', value: 1 }] },

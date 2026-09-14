@@ -33,7 +33,7 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
               {ledger.items.map((it, i) => <li key={i} className={it.points > 0 ? '' : 'text-zinc-600'}>{lt(it.label)}：+{it.points}</li>)}
             </ul>
             <p className="mt-1 text-xs text-zinc-500">{t(`crisis.tips.${state.crisis.crisisKind}`)}</p>
-            <p className="text-xs text-zinc-500">{t('crisis.resolveHint')}</p>
+            <p className="text-xs text-zinc-500">{t('crisis.resolveHint')}{state.hand.some((c) => { const d = cardDefs.get(c.defId); return d?.kind === 'skill' && d.counters === state.crisis?.crisisKind }) ? ' 你手里正好有能顶这类危机的技能卡，去仓库页"手牌"用。' : ''}</p>
           </div>
         ) : <p className="text-sm text-zinc-500">{state.time.phase === 'prologue' ? '末日还没来。' : '本月无危机。'}</p>}
         <h4 className="mt-3 text-sm font-semibold">{t('crisis.memory')}</h4>

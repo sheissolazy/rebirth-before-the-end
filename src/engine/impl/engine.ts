@@ -56,7 +56,7 @@ export function createEngine(content: ContentPack): GameEngine {
         name: { zh: '林知夏' }, attrs, energy: 0, energyBonus: 0, health: 10, exposure: 0, butterfly: 0, employed: true, skippedWorkStreak: 0, incapacitatedWeeks: 0,
         equipment: {}, spaceRarity: bought('shop_space') > 0 ? 'fine' : 'common', debt: 0,
       },
-      money: 50000 + bought('shop_money') * 50000,
+      money: 30000 + bought('shop_money') * 50000,
       priceMultiplier: 1,
       base: { type: 'apartment', modules: [] },
       warehouse: [], hand: [],
@@ -257,6 +257,23 @@ export function createEngine(content: ContentPack): GameEngine {
       for (const p of [s.hero, ...Object.values(s.people)]) for (const [slot, id] of Object.entries(p.equipment)) if (id === instanceId) delete p.equipment[slot as keyof typeof p.equipment]
       target.equipment[def.slot] = instanceId
       notice(s, `${personId === 'hero' ? '你' : (s.people[personId].generated?.name ?? ci.npcs.get(s.people[personId].defId ?? '')?.name)?.zh}装备了${def.name.zh}：${def.forAttr ? ['体力', '头脑', '魅力'][['strength', 'mind', 'charm'].indexOf(def.forAttr)] + '检定' : '所有检定'} +${def.bonusDice} 骰`)
+    }),
+    useSkill: (state, instanceId) => mutate(state, (s) => {
+      const inst = findCard(s, instanceId)
+      if (!inst) throw new EngineError('NO_CARD', instanceId)
+      const def = ci.card(inst.defId)
+      if (def.kind !== 'skill' || !def.counters) throw new EngineError('NOT_SKILL', '这张卡不能顶危机')
+      if (!s.crisis || s.crisis.resolved) throw new EngineError('NO_CRISIS', '现在没有要顶的危机')
+      if (s.crisis.crisisKind !== def.counters) throw new EngineError('WRONG_KIND', `这张卡只能顶${{ horde: '尸潮', scarcity: '匮乏', climate: '气候', plague: '疫病', human: '人祸' }[def.counters]}`)
+      const owner = s.people[def.ownerId]
+      if (def.ownerId !== 'hero') {
+        if (!owner?.alive) throw new EngineError('OWNER_DEAD', '他已经不在了')
+        if (!owner.inBase && owner.affection < 40) throw new EngineError('OWNER_AWAY', '他不在基地，好感也不到朋友，叫不动')
+      }
+      removeCard(s, instanceId)
+      s.crisis.resolved = true
+      if (owner && isRomanceable(ci, owner)) owner.affection = clamp(owner.affection + 3, 0, 100)
+      notice(s, `${def.name.zh}：本月危机已顶住。技能卡用掉了，他的下一次要等剧情再给`)
     }),
     useIntel: (state, instanceId) => mutate(state, (s) => {
       const inst = findCard(s, instanceId)

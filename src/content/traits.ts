@@ -8,7 +8,7 @@ export const startTraits: StartTraitDef[] = [
   { id: 'trait_charming', cost: 2, name: { zh: '好人缘' }, desc: { zh: '魅力 +1' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }] },
   { id: 'trait_energetic', cost: 3, name: { zh: '精力旺盛' }, desc: { zh: '精力上限 +1' }, effects: [{ type: 'energy', delta: 1, permanent: true }] },
   { id: 'trait_hoarder', cost: 1, name: { zh: '囤货癖' }, desc: { zh: '开局多 3 袋米、3 箱水' }, effects: [{ type: 'gainCard', cardId: 'supply_rice_5kg', count: 3 }, { type: 'gainCard', cardId: 'supply_water_box', count: 3 }] },
-  { id: 'trait_savings', cost: 1, name: { zh: '有存款' }, desc: { zh: '开局 +2 万' }, effects: [{ type: 'money', delta: 20000 }] },
+  { id: 'trait_savings', cost: 1, name: { zh: '有存款' }, desc: { zh: '开局 +2 万（基础 3 万）' }, effects: [{ type: 'money', delta: 20000 }] },
   { id: 'trait_pharmacist', cost: 1, name: { zh: '药店常客' }, desc: { zh: '开局 2 盒抗生素、1 个急救箱' }, effects: [{ type: 'gainCard', cardId: 'supply_antibiotics', count: 2 }, { type: 'gainCard', cardId: 'supply_medkit' }] },
   { id: 'trait_dog', cost: 1, name: { zh: '狗主人' }, desc: { zh: '开局带一条狗' }, effects: [{ type: 'adoptPet', petId: 'pet_dog' }] },
   { id: 'trait_armed', cost: 1, name: { zh: '户外爱好者' }, desc: { zh: '开局一把砍刀和一把弩' }, effects: [{ type: 'gainCard', cardId: 'equip_machete' }, { type: 'gainCard', cardId: 'equip_crossbow' }] },

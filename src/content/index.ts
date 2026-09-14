@@ -33,7 +33,7 @@ export const content: ContentPack = {
   startTraits,
   rebirthShop: [
     { id: 'shop_weeks', name: { zh: '更早醒来' }, desc: { zh: '序章 +4 周，最多到 48 周。' }, cost: [10, 20, 40, 80, 120, 160, 200, 250, 300, 350, 400], effect: { type: 'prologueWeeks', delta: 4 } },
-    { id: 'shop_money', name: { zh: '一笔意外之财' }, desc: { zh: '开局 +5 万。' }, cost: [10, 20, 40, 80], effect: { type: 'money', delta: 50000 } },
+    { id: 'shop_money', name: { zh: '一笔意外之财' }, desc: { zh: '开局 +5 万（基础 3 万）。' }, cost: [10, 20, 40, 80], effect: { type: 'money', delta: 50000 } },
     { id: 'shop_space', name: { zh: '更大的空间' }, desc: { zh: '空间起始档 +1。' }, cost: [60, 200], effect: { type: 'spaceRarity', rarity: 'fine' } },
     { id: 'shop_attr', name: { zh: '前世的本事' }, desc: { zh: '+1 属性点。' }, cost: [15, 30, 60, 120], effect: { type: 'attrPoint', count: 1 } },
     { id: 'shop_affection', name: { zh: '他好像记得你' }, desc: { zh: '选一位男主，初始好感 +20。' }, cost: [30, 60, 120], effect: { type: 'affection', delta: 20 } },

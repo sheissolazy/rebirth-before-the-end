@@ -39,6 +39,8 @@ export interface GameEngine {
   /** 送这张卡会涨多少好感/忠诚（UI 预览用） */
   giftValue(state: GameState, personId: string, instanceId: string): number
   equip(state: GameState, personId: 'hero' | string, instanceId: string): GameState
+  /** 借力：用男主/伙伴的技能卡代替硬顶本月危机 */
+  useSkill(state: GameState, instanceId: string): GameState
   useIntel(state: GameState, instanceId: string): GameState
   /** 用晶核升级异能 */
   upgradePower(state: GameState, powerId: string, coreInstanceIds: string[]): GameState

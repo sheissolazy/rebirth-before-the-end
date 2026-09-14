@@ -57,6 +57,8 @@ export const zh = {
   'map.energy': '本周精力 ⚡ {have}/{max}',
   'shop.storage': '仓库 {used}/{cap} 格 · 在路上 {reserved} 格 · 还能放 {free} 格',
   'wh.summary': '{n} 张',
+  'skill.use': '借力顶住本月危机',
+  'skill.hint': '技能卡：对上类型时，一键代替硬顶本月危机。用掉后要等他的剧情再给。',
   'parcel.title': '快递站待取（{n} 件）',
   'parcel.hint': '仓库放不下的快递先放在这里。随时取回或丢弃；末日一到，没取的就没了。',
   'parcel.pickup': '取回',

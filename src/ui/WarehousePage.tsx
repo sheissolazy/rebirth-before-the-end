@@ -145,7 +145,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
       <Section title={t('space.capacity', { used: st.spaceUsed, cap: st.spaceCap })} inSpace={true} />
 
       <section className="rounded-lg border border-zinc-800 p-3">
-        <h3 className="font-semibold">手牌</h3>
+        <h3 className="font-semibold">手牌 <span className="text-xs font-normal text-zinc-500">{t('skill.hint')}</span></h3>
         <ul className="mt-1 grid gap-1 sm:grid-cols-2">
           {state.hand.map((c) => {
             const d = cardDefs.get(c.defId)!
@@ -154,6 +154,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
                 <div>{cardName(c)}</div>
                 <div className="text-zinc-500">{lt(d.desc)}</div>
                 {d.kind === 'intel' && <button className="mt-1 rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.useIntel(s, c.instanceId))}>使用</button>}
+                {d.kind === 'skill' && d.counters && <button className="mt-1 rounded bg-red-900 px-2 py-0.5 disabled:opacity-40" disabled={!state.crisis || state.crisis.resolved || state.crisis.crisisKind !== d.counters} onClick={() => store.act((s) => engine.useSkill(s, c.instanceId))}>{t('skill.use')}{state.crisis && state.crisis.crisisKind !== d.counters ? `（只能顶${t(`crisisKind.${d.counters}`)}）` : ''}</button>}
               </li>
             )
           })}
