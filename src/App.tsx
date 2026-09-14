@@ -1,19 +1,20 @@
-import { t } from './i18n'
-import { content } from './content'
+import { useEffect, useState } from 'react'
+import { useStore } from './ui/store'
+import { StartScreen } from './ui/StartScreen'
+import { Game } from './ui/Game'
+import { EndingScreen } from './ui/EndingScreen'
 
-/** 占位首页。UI 由 Codex 按 docs/tasks/T-002 重做。 */
 export default function App() {
-  return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
-      <h1 className="text-2xl font-bold">{t('app.title')}</h1>
-      <p className="mt-2 text-zinc-400">{t('time.prologue', { weeks: 4 })}</p>
-      <ul className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {content.locations.map((l) => (
-          <li key={l.id} className="rounded-lg border border-zinc-800 p-3">
-            <span className="mr-2">{l.icon}</span>{l.name.zh}
-          </li>
-        ))}
-      </ul>
-    </main>
-  )
+  const store = useStore()
+  const [hash, setHash] = useState(window.location.hash)
+  useEffect(() => {
+    const on = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', on)
+    return () => window.removeEventListener('hashchange', on)
+  }, [])
+  useEffect(() => { if (store.error) { const id = setTimeout(store.clearError, 2500); return () => clearTimeout(id) } }, [store.error, store.clearError])
+
+  if (store.state?.ending && !store.report) return <EndingScreen state={store.state} store={store} />
+  if (store.state && hash === '#game') return <Game state={store.state} store={store} />
+  return <StartScreen store={store} />
 }
