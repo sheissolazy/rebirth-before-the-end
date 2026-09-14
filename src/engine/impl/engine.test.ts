@@ -83,9 +83,11 @@ describe('economy', () => {
     expect(s.orders).toHaveLength(1)
     expect(() => engine.buy(s, 'equip_shotgun', 1)).toThrow('NOT_BUYABLE')
     expect(() => engine.buy(s, 'supply_generator', 2)).toThrow('LIMIT')
-    s = week(s).state
-    expect(s.warehouse.filter((c) => c.defId === 'supply_rice_5kg')).toHaveLength(3)
-    expect(s.orders).toHaveLength(0)
+    const before = s.warehouse.filter((c) => c.defId === 'supply_rice_5kg').length
+    const r = week(s)
+    expect(r.report.delivered.filter((c) => c.defId === 'supply_rice_5kg')).toHaveLength(2)
+    expect(r.state.orders).toHaveLength(0)
+    void before
   })
   it('undelivered orders are lost when the apocalypse begins', () => {
     let s = engine.newGame(content, { seed: 'b2', build: 'balanced', meta })

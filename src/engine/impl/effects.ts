@@ -11,6 +11,8 @@ export interface EffectCtx {
   report?: WeekReport
   /** 效果里 target 为 'self' 时指向谁（事件里放进槽位的人） */
   actorId?: string
+  /** 女主是否在场；不在场时 target 'hero' 的伤害/属性效果落到 actor 头上 */
+  heroPresent?: boolean
 }
 
 /** 生成一张卡的实例并放进仓库/手牌；仓库满则丢弃并返回 null */
@@ -62,7 +64,10 @@ export function generateSurvivor(ctx: EffectCtx, weights?: Partial<Record<Rarity
   for (let i = 3; i < total; i++) attrs[rng.pick(['strength', 'mind', 'charm'] as const)]++
   const trait = ci.pack.survivorTraits.length ? rng.pick(ci.pack.survivorTraits) : undefined
   if (trait?.attrDelta) for (const [k, v] of Object.entries(trait.attrDelta)) attrs[k as keyof typeof attrs] = clamp(attrs[k as keyof typeof attrs] + (v ?? 0), 1, 10)
-  const names = ci.pack.survivorNames.length ? ci.pack.survivorNames : SURVIVOR_FALLBACK_NAMES
+  const pool = ci.pack.survivorNames.length ? ci.pack.survivorNames : SURVIVOR_FALLBACK_NAMES
+  const used = new Set(Object.values(ctx.state.people).map((p) => p.generated?.name.zh))
+  const free = pool.filter((n) => !used.has(n.zh))
+  const names = free.length ? free : pool.map((n) => ({ zh: `${n.zh}${['二', '三', '四', '五'][ctx.rng.int(4)]}` }))
   const needs: SupplyKind = rng.pick(['food', 'water', 'medicine', 'energy', 'weapon', 'material', 'daily'])
   const powerId = rng.chance(0.05) ? rng.pick(ci.pack.powers.filter((p) => p.kind !== 'space'))?.id : undefined
   return {
@@ -76,6 +81,10 @@ export function generateSurvivor(ctx: EffectCtx, weights?: Partial<Record<Rarity
 export function applyEffect(ctx: EffectCtx, ef: Effect): void {
   const { ci, state, rng, report } = ctx
   const h = state.hero
+  // 伙伴带队时，指向女主的伤害/属性效果落到带队的人身上
+  if (ctx.heroPresent === false && ctx.actorId && ctx.actorId !== 'hero' && (ef.type === 'injure' || ef.type === 'kill' || ef.type === 'attr') && ef.target === 'hero') {
+    ef = { ...ef, target: ctx.actorId } as Effect
+  }
   switch (ef.type) {
     case 'money': state.money = Math.max(0, state.money + ef.delta); break
     case 'stat': {

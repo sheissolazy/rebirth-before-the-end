@@ -8,6 +8,7 @@ import { t, lt } from '../i18n'
 import { content } from '../content'
 import { npcDefs, personName, personRarity, isRomanceable, RARITY_CLASS, petDefs, cardDefs, rarityLabel } from './lookup'
 import { RARITY_ORDER, RARITY_POINTS } from '../engine/types'
+import { locationDefs } from './lookup'
 
 const JOBS: CompanionJob[] = ['idle', 'guard', 'farm', 'scavenge', 'train']
 
@@ -29,6 +30,22 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
   const cores = state.warehouse.filter((c) => cardDefs.get(c.defId)?.kind === 'core')
   const corePoints = cores.reduce((t, c) => t + RARITY_POINTS[cardDefs.get(c.defId)!.rarity], 0)
   const spacePower = content.powers.find((p) => p.id === 'power_space')!
+  /** 男主下一步：找他剧情线里还没做、条件里阶段/月份匹配当前的事件 */
+  const nextStep = (npcId: string) => {
+    const evs = content.events.filter((e) => e.storylineNpcId === npcId && !state.usedOnceEvents.includes(e.id))
+    const phaseOk = (e: typeof evs[number]) => e.conditions.every((c) => {
+      if (c.type === 'phase') return c.phase === state.time.phase
+      if (c.type === 'month') return state.time.phase === 'apocalypse' && state.time.month >= c.from && state.time.month <= c.to
+      return true
+    })
+    const e = evs.find(phaseOk) ?? evs[0]
+    if (!e) return null
+    const loc = locationDefs.get(e.locationId)
+    const aff = e.conditions.find((c) => c.type === 'affectionAtLeast')
+    const mon = e.conditions.find((c) => c.type === 'month')
+    const ph = e.conditions.find((c) => c.type === 'phase')
+    return `${loc ? `${loc.icon} ${lt(loc.name)}` : ''}「${lt(e.title)}」${ph?.type === 'phase' && ph.phase !== state.time.phase ? (ph.phase === 'prologue' ? '（序章）' : '（末日后）') : ''}${mon?.type === 'month' ? `（${mon.from}~${mon.to} 月）` : ''}${aff?.type === 'affectionAtLeast' ? `（需好感 ${t(`affection.${aff.rank}`)}）` : ''}`
+  }
   const nextLevel = spacePower.levels.find((l) => RARITY_ORDER.indexOf(l.rarity) > RARITY_ORDER.indexOf(state.hero.spaceRarity))
   const upgradeSpace = () => {
     // 从低到高凑够分
@@ -65,6 +82,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
                 <div className="flex justify-between"><span>{d.icon} {personName(p)} <span className="text-xs text-zinc-400">{lt(d.title)}</span></span><Attr p={p} /></div>
                 <div className="text-xs text-zinc-400">{lt(d.bio)}</div>
                 {d.powerId && <div className="text-xs text-sky-300">异能：{lt(content.powers.find((x) => x.id === d.powerId)?.name ?? { zh: '' })} · {p.powerRarity ? rarityLabel(p.powerRarity) : ''}</div>}
+                {p.alive && <div className="text-xs text-emerald-300">{(() => { const n = nextStep(p.id); return n ? t('lead.next', { where: n }) : t('lead.nextNone') })()}</div>}
                 <div className="mt-1 flex items-center justify-between text-xs">
                   <span>好感 {p.affection}（{rank(p.affection)}）{p.inBase ? ' · 在基地' : ''}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : ''} · 缺 {t(`supply.${d.needs}`)}</span>
                   <span className="flex gap-1">
@@ -115,6 +133,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
           {state.pets.map((p) => <li key={p.id} className={!p.alive ? 'opacity-40' : ''}>{petDefs.get(p.defId)?.icon} {lt(petDefs.get(p.defId)!.name)}{!p.alive && '（已死亡）'}</li>)}
           {!state.pets.length && <li className="text-xs text-zinc-500">没有宠物。</li>}
         </ul>
+        <p className="mt-1 text-xs text-zinc-500">{t('pet.hint')}</p>
       </section>
 
       {gifting && <GiftModal state={state} person={gifting} store={store} onClose={() => setGifting(null)} />}

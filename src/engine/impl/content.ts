@@ -33,11 +33,7 @@ export class ContentIndex {
     for (const l of pack.lootTables) this.loot.set(l.id, l)
     for (const a of pack.affixes) this.affixes.set(a.id, a)
     for (const l of pack.locations) this.locations.set(l.id, l)
-    for (const e of pack.events) {
-      for (const branch of Object.values(e.outcomes)) {
-        for (const ef of branch?.effects ?? []) if (ef.type === 'unlockEvent') this.lockedEvents.add(ef.eventId)
-      }
-    }
+    for (const e of pack.events) if (e.locked) this.lockedEvents.add(e.id)
   }
 
   card(id: string): CardDef {

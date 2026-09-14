@@ -10,7 +10,24 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
   const options = useMemo(() => Object.fromEntries(event.slots.map((s) => [s.id, engine.eligibleCards(state, event.id, s.id)])), [state, event])
   const dice = event.check ? engine.previewDice(state, event.id, assign) : 0
   const canPlace = event.slots.every((s) => !s.required || assign[s.id])
-  const heroSlot = event.slots.find((s) => s.accepts.kind === 'hero')
+  const clean = (a: Record<string, string>) => Object.fromEntries(Object.entries(a).filter(([, v]) => v))
+  const optionDice = (slotId: string, id: string) => {
+    if (!event.check) return 0
+    const without = engine.previewDice(state, event.id, clean({ ...assign, [slotId]: '' }))
+    const withIt = engine.previewDice(state, event.id, clean({ ...assign, [slotId]: id }))
+    return withIt - without
+  }
+  // 二项分布：每骰 50%
+  const odds = (() => {
+    const p = event.check?.successChance ?? 0.5
+    const n = dice
+    const pk = (k: number) => { let c = 1; for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1); return c * Math.pow(p, k) * Math.pow(1 - p, n - k) }
+    const sum = (a: number, b: number) => { let t = 0; for (let k = a; k <= Math.min(b, n); k++) t += pk(k); return t }
+    const pc = (x: number) => Math.round(x * 100)
+    return { fail: pc(sum(0, 0)), common: pc(sum(1, 2)), fine: pc(sum(3, 4)), rare: pc(sum(5, n)) }
+  })()
+  const leaderSlot = event.slots.find((s) => s.accepts.kind === 'person')
+  const heroSlot = event.slots.find((s) => s.accepts.kind === 'hero' || s.accepts.kind === 'person')
   const heroBlocked = !placed && heroSlot && options[heroSlot.id].length === 0
   const heroReason = state.hero.incapacitatedWeeks > 0 ? '你受伤了，这周不能行动。' : `精力不够：需要 ${event.energy ?? 2}，剩 ${state.hero.energy}。喝咖啡或下周再来。`
   return (
@@ -18,6 +35,8 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-900 p-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold">{event.icon} {lt(event.title)}</h3>
         <p className="mt-1 text-sm text-zinc-300">{lt(event.text)}</p>
+        {event.check && <p className="mt-1 text-xs text-amber-200">{t('event.odds', odds)}</p>}
+        {leaderSlot && <p className="mt-1 text-xs text-zinc-500">{t('event.leaderHint')}</p>}
         <p className="mt-1 text-xs text-zinc-500">
           耗时 {event.durationWeeks} 周 · {t('event.energy', { n: event.energy ?? 2 })}（剩 {state.hero.energy}）
           {event.check && ` · 检定 ${event.check.attrs.map((a) => t(`attr.${a}`)).join('+')} · 掷 ${dice} 骰`}
@@ -32,9 +51,10 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
               <select className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 p-2" disabled={!!placed} value={assign[slot.id] ?? ''}
                 onChange={(e) => setAssign({ ...assign, [slot.id]: e.target.value })}>
                 <option value="">—</option>
-                {options[slot.id].filter((id) => !Object.entries(assign).some(([k, v]) => v === id && k !== slot.id)).map((id) => (
-                  <option key={id} value={id}>{optionLabel(state, id)}</option>
-                ))}
+                {options[slot.id].filter((id) => !Object.entries(assign).some(([k, v]) => v === id && k !== slot.id)).map((id) => {
+                  const d = optionDice(slot.id, id)
+                  return <option key={id} value={id}>{optionLabel(state, id)}{event.check && d ? `（+${d} 骰）` : ''}</option>
+                })}
               </select>
             </label>
           ))}

@@ -335,8 +335,12 @@ export type Condition =
   | { type: 'not'; cond: Condition }
   | { type: 'random'; chance: number }
 
+export type EventKind = 'main' | 'routine' | 'story' | 'random'
+
 export type CardFilter =
   | { kind: 'hero' }
+  /** 带队的人：女主、在基地的伙伴或男主都可以 */
+  | { kind: 'person' }
   | { kind: 'npc'; npcId?: string; romanceable?: boolean; minRank?: AffectionRank }
   | { kind: 'companion'; minLoyalty?: number }
   | { kind: 'pet'; species?: 'dog' | 'cat' }
@@ -416,6 +420,10 @@ export interface EventDef {
   title: LocalizedText
   text: LocalizedText
   icon?: string
+  /** 事件层级：主线（不做有严重后果）/ 日常（每周都在）/ 剧情（人物线）/ 随机（抽到的机会，默认） */
+  kind?: EventKind
+  /** 需要被 unlockEvent 解锁才可见（默认 false：只看 conditions） */
+  locked?: boolean
   /** 女主参与需要的精力（默认 2）。伙伴不耗精力 */
   energy?: number
   /** 即时选择事件：周初弹出，当场选一个选项结算，不占槽位。locationId 可为 '' */

@@ -6,7 +6,7 @@ const P = { type: 'phase', phase: 'prologue' } as const
 export const prologueEvents: EventDef[] = [
   // ---- 公司 ----
   {
-    id: 'ev_office_work', locationId: 'office', icon: '💼', repeatable: true, weight: 0,
+    id: 'ev_office_work', kind: 'routine', locationId: 'office', icon: '💼', repeatable: true, weight: 0,
     title: { zh: '去上班' }, text: { zh: '打卡、开会、装作一切正常。周五发薪。' },
     conditions: [P, { type: 'employed', value: true }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '又熬过一周。工资到账。' }, effects: [{ type: 'money', delta: 5000 }] } },
@@ -177,7 +177,7 @@ export const prologueEvents: EventDef[] = [
   },
   // ---- 家 ----
   {
-    id: 'ev_home_workout', locationId: 'home', icon: '🏋️', repeatable: true, weight: 5,
+    id: 'ev_home_workout', kind: 'routine', locationId: 'home', icon: '🏋️', repeatable: true, weight: 0,
     title: { zh: '练体力' }, text: { zh: '跑步、深蹲、搬米袋。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['strength'] },
     outcomes: {
@@ -188,7 +188,7 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_read', locationId: 'home', icon: '📚', repeatable: true, weight: 5,
+    id: 'ev_home_read', kind: 'routine', locationId: 'home', icon: '📚', repeatable: true, weight: 0,
     title: { zh: '看书' }, text: { zh: '急救、电工、种植。你上一世后悔没学的。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
     outcomes: {
@@ -219,6 +219,12 @@ export const prologueEvents: EventDef[] = [
       fine: { text: { zh: '你知道了村里谁家有井、谁家有枪。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'gainCard', cardId: 'supply_seed_veg', count: 2 }] },
       rare: { text: { zh: '老张家的狗生了崽。他给了你一只。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'adoptPet', petId: 'pet_dog' }] },
     },
+  },
+  {
+    id: 'ev_home_adopt_dog', kind: 'routine', energy: 1, locationId: 'home', icon: '🐕', once: true, weight: 0,
+    title: { zh: '去收容所领养一条狗' }, text: { zh: '五百块领养费。末日后它会在尸潮来之前叫，守夜时比人靠得住。' },
+    conditions: [P, { type: 'moneyAtLeast', amount: 500 }, { type: 'not', cond: { type: 'hasPet', species: 'dog' } }], durationWeeks: 1, slots: [HERO],
+    outcomes: { fine: { text: { zh: '它上车的时候没回头看一眼笼子。' }, effects: [{ type: 'money', delta: -500 }, { type: 'adoptPet', petId: 'pet_dog' }] } },
   },
   {
     id: 'ev_home_adopt_cat', energy: 1, locationId: 'home', icon: '🐈', once: true, weight: 3,
@@ -259,7 +265,7 @@ export const prologueEvents: EventDef[] = [
   },
   // ---- 军区门口 ----
   {
-    id: 'ev_armygate_warn', locationId: 'armygate', icon: '🪖', once: true, weight: 0, storylineNpcId: 'guchen',
+    id: 'ev_armygate_warn', kind: 'story', locationId: 'armygate', icon: '🪖', once: true, weight: 0, storylineNpcId: 'guchen',
     title: { zh: '去军区门口示警' }, text: { zh: '你知道他叫顾沉。他不知道你是谁。' },
     conditions: [P], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {

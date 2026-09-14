@@ -90,6 +90,13 @@ export function eligibleForSlot(ci: ContentIndex, state: GameState, slot: SlotDe
     case 'hero':
       if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergy(event) : 1)) out.push('hero')
       break
+    case 'person':
+      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergy(event) : 1)) out.push('hero')
+      for (const p of Object.values(state.people)) {
+        if (!p.alive || !p.inBase || p.busyWithEventId || exclude.has(p.id) || p.injury >= 2) continue
+        out.push(p.id)
+      }
+      break
     case 'npc':
       for (const p of Object.values(state.people)) {
         if (!p.alive || p.busyWithEventId || exclude.has(p.id)) continue
@@ -214,6 +221,25 @@ export function pickBranch(e: { outcomes: EventDef['outcomes'] }, o: Outcome) {
   return { outcome: 'fine' as Outcome, branch: e.outcomes.fine }
 }
 
+/** 一张卡放进白槽加几骰：物资按稀有度（普通/优良 = 槽位基础，稀有 +1，传说 +2），装备按自身加成+词缀，技能按自身 */
+export function cardDice(ci: ContentIndex, state: GameState, card: { defId: string; affixIds?: string[]; spoiled?: number }, slot: SlotDef, attrs: Attr[]): number {
+  const def = ci.card(card.defId)
+  const base = slot.bonusDice ?? (def.kind === 'supply' ? 1 : 0)
+  if (def.kind === 'supply') {
+    const r = effectiveRarity(ci, card as never) ?? 'common'
+    return base + [0, 0, 1, 2][rarityIndex(r)]
+  }
+  if (def.kind === 'equipment') {
+    let d = (!def.forAttr || attrs.includes(def.forAttr)) ? def.bonusDice : Math.floor(def.bonusDice / 2)
+    for (const a of card.affixIds ?? []) d += ci.affixes.get(a)?.bonusDice ?? 0
+    return d + (slot.bonusDice ?? 0)
+  }
+  if (def.kind === 'skill') return ((!def.forAttr || attrs.includes(def.forAttr)) ? def.bonusDice ?? 0 : 0) + (slot.bonusDice ?? 0)
+  if (def.kind === 'core') return base + rarityIndex(def.rarity)
+  void state
+  return base
+}
+
 export function diceFor(ci: ContentIndex, state: GameState, e: EventDef, p: Placement): number {
   if (!e.check) return 0
   const attrs: Attr[] = e.check.attrs
@@ -226,12 +252,7 @@ export function diceFor(ci: ContentIndex, state: GameState, e: EventDef, p: Plac
     else if (state.pets.some((x) => x.id === v)) dice += slot.bonusDice ?? 0
     else {
       const card = findCard(state, v)
-      if (card) {
-        const def = ci.card(card.defId)
-        dice += slot.bonusDice ?? 0
-        if (def.kind === 'skill' && (!def.forAttr || attrs.includes(def.forAttr))) dice += def.bonusDice ?? 0
-        if (def.kind === 'equipment' && (!def.forAttr || attrs.includes(def.forAttr))) dice += def.bonusDice
-      }
+      if (card) dice += cardDice(ci, state, card, slot, attrs)
     }
   }
   if (state.hero.health <= 3) dice -= 1
@@ -255,8 +276,11 @@ export function resolvePlacement(ci: ContentIndex, state: GameState, rng: Rng, p
     if (state.people[v]) state.people[v].busyWithEventId = undefined
     else if (slot.consumes || ci.cards.get(findCard(state, v)?.defId ?? '')?.kind === 'intel') removeCard(state, v)
   }
-  const actor = Object.values(p.assignments).find((v) => v !== 'hero' && state.people[v])
-  const ctx: EffectCtx = { ci, state, rng, report, actorId: actor ?? 'hero' }
+  const heroPresent = Object.values(p.assignments).includes('hero')
+  const leaderSlot = e.slots.find((s) => s.accepts.kind === 'person' || s.accepts.kind === 'hero')
+  const leader = leaderSlot ? p.assignments[leaderSlot.id] : undefined
+  const actor = (leader && leader !== 'hero' && state.people[leader]) ? leader : Object.values(p.assignments).find((v) => v !== 'hero' && state.people[v])
+  const ctx: EffectCtx = { ci, state, rng, report, actorId: actor ?? 'hero', heroPresent }
   applyEffects(ctx, picked.branch.effects)
   // 同行涨好感/忠诚
   for (const v of Object.values(p.assignments)) {
