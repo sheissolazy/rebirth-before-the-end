@@ -1,18 +1,19 @@
 import { useState } from 'react'
-import type { GameState, CardInstance, SupplyKind } from '../engine/types'
+import type { GameState, CardInstance, SupplyKind, CardDef } from '../engine/types'
+import { SUPPLY_KINDS, RARITY_ORDER } from '../engine/types'
 import { engine, type Store } from './store'
 import { t, lt } from '../i18n'
 import { content } from '../content'
-import { cardDefs, cardName, RARITY_CLASS, personName } from './lookup'
+import { cardDefs, cardName, RARITY_CLASS } from './lookup'
 
-const KINDS: SupplyKind[] = ['food', 'water', 'medicine', 'energy', 'weapon', 'material', 'daily']
+const KINDS: SupplyKind[] = SUPPLY_KINDS
+const groupOf = (c: CardDef): string => (c.kind === 'supply' ? c.supplyKind : c.kind)
+const groupLabel = (k: string) => KINDS.includes(k as SupplyKind) ? t(`supply.${k as SupplyKind}`) : k === 'equipment' ? t('group.equipment') : k === 'core' ? t('group.core') : t('group.other')
 
 export function WarehousePage({ state, store }: { state: GameState; store: Store }) {
   const st = engine.stats(state)
   const [shopOpen, setShopOpen] = useState(state.time.phase === 'prologue')
-  const [giftTarget, setGiftTarget] = useState<string>('')
   const [faction, setFaction] = useState<string>(content.factions[0]?.id ?? '')
-  const people = Object.values(state.people).filter((p) => p.alive && (p.inBase || (p.defId && content.npcs.find((n) => n.id === p.defId)?.romanceable)))
 
   const group = (inSpace: boolean) => {
     const cards = state.warehouse.filter((c) => !!c.inSpace === inSpace)
@@ -36,7 +37,6 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.moveToSpace(s, c.instanceId, !c.inSpace))}>{c.inSpace ? t('action.fromSpace') : t('action.toSpace')}</button>
           {d.kind === 'equipment' && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.equip(s, 'hero', c.instanceId))}>{t('action.equip')}</button>}
           {d.kind === 'supply' && d.onUse && <button className="rounded bg-emerald-900 px-2 py-0.5" onClick={() => store.act((s) => engine.useItem(s, c.instanceId))}>{t('action.use')}</button>}
-          {giftTarget && d.kind === 'supply' && <button className="rounded bg-pink-900 px-2 py-0.5" onClick={() => store.act((s) => engine.gift(s, giftTarget, c.instanceId))}>{t('action.gift')}</button>}
           {(d.kind === 'supply' || d.kind === 'equipment') && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.sell(s, c.instanceId, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.sell')}</button>}
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.discard(s, c.instanceId))}>{t('action.discard')}</button>
         </div>
@@ -51,7 +51,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
         <h3 className="font-semibold">{title}</h3>
         {[...KINDS, 'equipment', 'core', 'other'].map((k) => g[k]?.length ? (
           <div key={k} className="mt-2">
-            <h4 className="text-xs text-zinc-400">{KINDS.includes(k as SupplyKind) ? t(`supply.${k as SupplyKind}`) : k === 'equipment' ? '装备' : k === 'core' ? '晶核' : '其它'}</h4>
+            <h4 className="text-xs text-zinc-400">{groupLabel(k)}</h4>
             <ul className="mt-1 grid gap-1 sm:grid-cols-2">{g[k].map((c) => <Card key={c.instanceId} c={c} />)}</ul>
           </div>
         ) : null)}
@@ -63,12 +63,6 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
   return (
     <div className="space-y-4 p-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <label>送礼对象：
-          <select className="rounded border border-zinc-700 bg-zinc-800 p-1" value={giftTarget} onChange={(e) => setGiftTarget(e.target.value)}>
-            <option value="">—</option>
-            {people.map((p) => <option key={p.id} value={p.id}>{personName(p)}</option>)}
-          </select>
-        </label>
         {state.time.phase === 'apocalypse' && (
           <label>交易对象：
             <select className="rounded border border-zinc-700 bg-zinc-800 p-1" value={faction} onChange={(e) => setFaction(e.target.value)}>
@@ -86,8 +80,15 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
           {state.orders.length > 0 && (
             <p className="mt-1 text-xs text-amber-300">{t('shop.orders')}：{state.orders.map((o) => `${lt(cardDefs.get(o.cardDefId)?.name ?? { zh: o.cardDefId })}×${o.count}（${t('shop.arrives', { n: Math.max(0, o.arrivesAtTurn - state.turn) })}）`).join('、')}</p>
           )}
-          <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-            {content.cards.filter((c) => c.kind === 'supply' || c.kind === 'equipment').filter((c) => state.time.phase === 'apocalypse' || c.buyable).map((c) => {
+          {[...KINDS, 'equipment'].map((k) => {
+            const items = content.cards.filter((c) => c.kind === 'supply' || c.kind === 'equipment').filter((c) => state.time.phase === 'apocalypse' || c.buyable).filter((c) => groupOf(c) === k)
+              .sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity) || a.basePrice - b.basePrice)
+            if (!items.length) return null
+            return (
+          <div key={k} className="mt-3">
+          <h4 className="text-xs font-semibold text-zinc-300">{groupLabel(k)}</h4>
+          <ul className="mt-1 grid gap-1 sm:grid-cols-2">
+            {items.map((c) => {
               const price = state.time.phase === 'prologue' ? Math.round(c.basePrice * state.priceMultiplier * 1.1) : ({ common: 1, fine: 2, rare: 4, legendary: 8 }[c.rarity] * (content.factions.find((f) => f.id === faction)?.tradeRate ?? 2))
               const ordered = state.orderedThisWeek[c.id] ?? 0
               const limit = c.weeklyLimit ?? 5
@@ -105,6 +106,9 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
               )
             })}
           </ul>
+          </div>
+            )
+          })}
         </section>
       )}
 

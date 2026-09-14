@@ -16,6 +16,9 @@ export const lootTables: LootTableDef[] = [
   { id: 'loot_zombie', affixChance: 0, entries: [
     { cardId: 'core_common', weight: 80 }, { cardId: 'core_fine', weight: 20 },
   ] },
+  { id: 'loot_farm', affixChance: 0, entries: [
+    { cardId: 'supply_seed_veg', weight: 35 }, { cardId: 'supply_seed_potato', weight: 25 }, { cardId: 'supply_seed_sapling', weight: 10 }, { cardId: 'supply_rice_5kg', weight: 15 }, { cardId: 'supply_eggs', weight: 15 },
+  ] },
   { id: 'loot_factory', affixChance: 0.5, entries: [
     { cardId: 'supply_steel', weight: 50 }, { cardId: 'supply_battery', weight: 20 }, { cardId: 'equip_machete', weight: 15 }, { cardId: 'equip_crossbow', weight: 5 }, { cardId: 'core_common', weight: 10 },
   ] },

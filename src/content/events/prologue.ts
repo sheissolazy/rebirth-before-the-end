@@ -178,7 +178,7 @@ export const prologueEvents: EventDef[] = [
   // ---- 家 ----
   {
     id: 'ev_home_workout', locationId: 'home', icon: '🏋️', repeatable: true, weight: 5,
-    title: { zh: '练体力' }, text: { zh: '爬楼、深蹲、搬米袋。' },
+    title: { zh: '练体力' }, text: { zh: '跑步、深蹲、搬米袋。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['strength'] },
     outcomes: {
       fail: { text: { zh: '第二天下不了床。' }, effects: [] },
@@ -201,12 +201,23 @@ export const prologueEvents: EventDef[] = [
   {
     id: 'ev_home_social', energy: 1, locationId: 'home', icon: '💬', repeatable: true, weight: 4,
     title: { zh: '跟邻居混熟' }, text: { zh: '帮王阿姨拎菜，跟楼下小孩玩。' },
-    conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    conditions: [{ type: 'not', cond: { type: 'baseType', baseType: 'farmhouse' } }, { type: 'not', cond: { type: 'baseType', baseType: 'bunker' } }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '王阿姨问你是不是传销。' }, effects: [] },
       common: { text: { zh: '你知道了谁家有老人、谁家有狗。' }, effects: [{ type: 'affection', npcId: 'auntwang', delta: 5 }] },
       fine: { text: { zh: '你成了楼里"那个热心的姑娘"。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'affection', npcId: 'auntwang', delta: 10 }] },
       rare: { text: { zh: '楼下一条流浪狗跟你回了家。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'adoptPet', petId: 'pet_dog' }] },
+    },
+  },
+  {
+    id: 'ev_home_village', locationId: 'home', icon: '🧑‍🌾', repeatable: true, weight: 4,
+    title: { zh: '跟村里人混熟' }, text: { zh: '帮隔壁老张修水泵，听他讲哪块地涝。' },
+    conditions: [{ type: 'baseType', baseType: 'farmhouse' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    outcomes: {
+      fail: { text: { zh: '他们觉得城里来的姑娘待不久。' }, effects: [] },
+      common: { text: { zh: '老张送了你一筐土豆。' }, effects: [{ type: 'gainCard', cardId: 'supply_seed_potato' }] },
+      fine: { text: { zh: '你知道了村里谁家有井、谁家有枪。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'gainCard', cardId: 'supply_seed_veg', count: 2 }] },
+      rare: { text: { zh: '老张家的狗生了崽。他给了你一只。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'adoptPet', petId: 'pet_dog' }] },
     },
   },
   {

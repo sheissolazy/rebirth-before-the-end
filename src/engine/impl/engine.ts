@@ -111,6 +111,22 @@ export function createEngine(content: ContentPack): GameEngine {
     }
   }
 
+  /** 送礼价值：他缺的维度 5×档位，否则 2×档位；装备按档位 3×；伙伴翻倍算忠诚 */
+  function giftValue(s: GameState, personId: string, instanceId: string): number {
+    const p = s.people[personId]
+    const inst = findCard(s, instanceId)
+    if (!p || !inst) return 0
+    const def = ci.card(inst.defId)
+    const rarity = effectiveRarity(ci, inst) ?? 'common'
+    const needs = p.generated?.needs ?? ci.npcs.get(p.defId ?? '')?.needs
+    let amount = 0
+    if (def.kind === 'supply') amount = (def.supplyKind === needs ? 5 : 2) * (rarityIndex(rarity) + 1)
+    else if (def.kind === 'equipment') amount = 3 * (rarityIndex(rarity) + 1)
+    else if (def.kind === 'core') amount = 2 * (rarityIndex(rarity) + 1)
+    else return 0
+    return isRomanceable(ci, p) ? amount : amount * 2
+  }
+
   function payCores(s: GameState, cost: number): void {
     const cores = s.warehouse.filter((c) => ci.card(c.defId).kind === 'core').sort((a, b) => cardPoints(ci, a) - cardPoints(ci, b))
     const total = cores.reduce((t, c) => t + cardPoints(ci, c), 0)
@@ -139,6 +155,10 @@ export function createEngine(content: ContentPack): GameEngine {
       if (s.base.building) throw new EngineError('BUSY_BUILDING', s.base.building.moduleId)
       if (m.cost.money && s.money < m.cost.money) throw new EngineError('NO_MONEY', moduleId)
       if (s.hero.energy < 1) throw new EngineError('NO_ENERGY', '开工要 1 点精力')
+      for (const req of m.cost.requires ?? []) {
+        const have = s.warehouse.filter((c) => c.defId === req.cardId).length
+        if (have < req.count) throw new EngineError('NO_REQUIRED', `需要 ${ci.card(req.cardId).name.zh} ×${req.count}，只有 ${have}`)
+      }
       // 材料
       const mats = s.warehouse.filter((c) => { const d = ci.card(c.defId); return d.kind === 'supply' && d.supplyKind === 'material' }).sort((a, b) => cardPoints(ci, a) - cardPoints(ci, b))
       const total = mats.reduce((t, c) => t + cardPoints(ci, c), 0)
@@ -146,6 +166,7 @@ export function createEngine(content: ContentPack): GameEngine {
       let left = m.cost.materialPoints
       for (const c of mats) { if (left <= 0) break; left -= cardPoints(ci, c); s.warehouse.splice(s.warehouse.indexOf(c), 1) }
       if (m.cost.money) s.money -= m.cost.money
+      for (const req of m.cost.requires ?? []) for (let i = 0; i < req.count; i++) { const idx = s.warehouse.findIndex((c) => c.defId === req.cardId); if (idx >= 0) s.warehouse.splice(idx, 1) }
       s.hero.energy -= 1
       s.base.building = { moduleId, weeksLeft: Math.max(1, m.cost.weeks) }
     }),
@@ -174,18 +195,14 @@ export function createEngine(content: ContentPack): GameEngine {
     }),
     gift: (state, personId, instanceId) => mutate(state, (s) => {
       const p = s.people[personId]
-      const inst = findCard(s, instanceId)
       if (!p || !p.alive) throw new EngineError('NO_PERSON', personId)
-      if (!inst) throw new EngineError('NO_CARD', instanceId)
-      const def = ci.card(inst.defId)
-      const rarity = effectiveRarity(ci, inst) ?? 'common'
-      const needs = p.generated?.needs ?? ci.npcs.get(p.defId ?? '')?.needs
-      const match = def.kind === 'supply' && def.supplyKind === needs
-      const amount = (match ? 5 : 2) * (rarityIndex(rarity) + 1)
+      if (!findCard(s, instanceId)) throw new EngineError('NO_CARD', instanceId)
+      const amount = giftValue(s, personId, instanceId)
       removeCard(s, instanceId)
       if (isRomanceable(ci, p)) p.affection = clamp(p.affection + amount, 0, 100)
-      else p.loyalty = clamp(p.loyalty + amount * 2, 0, 100)
+      else p.loyalty = clamp(p.loyalty + amount, 0, 100)
     }),
+    giftValue: (state, personId, instanceId) => giftValue(state, personId, instanceId),
     equip: (state, personId, instanceId) => mutate(state, (s) => {
       const inst = findCard(s, instanceId)
       if (!inst) throw new EngineError('NO_CARD', instanceId)

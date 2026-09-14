@@ -3,6 +3,7 @@ import { engine, type Store } from './store'
 import { t, lt } from '../i18n'
 import { content } from '../content'
 import { moduleDefs, cardDefs } from './lookup'
+import { lt as L } from '../i18n'
 
 export function BasePage({ state, store }: { state: GameState; store: Store }) {
   const st = engine.stats(state)
@@ -47,9 +48,11 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
               <li key={m.id} className="flex items-start justify-between gap-2">
                 <div>
                   <div>{m.icon} {lt(m.name)} {b && <span className={`text-xs ${b.damaged ? 'text-red-400' : 'text-emerald-400'}`}>{b.damaged ? '已损毁' : '已建'}</span>}</div>
-                  <div className="text-xs text-zinc-500">{lt(m.desc)} · 材料 {m.cost.materialPoints} 分 · {m.cost.weeks} 周{m.cost.money ? ` · ￥${m.cost.money}` : ''}{st.materialPoints < m.cost.materialPoints ? ` · 还差 ${m.cost.materialPoints - st.materialPoints} 分` : ''}</div>
+                  <div className="text-xs text-zinc-500">{lt(m.desc)} · 材料 {m.cost.materialPoints} 分 · {m.cost.weeks} 周{m.cost.money ? ` · ￥${m.cost.money}` : ''}{st.materialPoints < m.cost.materialPoints ? ` · 还差 ${m.cost.materialPoints - st.materialPoints} 分` : ''}
+                    {(m.cost.requires ?? []).map((r) => { const have = state.warehouse.filter((c) => c.defId === r.cardId).length; return <span key={r.cardId} className={have >= r.count ? '' : 'text-red-400'}> · 需要 {L(cardDefs.get(r.cardId)?.name ?? { zh: r.cardId })} ×{r.count}（有 {have}）</span> })}
+                  </div>
                 </div>
-                {(!b || b.damaged) && state.base.building?.moduleId !== m.id && <button className="shrink-0 rounded bg-zinc-700 px-3 py-1 disabled:opacity-40" disabled={!!state.base.building || st.materialPoints < m.cost.materialPoints} onClick={() => store.act((s) => engine.build(s, m.id))}>{b ? '修复' : t('action.build')}</button>}
+                {(!b || b.damaged) && state.base.building?.moduleId !== m.id && <button className="shrink-0 rounded bg-zinc-700 px-3 py-1 disabled:opacity-40" disabled={!!state.base.building || st.materialPoints < m.cost.materialPoints || (m.cost.requires ?? []).some((r) => state.warehouse.filter((c) => c.defId === r.cardId).length < r.count)} onClick={() => store.act((s) => engine.build(s, m.id))}>{b ? '修复' : t('action.build')}</button>}
                 {state.base.building?.moduleId === m.id && <span className="shrink-0 text-xs text-amber-300">在建</span>}
               </li>
             )

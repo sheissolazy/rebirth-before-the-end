@@ -30,6 +30,8 @@ export interface GameEngine {
   buy(state: GameState, cardDefId: string, count: number, factionId?: string): GameState
   sell(state: GameState, instanceId: string, factionId?: string): GameState
   gift(state: GameState, personId: string, instanceId: string): GameState
+  /** 送这张卡会涨多少好感/忠诚（UI 预览用） */
+  giftValue(state: GameState, personId: string, instanceId: string): number
   equip(state: GameState, personId: 'hero' | string, instanceId: string): GameState
   useIntel(state: GameState, instanceId: string): GameState
   /** 用晶核升级异能 */

@@ -16,7 +16,7 @@ export function MapPage({ state, store }: { state: GameState; store: Store }) {
       {state.hero.incapacitatedWeeks === 0 && <p className="text-xs text-zinc-500">本周剩余精力 ⚡{state.hero.energy}。精力够就能同时做几件事；伙伴不耗你的精力。</p>}
       {locs.map((loc) => (
         <section key={loc.id}>
-          <h3 className="font-semibold">{loc.icon} {lt(loc.name)} <span className="text-xs font-normal text-zinc-500">{lt(loc.desc)}</span></h3>
+          <h3 className="font-semibold">{loc.id === 'home' ? `${content.bases.find((b) => b.type === state.base.type)?.icon ?? loc.icon} ${lt(content.bases.find((b) => b.type === state.base.type)?.name ?? loc.name)}` : `${loc.icon} ${lt(loc.name)}`} <span className="text-xs font-normal text-zinc-500">{lt(loc.desc)}</span></h3>
           <ul className="mt-1 grid gap-2 sm:grid-cols-2">
             {events.filter((e) => e.locationId === loc.id).map((e) => (
               <li key={e.id}>

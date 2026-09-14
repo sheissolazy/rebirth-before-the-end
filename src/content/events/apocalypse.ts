@@ -8,12 +8,45 @@ export const apocalypseEvents: EventDef[] = [
   {
     id: 'ev_home_kill_zombies', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
     title: { zh: '清理楼道的丧尸' }, text: { zh: '它们卡在楼梯口。一只一只来。' },
-    conditions: [A], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    conditions: [A, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
     outcomes: {
       fail: { text: { zh: '你被抓了一下。没破皮。应该没破皮。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
       common: { text: { zh: '两只。你吐了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 1 }] },
       fine: { text: { zh: '五只。手不抖了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 2 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
       rare: { text: { zh: '楼道干净了。其中一只脑子里有块发光的东西。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 3 }, { type: 'gainCard', cardId: 'core_fine' }] },
+    },
+  },
+  {
+    id: 'ev_home_kill_zombies_villa', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    title: { zh: '清理院墙外的丧尸' }, text: { zh: '它们贴着围墙转。从墙头用长矛捅最安全。' },
+    conditions: [A, { type: 'baseType', baseType: 'villa' }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    outcomes: {
+      fail: { text: { zh: '一只翻过了墙。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+      common: { text: { zh: '三只。墙外一片狼藉。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 1 }] },
+      fine: { text: { zh: '清干净了。你在墙头上练出了准头。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 2 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
+      rare: { text: { zh: '其中一只脑子里有块发光的东西。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 3 }, { type: 'gainCard', cardId: 'core_fine' }] },
+    },
+  },
+  {
+    id: 'ev_home_kill_zombies_farm', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    title: { zh: '清理围栏边的丧尸' }, text: { zh: '郊区人少，丧尸也少，但每一只都是顺着路来的。' },
+    conditions: [A, { type: 'baseType', baseType: 'farmhouse' }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    outcomes: {
+      fail: { text: { zh: '围栏被撞歪了一段。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }, { type: 'damageModule', moduleId: 'farm_fence' }] },
+      common: { text: { zh: '两只。你把它们拖到远处烧了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 1 }] },
+      fine: { text: { zh: '清干净了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 2 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
+      rare: { text: { zh: '其中一只穿着军装。它的晶核比别的亮。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 3 }, { type: 'gainCard', cardId: 'core_fine' }] },
+    },
+  },
+  {
+    id: 'ev_home_kill_zombies_bunker', locationId: 'home', icon: '🧟', repeatable: true, weight: 8,
+    title: { zh: '清理入口的丧尸' }, text: { zh: '它们知道下面有人。' },
+    conditions: [A, { type: 'baseType', baseType: 'bunker' }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    outcomes: {
+      fail: { text: { zh: '你在通道里被堵住了。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+      common: { text: { zh: '通道清干净了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 1 }] },
+      fine: { text: { zh: '你在通道里布了陷阱。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 2 }, { type: 'attr', target: 'hero', attr: 'mind', delta: 1 }] },
+      rare: { text: { zh: '陷阱里有一只异能丧尸。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 3 }, { type: 'gainCard', cardId: 'core_rare' }] },
     },
   },
   {
@@ -201,6 +234,17 @@ export const apocalypseEvents: EventDef[] = [
       common: { text: { zh: '换了两袋米。' }, effects: [{ type: 'gainCard', cardId: 'supply_rice_5kg', count: 2 }] },
       fine: { text: { zh: '米、鸡蛋、一桶井水。' }, effects: [{ type: 'gainCard', cardId: 'supply_rice_5kg', count: 3 }, { type: 'gainCard', cardId: 'supply_eggs', count: 2 }, { type: 'gainCard', cardId: 'supply_well_water', count: 2 }] },
       rare: { text: { zh: '他说"你要是搬来，地分你一半"。' }, effects: [{ type: 'gainCard', cardId: 'supply_rice_5kg', count: 4 }, { type: 'gainCard', cardId: 'supply_eggs', count: 3 }, { type: 'setFlag', flag: 'farm_invite' }] },
+    },
+  },
+  {
+    id: 'ev_farm_seeds', locationId: 'farm', icon: '🌱', repeatable: true, weight: 8,
+    title: { zh: '翻农场的仓库找种子' }, text: { zh: '末日后没人卖种子了。农场的仓库里应该还有。' },
+    conditions: [A], durationWeeks: 1, slots: [HERO, HELPER, WEAPON], check: { attrs: ['mind', 'strength'] },
+    outcomes: {
+      fail: { text: { zh: '仓库里有一群丧尸。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+      common: { text: { zh: '一袋受潮的种子。' }, effects: [{ type: 'gainRandom', table: 'loot_farm', count: 1 }] },
+      fine: { text: { zh: '整整一架子。' }, effects: [{ type: 'gainRandom', table: 'loot_farm', count: 3 }] },
+      rare: { text: { zh: '你找到了育苗棚。苗还活着。' }, effects: [{ type: 'gainRandom', table: 'loot_farm', count: 3 }, { type: 'gainCard', cardId: 'supply_seed_sapling', count: 2 }] },
     },
   },
   {

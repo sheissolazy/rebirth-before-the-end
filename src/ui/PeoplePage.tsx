@@ -1,4 +1,6 @@
-import type { GameState, CompanionJob } from '../engine/types'
+import { useState } from 'react'
+import type { GameState, CompanionJob, PersonState } from '../engine/types'
+import { GiftModal } from './GiftModal'
 import { AFFECTION_THRESHOLDS } from '../engine/types'
 import { engine, type Store } from './store'
 import { t, lt } from '../i18n'
@@ -14,6 +16,7 @@ function rank(v: number) {
 }
 
 export function PeoplePage({ state, store }: { state: GameState; store: Store }) {
+  const [gifting, setGifting] = useState<PersonState | null>(null)
   const people = Object.values(state.people)
   const leads = people.filter((p) => isRomanceable(p))
   const companions = people.filter((p) => !isRomanceable(p) && (p.inBase || p.generated))
@@ -36,7 +39,10 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
               <li key={p.id} className={`rounded border p-2 text-sm ${RARITY_CLASS[personRarity(p)]} ${!p.alive ? 'opacity-40' : ''}`}>
                 <div className="flex justify-between"><span>{d.icon} {personName(p)} <span className="text-xs text-zinc-400">{lt(d.title)}</span></span><Attr p={p} /></div>
                 <div className="text-xs text-zinc-400">{lt(d.bio)}</div>
-                <div className="mt-1 text-xs">好感 {p.affection}（{rank(p.affection)}）{p.inBase ? ' · 在基地' : ''}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : ''} · 缺 {t(`supply.${d.needs}`)}</div>
+                <div className="mt-1 flex items-center justify-between text-xs">
+                  <span>好感 {p.affection}（{rank(p.affection)}）{p.inBase ? ' · 在基地' : ''}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : ''} · 缺 {t(`supply.${d.needs}`)}</span>
+                  {p.alive && <button className="rounded bg-pink-900 px-2 py-0.5" onClick={() => setGifting(p)}>{t('action.gift')}</button>}
+                </div>
                 <div className="h-1 w-full rounded bg-zinc-800"><div className="h-1 rounded bg-pink-500" style={{ width: `${p.affection}%` }} /></div>
               </li>
             )
@@ -50,7 +56,10 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
           {companions.map((p) => (
             <li key={p.id} className={`rounded border p-2 text-sm ${RARITY_CLASS[personRarity(p)]} ${!p.alive ? 'opacity-40' : ''}`}>
               <div className="flex justify-between"><span>{personName(p)} <span className="text-xs text-zinc-400">{p.generated ? lt(content.survivorTraits.find((x) => x.id === p.generated!.traitId)?.name ?? { zh: '' }) : lt(npcDefs.get(p.defId!)?.title ?? { zh: '' })}</span></span><Attr p={p} /></div>
-              <div className="text-xs">{t('stat.loyalty')} {p.loyalty}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : !p.inBase ? ' · 已离开' : ''}{p.generated?.powerId ? ` · 异能 ${lt(content.powers.find((x) => x.id === p.generated!.powerId)?.name ?? { zh: '' })}` : ''}</div>
+              <div className="flex items-center justify-between text-xs">
+                <span>{t('stat.loyalty')} {p.loyalty}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : !p.inBase ? ' · 已离开' : ''}{p.generated?.powerId ? ` · 异能 ${lt(content.powers.find((x) => x.id === p.generated!.powerId)?.name ?? { zh: '' })}` : ''} · 缺 {t(`supply.${p.generated?.needs ?? npcDefs.get(p.defId ?? '')?.needs ?? 'daily'}`)}</span>
+                {p.alive && p.inBase && <button className="rounded bg-pink-900 px-2 py-0.5" onClick={() => setGifting(p)}>{t('action.gift')}</button>}
+              </div>
               {p.alive && p.inBase && (
                 <label className="mt-1 block text-xs">派工：
                   <select className="rounded border border-zinc-700 bg-zinc-800 p-1" value={p.job} disabled={!!p.busyWithEventId} onChange={(e) => store.act((s) => engine.assignJob(s, p.id, e.target.value as CompanionJob))}>
@@ -73,6 +82,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
         </ul>
       </section>
 
+      {gifting && <GiftModal state={state} person={gifting} store={store} onClose={() => setGifting(null)} />}
       {others.length > 0 && (
         <section className="rounded-lg border border-zinc-800 p-3">
           <h3 className="font-semibold">其他人</h3>

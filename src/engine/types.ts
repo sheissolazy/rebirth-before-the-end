@@ -26,8 +26,9 @@ export const CRISIS_POINTS: Record<Rarity, number> = { common: 2, fine: 4, rare:
 /** 危机五类：尸潮 / 匮乏 / 气候 / 疫病 / 人祸 */
 export type CrisisKind = 'horde' | 'scarcity' | 'climate' | 'plague' | 'human'
 
-/** 物资七维度 */
-export type SupplyKind = 'food' | 'water' | 'medicine' | 'energy' | 'weapon' | 'material' | 'daily'
+/** 物资八维度（种子不顶危机，只用于建造种植类模块） */
+export type SupplyKind = 'food' | 'water' | 'medicine' | 'energy' | 'weapon' | 'material' | 'daily' | 'seed'
+export const SUPPLY_KINDS: SupplyKind[] = ['food', 'water', 'medicine', 'energy', 'weapon', 'material', 'daily', 'seed']
 
 /** 每类危机能用哪些维度硬顶（尸潮/人祸还会算基地防御与守卫战力，见引擎） */
 export const CRISIS_ACCEPTS: Record<CrisisKind, SupplyKind[]> = {
@@ -251,8 +252,8 @@ export interface ModuleDef {
   icon?: string
   /** 只能建在哪种基地 */
   baseType: BaseType
-  /** 建造消耗：材料分 + 人力（伙伴周数）+ 周数 */
-  cost: { materialPoints: number; labor: number; weeks: number; money?: number }
+  /** 建造消耗：材料分 + 人力（伙伴周数）+ 周数 + 必需的特定卡（种子等，消耗） */
+  cost: { materialPoints: number; labor: number; weeks: number; money?: number; requires?: Array<{ cardId: string; count: number }> }
   /** 建成效果（持续性，引擎每周结算） */
   provides: ModuleEffect[]
 }
