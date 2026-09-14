@@ -5,7 +5,7 @@ export const npcs: NpcDef[] = [
   {
     id: 'guchen', name: { zh: '顾沉' }, title: { zh: '军区基地长' }, icon: '⚡', rarity: 'legendary',
     bio: { zh: '前世第 2 年为护送平民战死。序章去军区门口示警，他不会信你。' },
-    romanceable: true, attrs: { strength: 5, mind: 3, charm: 2 }, needs: 'medicine',
+    romanceable: true, attrs: { strength: 6, mind: 3, charm: 3 }, needs: 'medicine',
     powerId: 'power_lightning', skillCardIds: ['skill_guchen_thunder'], initialAffection: 0, factionId: 'army',
     care: [
       { text: { zh: '一个兵送来一箱压缩饼干，纸条上只有两个字："吃饭。"' }, cardId: 'supply_compressed_biscuit' },
@@ -16,7 +16,7 @@ export const npcs: NpcDef[] = [
   {
     id: 'shenyan', name: { zh: '沈砚' }, title: { zh: '天才医生' }, icon: '🩺', rarity: 'legendary',
     bio: { zh: '前世研究疫苗到一半病死。他需要 5 种材料，其中一种是丧尸王的血。' },
-    romanceable: true, attrs: { strength: 1, mind: 5, charm: 3 }, needs: 'energy',
+    romanceable: true, attrs: { strength: 2, mind: 6, charm: 4 }, needs: 'energy',
     powerId: 'power_heal', skillCardIds: ['skill_shenyan_heal'], initialAffection: 0,
     care: [
       { text: { zh: '他留下一个急救箱，里面每样东西都贴了用法。' }, cardId: 'supply_medkit' },
@@ -49,7 +49,7 @@ export const npcs: NpcDef[] = [
   {
     id: 'aji', name: { zh: '阿寂' }, title: { zh: '丧尸王' }, icon: '🧟', rarity: 'legendary',
     bio: { zh: '不会腐烂的男人。前世杀死你的尸潮由他驱动，他不记得。第 1 年末出场。' },
-    romanceable: true, attrs: { strength: 6, mind: 2, charm: 2 }, needs: 'daily',
+    romanceable: true, attrs: { strength: 7, mind: 2, charm: 3 }, needs: 'daily',
     powerId: 'power_mind', skillCardIds: ['skill_aji_command'], initialAffection: 0,
     care: [
       { text: { zh: '门口放着一颗晶核。周围的丧尸一夜没靠近。' }, cardId: 'core_rare' },

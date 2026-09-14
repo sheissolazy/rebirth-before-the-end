@@ -24,7 +24,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
   const equipLine = (eq: Partial<Record<string, string>>) => Object.values(eq).map((id) => { const c = state.warehouse.find((x) => x.instanceId === id); return c ? lt(cardDefs.get(c.defId)!.name) : '' }).filter(Boolean).join('、') || '无'
   const people = Object.values(state.people)
   const leads = people.filter((p) => isRomanceable(p))
-  const companions = people.filter((p) => !isRomanceable(p) && (p.inBase || p.generated))
+  const companions = [...leads.filter((p) => p.alive && p.inBase), ...people.filter((p) => !isRomanceable(p) && (p.inBase || p.generated))]
   const others = people.filter((p) => !isRomanceable(p) && !p.inBase && !p.generated)
   /** 装备带来的属性加成（对口属性加 bonusDice，不对口加一半） */
   const eqBonus = (equipment: Partial<Record<string, string>>) => {
@@ -139,9 +139,9 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
         <ul className="mt-2 space-y-2">
           {companions.map((p) => (
             <li key={p.id} className={`rounded border p-2 text-sm ${RARITY_CLASS[personRarity(p)]} ${!p.alive ? 'opacity-40' : ''}`}>
-              <div className="flex justify-between"><span>{personName(p)} <span className="text-xs text-zinc-400">{p.generated ? lt(content.survivorTraits.find((x) => x.id === p.generated!.traitId)?.name ?? { zh: '' }) : lt(npcDefs.get(p.defId!)?.title ?? { zh: '' })}</span></span><Attr p={p} /></div>
+              <div className="flex justify-between"><span>{personName(p)} {isRomanceable(p) && <span className="rounded bg-pink-900 px-1 text-[10px] text-pink-200">男主</span>} <span className="text-xs text-zinc-400">{p.generated ? lt(content.survivorTraits.find((x) => x.id === p.generated!.traitId)?.name ?? { zh: '' }) : lt(npcDefs.get(p.defId!)?.title ?? { zh: '' })}</span></span><Attr p={p} /></div>
               <div className="flex items-center justify-between text-xs">
-                <span>{t('stat.loyalty')} {p.loyalty}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : !p.inBase ? ' · 已离开' : ''}{p.generated?.powerId ? ` · 异能 ${lt(content.powers.find((x) => x.id === p.generated!.powerId)?.name ?? { zh: '' })}` : ''} · 缺 {t(`supply.${p.generated?.needs ?? npcDefs.get(p.defId ?? '')?.needs ?? 'daily'}`)}</span>
+                <span>{isRomanceable(p) ? `好感 ${p.affection}` : `${t('stat.loyalty')} ${p.loyalty}`}{p.injury ? ` · 受伤${p.injury}` : ''}{!p.alive ? ' · 已死亡' : !p.inBase ? ' · 已离开' : ''}{p.generated?.powerId ? ` · 异能 ${lt(content.powers.find((x) => x.id === p.generated!.powerId)?.name ?? { zh: '' })}` : ''} · 缺 {t(`supply.${p.generated?.needs ?? npcDefs.get(p.defId ?? '')?.needs ?? 'daily'}`)}</span>
                 <span className="flex gap-1">
                   {p.alive && p.inBase && <button className="rounded bg-zinc-700 px-2 py-0.5" onClick={() => setEquipping(p)}>{t('action.equip')}</button>}
                   {p.alive && p.inBase && <button className="rounded bg-pink-900 px-2 py-0.5" onClick={() => setGifting(p)}>{t('action.gift')}</button>}

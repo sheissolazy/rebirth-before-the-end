@@ -138,6 +138,15 @@ export function rankIndex(r: AffectionRank): number { return Object.keys(AFFECTI
 export function isRomanceable(ci: ContentIndex, p: PersonState): boolean {
   return !!(p.defId && ci.npcs.get(p.defId)?.romanceable)
 }
+/** 人物稀有度：随机幸存者看生成档，NPC 看定义 */
+export function personRarityOf(ci: ContentIndex, p: PersonState): Rarity {
+  return p.generated?.rarity ?? (p.defId ? ci.npcs.get(p.defId)?.rarity : undefined) ?? 'common'
+}
+/** 颜色对应能力：成长倍率（传说 2 倍、稀有 1.5 倍、优良 1 倍、普通 0.8 倍） */
+export const GROWTH_FACTOR: Record<Rarity, number> = { common: 0.8, fine: 1, rare: 1.5, legendary: 2 }
+/** 颜色对应能力：属性上限（普通 5 / 优良 6 / 稀有 8 / 传说 10） */
+export const ATTR_CAP: Record<Rarity, number> = { common: 5, fine: 6, rare: 8, legendary: 10 }
+
 export function isCompanion(ci: ContentIndex, p: PersonState): boolean {
   return !isRomanceable(ci, p)
 }

@@ -247,6 +247,17 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 加油站 ----
   {
+    id: 'ev_gas_shelves', locationId: 'gasstation', icon: '🍫', repeatable: true, weight: 8,
+    title: { zh: '翻便利店货架' }, text: { zh: '收银台后面的货架还没被搬空：功能饮料、速溶咖啡、几排罐头，冰柜里的东西早坏了。' },
+    conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON], check: { attrs: ['mind', 'strength'] },
+    outcomes: {
+      fail: { text: { zh: '冰柜后面有人。你退出来了。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 2 }] },
+      common: { text: { zh: '抱了几样就走。' }, effects: [{ type: 'gainRandom', table: 'loot_gas', count: 2 }] },
+      fine: { text: { zh: '装满了一个购物筐。' }, effects: [{ type: 'gainRandom', table: 'loot_gas', count: 3 }] },
+      rare: { text: { zh: '仓库门没锁，整箱整箱地搬。' }, effects: [{ type: 'gainRandom', table: 'loot_gas', count: 5 }] },
+    },
+  },
+  {
     id: 'ev_gas_fuel', locationId: 'gasstation', icon: '⛽', repeatable: true, weight: 8,
     title: { zh: '抽油' }, text: { zh: '地下油罐还有。黑鸦的人也知道。' },
     conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON], check: { attrs: ['mind', 'strength'] },

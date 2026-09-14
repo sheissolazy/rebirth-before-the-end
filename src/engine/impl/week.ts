@@ -3,7 +3,7 @@ import type { ContentIndex } from './content'
 import { Rng } from './rng'
 import { turnToTime } from '../api'
 import { drawEvents, resolvePlacement, drawChoice } from './events'
-import { energyMax, hasCold } from './helpers'
+import { energyMax, hasCold, personRarityOf, GROWTH_FACTOR, ATTR_CAP } from './helpers'
 import { drawCrisis, resolveCrisis } from './crisis'
 import { grantCard, grantFromLoot, loseRandomCards, applyEffects, type EffectCtx } from './effects'
 import { isCompanion, isRomanceable, baseDefense, supplyPoints, cardPoints, personName, clamp } from './helpers'
@@ -148,7 +148,6 @@ function runJobs(ci: ContentIndex, state: GameState, rng: Rng, report: WeekRepor
   const ctx: EffectCtx = { ci, state, rng, report }
   const farmMods = state.base.modules.some((m) => !m.damaged && ci.modules.get(m.moduleId)?.provides.some((e) => e.type === 'produce' && e.supplyKind === 'food'))
   const hasTrainingGround = state.base.modules.some((m) => !m.damaged && ci.modules.get(m.moduleId)?.provides.some((e) => e.type === 'trainBonus'))
-  const trainCap = hasTrainingGround ? 8 : 6
   for (const p of Object.values(state.people)) {
     if (!p.alive || !p.inBase || p.busyWithEventId) continue
     switch (p.job) {
@@ -160,11 +159,13 @@ function runJobs(ci: ContentIndex, state: GameState, rng: Rng, report: WeekRepor
         break
       }
       case 'train': {
-        // 约 12%（有训练场 25%）每周 +1，越高越难；上限 6 / 8
+        // 约 12%（有训练场 25%）× 稀有度倍率，每周 +1，越高越难；上限按稀有度（普通 5 / 优良 6 / 稀有 8 / 传说 10）
         const attr = rng.pick(['strength', 'mind', 'charm'] as const)
+        const pr = personRarityOf(ci, p)
+        const trainCap = ATTR_CAP[pr]
         if (p.attrs[attr] >= trainCap) break
-        const chance = (hasTrainingGround ? 0.25 : 0.12) * (4 / (p.attrs[attr] + 1))
-        if (rng.chance(Math.min(0.5, chance))) p.attrs[attr] = clamp(p.attrs[attr] + 1, 1, trainCap)
+        const chance = (hasTrainingGround ? 0.25 : 0.12) * (4 / (p.attrs[attr] + 1)) * GROWTH_FACTOR[pr]
+        if (rng.chance(Math.min(0.6, chance))) p.attrs[attr] = clamp(p.attrs[attr] + 1, 1, trainCap)
         break
       }
       default: break

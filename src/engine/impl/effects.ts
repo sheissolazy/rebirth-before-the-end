@@ -2,7 +2,7 @@ import type { Effect, GameState, CardInstance, Rarity, SupplyKind, PersonState, 
 import { RARITY_POINTS, RARITY_ORDER } from '../types'
 import type { ContentIndex } from './content'
 import { Rng } from './rng'
-import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName, hasCold, affectionCap } from './helpers'
+import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName, hasCold, affectionCap, personRarityOf, GROWTH_FACTOR, ATTR_CAP } from './helpers'
 
 export interface EffectCtx {
   ci: ContentIndex
@@ -104,9 +104,12 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     case 'attr': {
       const target = ef.target === 'hero' ? h : (ef.target === 'self' && ctx.actorId && ctx.actorId !== 'hero' ? findPerson(state, ctx.actorId) : findPerson(state, ef.target))
       if (!target) break
-      // 越高越难涨：3 以下必涨，之后概率 3/当前值（4→75%，6→50%，9→33%）
-      if (ef.delta > 0 && !rng.chance(Math.min(1, 3 / target.attrs[ef.attr]))) break
-      target.attrs[ef.attr] = clamp(target.attrs[ef.attr] + ef.delta, 1, 10)
+      // 越高越难涨：概率 = 3 × 稀有度倍率 / 当前值（女主按传说算）；上限按稀有度
+      const pr = target === h ? 'legendary' : personRarityOf(ci, target as PersonState)
+      const cap = target === h ? 10 : ATTR_CAP[pr]
+      if (ef.delta > 0 && target.attrs[ef.attr] >= cap) break
+      if (ef.delta > 0 && !rng.chance(Math.min(1, 3 * GROWTH_FACTOR[pr] / target.attrs[ef.attr]))) break
+      target.attrs[ef.attr] = clamp(target.attrs[ef.attr] + ef.delta, 1, cap)
       break
     }
     case 'gainCard': for (let i = 0; i < (ef.count ?? 1); i++) grantCard(ctx, ef.cardId, { affix: true }); break
