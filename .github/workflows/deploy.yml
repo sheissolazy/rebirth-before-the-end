@@ -3,9 +3,10 @@ name: Deploy to GitHub Pages
 # 同一个站点部署两个版本：
 #   /       ← main 分支（稳定测试版）
 #   /next/  ← next 分支（开发版，存档前缀不同，互不影响）
+# 只在 main 上运行（github-pages 环境只允许 main 部署）；next 推送时由 trigger-deploy.yml 触发这里。
 on:
   push:
-    branches: [main, next]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
