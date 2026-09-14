@@ -76,16 +76,42 @@ describe('placing and resolving', () => {
 })
 
 describe('economy', () => {
-  it('buys within budget and refuses unbuyable guns', () => {
+  it('online orders arrive next week, guns are not sold, limits apply', () => {
     let s = engine.newGame(content, { seed: 'b', build: 'balanced', meta })
     s = engine.buy(s, 'supply_rice_5kg', 2)
-    expect(s.warehouse.filter((c) => c.defId === 'supply_rice_5kg')).toHaveLength(3)
+    expect(s.warehouse.filter((c) => c.defId === 'supply_rice_5kg')).toHaveLength(1)
+    expect(s.orders).toHaveLength(1)
     expect(() => engine.buy(s, 'equip_shotgun', 1)).toThrow('NOT_BUYABLE')
-    expect(() => engine.buy(s, 'supply_generator', 100)).toThrow()
+    expect(() => engine.buy(s, 'supply_generator', 2)).toThrow('LIMIT')
+    s = week(s).state
+    expect(s.warehouse.filter((c) => c.defId === 'supply_rice_5kg')).toHaveLength(3)
+    expect(s.orders).toHaveLength(0)
+  })
+  it('undelivered orders are lost when the apocalypse begins', () => {
+    let s = engine.newGame(content, { seed: 'b2', build: 'balanced', meta })
+    for (let i = 0; i < 3; i++) s = week(s).state
+    s = engine.buy(s, 'supply_generator', 1)   // 两周到货，末日在一周后
+    const { state, report } = week(s)
+    expect(state.time.phase).toBe('apocalypse')
+    expect(state.orders).toHaveLength(0)
+    expect(report.news.some((n) => n.zh.includes('永远在路上'))).toBe(true)
+  })
+  it('building takes weeks and needs materials', () => {
+    let s = engine.newGame(content, { seed: 'bd', build: 'balanced', meta })
+    expect(() => engine.build(s, 'apt_windows')).toThrow('NO_MATERIAL')
+    s = engine.buy(s, 'supply_wood', 4)
+    s = week(s).state
+    s = engine.build(s, 'apt_windows')
+    expect(s.base.building?.moduleId).toBe('apt_windows')
+    expect(s.base.modules).toHaveLength(0)
+    const { state, report } = week(s)
+    expect(report.builtModuleId).toBe('apt_windows')
+    expect(state.base.modules[0].moduleId).toBe('apt_windows')
   })
   it('gift raises affection more when it matches needs', () => {
     let s = engine.newGame(content, { seed: 'g', build: 'balanced', meta })
     s = engine.buy(s, 'supply_antibiotics', 1)
+    s = week(s).state
     const inst = s.warehouse.find((c) => c.defId === 'supply_antibiotics')!
     const before = s.people.guchen.affection
     s = engine.gift(s, 'guchen', inst.instanceId)
@@ -113,6 +139,7 @@ describe('apocalypse transition and crises', () => {
     let s = engine.newGame(content, { seed: 'cr', build: 'balanced', meta })
     s = engine.buy(s, 'supply_rice_5kg', 4)
     s = engine.buy(s, 'supply_water_box', 4)
+    s = engine.buy(s, 'supply_compressed_biscuit', 4)
     for (let i = 0; i < 7; i++) s = week(s).state
     expect(s.hero.health).toBeGreaterThan(0)
     const { state, report } = week(s)
@@ -143,6 +170,7 @@ describe('traits and choices', () => {
   it('coffee restores energy', () => {
     let s = engine.newGame(content, { seed: 'k', build: 'balanced', meta })
     s = engine.buy(s, 'supply_coffee', 1)
+    s = week(s).state
     s = engine.place(s, { eventId: 'ev_office_work', assignments: { hero: 'hero' } })
     const before = s.hero.energy
     const coffee = s.warehouse.find((c) => c.defId === 'supply_coffee')!

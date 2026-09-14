@@ -51,6 +51,10 @@ export interface GameEngine {
 
 export interface DerivedStats {
   energyMax: number
+  /** 仓库里"材料"维度物资的总分 */
+  materialPoints: number
+  /** 有没有冷藏（有电就有冰箱） */
+  cold: boolean
   defense: number
   storageUsed: number
   storageCap: number

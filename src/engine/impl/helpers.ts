@@ -138,6 +138,19 @@ export function removeCard(state: GameState, instanceId: string): CardInstance |
 
 export function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)) }
 
+/** 冷藏：序章电网正常；末日后要有冷库、或任何产能源的模块（有电就有冰箱） */
+export function hasCold(ci: ContentIndex, state: GameState): boolean {
+  if (state.time.phase === 'prologue') return true
+  for (const m of state.base.modules) {
+    if (m.damaged) continue
+    for (const e of ci.modules.get(m.moduleId)?.provides ?? []) {
+      if (e.type === 'unlock' && e.feature === 'cold') return true
+      if (e.type === 'produce' && e.supplyKind === 'energy') return true
+    }
+  }
+  return false
+}
+
 /** 精力上限 = 2 + 体力/2 + 永久加成 */
 export function energyMax(state: GameState): number {
   return Math.max(1, 2 + Math.floor(state.hero.attrs.strength / 2) + state.hero.energyBonus)

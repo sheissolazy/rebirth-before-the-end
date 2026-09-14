@@ -1,6 +1,6 @@
 import type { WeekReport, GameState } from '../engine/types'
 import { t, lt } from '../i18n'
-import { cardName, eventDefs, personName } from './lookup'
+import { cardName, eventDefs, personName, moduleDefs } from './lookup'
 
 export function WeekReportModal({ report, state, onClose }: { report: WeekReport; state: GameState; onClose: () => void }) {
   return (
@@ -26,6 +26,8 @@ export function WeekReportModal({ report, state, onClose }: { report: WeekReport
         <p className="mt-2 text-xs text-zinc-400">
           消耗：食物 {report.upkeep.food} · 水 {report.upkeep.water}{report.upkeep.money ? ` · 钱 ${report.upkeep.money}` : ''}{report.upkeep.health ? ` · 健康 ${report.upkeep.health}` : ''}
           {report.produced.length > 0 && ` · 产出 ${report.produced.length} 张`}
+          {report.delivered.length > 0 && ` · 到货：${report.delivered.map(cardName).join('、')}`}
+          {report.builtModuleId && ` · 建成：${lt(moduleDefs.get(report.builtModuleId)?.name ?? { zh: report.builtModuleId })}`}
           {report.spoiled.length > 0 && ` · 过期：${report.spoiled.map(cardName).join('、')}`}
           {report.deaths.length > 0 && ` · 死亡：${report.deaths.map((id) => state.people[id] ? personName(state.people[id]) : id).join('、')}`}
         </p>

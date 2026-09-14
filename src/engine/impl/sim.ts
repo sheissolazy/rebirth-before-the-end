@@ -52,11 +52,9 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
     }
     // 序章：买东西
     if (s.time.phase === 'prologue') {
-      const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_compressed_biscuit', 'supply_antibiotics', 'supply_battery', 'supply_steel', 'equip_machete', 'supply_winter_clothes', 'supply_bolts']
-      for (let round = 0; round < 30; round++) {
-        const id = shopping[round % shopping.length]
-        try { s = engine.buy(s, id, 1) } catch { /* 没钱或没地方 */ }
-      }
+      const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_compressed_biscuit', 'supply_canned', 'supply_antibiotics', 'supply_battery', 'supply_wood', 'equip_machete', 'supply_winter_clothes', 'supply_bolts', 'supply_soap']
+      for (const id of shopping) for (let k = 0; k < 3; k++) { try { s = engine.buy(s, id, 1) } catch { break } }
+      if (s.time.weeksBeforeEnd <= 1) { try { s = engine.build(s, 'apt_windows') } catch { /* ignore */ } }
     }
     // 派工
     for (const p of Object.values(s.people)) {

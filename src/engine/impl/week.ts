@@ -3,7 +3,7 @@ import type { ContentIndex } from './content'
 import { Rng } from './rng'
 import { turnToTime } from '../api'
 import { drawEvents, resolvePlacement, drawChoice } from './events'
-import { energyMax } from './helpers'
+import { energyMax, hasCold } from './helpers'
 import { drawCrisis, resolveCrisis } from './crisis'
 import { grantCard, grantFromLoot, loseRandomCards, type EffectCtx } from './effects'
 import { isCompanion, isRomanceable, baseDefense, supplyPoints, cardPoints, personName, clamp } from './helpers'
@@ -11,7 +11,7 @@ import { checkAll } from './conditions'
 import { EngineError } from '../api'
 
 function emptyReport(state: GameState): WeekReport {
-  return { time: state.time, news: [], eventResults: [], upkeep: { money: 0, food: 0, water: 0, health: 0, loyalty: 0 }, spoiled: [], produced: [], deaths: [] }
+  return { time: state.time, news: [], eventResults: [], upkeep: { money: 0, food: 0, water: 0, health: 0, loyalty: 0 }, spoiled: [], produced: [], delivered: [], deaths: [] }
 }
 
 export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekReport {
@@ -35,6 +35,21 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   const due = state.placements.filter((p) => p.resolvesAtTurn <= state.turn)
   state.placements = state.placements.filter((p) => p.resolvesAtTurn > state.turn)
   for (const p of due) report.eventResults.push(resolvePlacement(ci, state, rng, p, report))
+
+  // 3b. 网购到货（序章）与建造进度
+  deliverOrders(ci, state, rng, report)
+  state.orderedThisWeek = {}
+  if (state.base.building) {
+    state.base.building.weeksLeft -= 1
+    if (state.base.building.weeksLeft <= 0) {
+      const id = state.base.building.moduleId
+      const existing = state.base.modules.find((m) => m.moduleId === id)
+      if (existing) existing.damaged = false
+      else state.base.modules.push({ moduleId: id, damaged: false })
+      report.builtModuleId = id
+      state.base.building = undefined
+    }
+  }
 
   // 4. 派工
   runJobs(ci, state, rng, report)
@@ -180,8 +195,32 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
   for (const p of Object.values(state.people)) if (p.alive && p.injury > 0 && rng.chance(0.3)) p.injury--
 }
 
+function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport): void {
+  if (!state.orders.length) return
+  if (state.time.phase === 'apocalypse') {
+    const n = state.orders.reduce((t, o) => t + o.count, 0)
+    state.orders = []
+    report.news.push({ zh: `你还有 ${n} 件快递在路上。它们永远在路上了。` })
+    return
+  }
+  const ctx: EffectCtx = { ci, state, rng, report }
+  const keep: typeof state.orders = []
+  for (const o of state.orders) {
+    if (o.arrivesAtTurn > state.turn) { keep.push(o); continue }
+    let left = o.count
+    for (let i = 0; i < o.count; i++) {
+      const c = grantCard(ctx, o.cardDefId)
+      if (!c) break
+      report.delivered.push(c)
+      left--
+    }
+    if (left > 0) { keep.push({ ...o, count: left, arrivesAtTurn: state.turn + 1 }); report.news.push({ zh: '仓库放不下，快递员把剩下的先带回站点了。' }) }
+  }
+  state.orders = keep
+}
+
 function spoil(ci: ContentIndex, state: GameState, report: WeekReport): void {
-  const cold = state.base.modules.some((m) => !m.damaged && m.moduleId === 'bunker_cold')
+  const cold = hasCold(ci, state)
   for (const c of state.warehouse) {
     if (c.expiresAtTurn === undefined) continue
     if (c.expiresAtTurn <= state.turn) {

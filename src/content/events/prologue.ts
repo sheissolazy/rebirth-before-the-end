@@ -31,7 +31,7 @@ export const prologueEvents: EventDef[] = [
   // ---- 超市 ----
   {
     id: 'ev_supermarket_bulk', energy: 3, locationId: 'supermarket', icon: '🛒', repeatable: true, weight: 10,
-    title: { zh: '大宗采购' }, text: { zh: '推三辆车。收银员多看了你一眼。' },
+    title: { zh: '亲自去超市搬' }, text: { zh: '网购限购、要等。你亲自去，推三辆车，当场到手。收银员多看了你一眼。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 2000 }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '限购。你只带回来一点。' }, effects: [{ type: 'money', delta: -500 }, { type: 'gainCard', cardId: 'supply_rice_5kg' }, { type: 'gainCard', cardId: 'supply_water_box' }] },
@@ -77,9 +77,9 @@ export const prologueEvents: EventDef[] = [
   },
   {
     id: 'ev_hardware_generator', energy: 3, locationId: 'hardware', icon: '⚡', once: true, weight: 0,
-    title: { zh: '订一台发电机' }, text: { zh: '三千二。老板说要等一周。' },
-    conditions: [P, { type: 'moneyAtLeast', amount: 3200 }], durationWeeks: 2, slots: [HERO],
-    outcomes: { fine: { text: { zh: '发电机到了。你一个人搬上了六楼。' }, effects: [{ type: 'money', delta: -3200 }, { type: 'gainCard', cardId: 'supply_generator' }, { type: 'gainCard', cardId: 'supply_gasoline', count: 2 }] } },
+    title: { zh: '去店里提发电机' }, text: { zh: '网购要等两周。老板说店里还有一台现货，三千二，自己搬。' },
+    conditions: [P, { type: 'moneyAtLeast', amount: 3200 }], durationWeeks: 1, slots: [HERO, HELPER],
+    outcomes: { fine: { text: { zh: '你把发电机搬上了六楼。' }, effects: [{ type: 'money', delta: -3200 }, { type: 'gainCard', cardId: 'supply_generator' }, { type: 'gainCard', cardId: 'supply_gasoline', count: 2 }] } },
   },
   // ---- 黑市 ----
   {
@@ -101,14 +101,36 @@ export const prologueEvents: EventDef[] = [
   },
   // ---- 银行 / 券商 ----
   {
-    id: 'ev_bank_stock', locationId: 'bank', icon: '📈', weight: 0,
-    title: { zh: '买那只股票' }, text: { zh: '你记得它下周涨停。也记得你上一世没敢买。' },
-    conditions: [P, { type: 'moneyAtLeast', amount: 10000 }, { type: 'not', cond: { type: 'flag', flag: 'stock_3' } }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
+    id: 'ev_bank_stock', locationId: 'bank', icon: '📈', once: true, weight: 0, energy: 1,
+    title: { zh: '第一只股票' }, text: { zh: '你记得三只股票。这只最稳：下周涨停。投一万。' },
+    conditions: [P, { type: 'moneyAtLeast', amount: 10000 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
     outcomes: {
-      fail: { text: { zh: '你改变了太多，它没涨。' }, effects: [{ type: 'money', delta: -10000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'setFlag', flag: 'stock_used' }] },
-      common: { text: { zh: '涨了一点。' }, effects: [{ type: 'money', delta: 10000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'setFlag', flag: 'stock_used' }] },
-      fine: { text: { zh: '翻倍。' }, effects: [{ type: 'money', delta: 20000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'setFlag', flag: 'stock_used' }] },
-      rare: { text: { zh: '连续涨停。你手抖着卖了。' }, effects: [{ type: 'money', delta: 50000 }, { type: 'stat', stat: 'butterfly', delta: 15 }, { type: 'stat', stat: 'exposure', delta: 5 }, { type: 'setFlag', flag: 'stock_used' }] },
+      fail: { text: { zh: '你改变了太多，它没涨。' }, effects: [{ type: 'money', delta: -10000 }, { type: 'stat', stat: 'butterfly', delta: 8 }, { type: 'unlockEvent', eventId: 'ev_bank_stock2' }] },
+      common: { text: { zh: '涨了一点。' }, effects: [{ type: 'money', delta: 8000 }, { type: 'stat', stat: 'butterfly', delta: 8 }, { type: 'unlockEvent', eventId: 'ev_bank_stock2' }] },
+      fine: { text: { zh: '翻倍。' }, effects: [{ type: 'money', delta: 20000 }, { type: 'stat', stat: 'butterfly', delta: 8 }, { type: 'unlockEvent', eventId: 'ev_bank_stock2' }] },
+      rare: { text: { zh: '连续涨停。你手抖着卖了。' }, effects: [{ type: 'money', delta: 40000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'unlockEvent', eventId: 'ev_bank_stock2' }] },
+    },
+  },
+  {
+    id: 'ev_bank_stock2', locationId: 'bank', icon: '📈', once: true, weight: 0, energy: 1,
+    title: { zh: '第二只股票' }, text: { zh: '这只你记得没那么清。投三万。' },
+    conditions: [P, { type: 'moneyAtLeast', amount: 30000 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
+    outcomes: {
+      fail: { text: { zh: '跌停。你记错了。' }, effects: [{ type: 'money', delta: -30000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'unlockEvent', eventId: 'ev_bank_stock3' }] },
+      common: { text: { zh: '小赚。' }, effects: [{ type: 'money', delta: 15000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'unlockEvent', eventId: 'ev_bank_stock3' }] },
+      fine: { text: { zh: '翻倍。券商给你打了电话，问你是不是有内幕。' }, effects: [{ type: 'money', delta: 60000 }, { type: 'stat', stat: 'butterfly', delta: 10 }, { type: 'stat', stat: 'exposure', delta: 5 }, { type: 'unlockEvent', eventId: 'ev_bank_stock3' }] },
+      rare: { text: { zh: '三倍。' }, effects: [{ type: 'money', delta: 120000 }, { type: 'stat', stat: 'butterfly', delta: 12 }, { type: 'stat', stat: 'exposure', delta: 10 }, { type: 'unlockEvent', eventId: 'ev_bank_stock3' }] },
+    },
+  },
+  {
+    id: 'ev_bank_stock3', locationId: 'bank', icon: '📈', once: true, weight: 0, energy: 1,
+    title: { zh: '第三只股票' }, text: { zh: '这只你其实只记得个名字。投十万。世界已经被你改了太多。' },
+    conditions: [P, { type: 'moneyAtLeast', amount: 100000 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
+    outcomes: {
+      fail: { text: { zh: '停牌。钱没了。' }, effects: [{ type: 'money', delta: -100000 }, { type: 'stat', stat: 'butterfly', delta: 15 }] },
+      common: { text: { zh: '保本出来。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 15 }] },
+      fine: { text: { zh: '翻倍。这是最后一次。' }, effects: [{ type: 'money', delta: 200000 }, { type: 'stat', stat: 'butterfly', delta: 15 }, { type: 'stat', stat: 'exposure', delta: 10 }] },
+      rare: { text: { zh: '五倍。有人开始查你的账户。' }, effects: [{ type: 'money', delta: 500000 }, { type: 'stat', stat: 'butterfly', delta: 20 }, { type: 'stat', stat: 'exposure', delta: 20 }] },
     },
   },
   {
@@ -135,10 +157,11 @@ export const prologueEvents: EventDef[] = [
     outcomes: { fine: { text: { zh: '二手贩子压价压得很狠。你没还价。' }, effects: [{ type: 'money', delta: 40000 }, { type: 'stat', stat: 'butterfly', delta: 3 }] } },
   },
   {
-    id: 'ev_bank_lottery', energy: 1, locationId: 'bank', icon: '🎟️', once: true, weight: 0,
-    title: { zh: '买那张彩票' }, text: { zh: '你记得号码。一世只能中一次。' },
-    conditions: [P], durationWeeks: 1, slots: [HERO],
-    outcomes: { fine: { text: { zh: '五百万。你的脸上了本地新闻。' }, effects: [{ type: 'money', delta: 5000000 }, { type: 'stat', stat: 'butterfly', delta: 25 }, { type: 'stat', stat: 'exposure', delta: 30 }, { type: 'gainCard', cardId: 'trouble_ex' }] } },
+    id: 'ev_bank_lottery', energy: 2, locationId: 'bank', icon: '🎟️', once: true, weight: 0,
+    title: { zh: '去省中心兑奖' }, text: { zh: '你记得号码，也中了。五百万，税后四百万。兑奖要去省城，要登记身份证，要上新闻。' },
+    conditions: [P, { type: 'flag', flag: 'lottery_memory' }], durationWeeks: 2, slots: [HERO],
+    outcomes: { fine: { text: { zh: '四百万到账。第二天，你的脸出现在本地新闻上。亲戚的电话开始响，周明宇也发来了消息。' },
+      effects: [{ type: 'money', delta: 4000000 }, { type: 'stat', stat: 'butterfly', delta: 30 }, { type: 'stat', stat: 'exposure', delta: 40 }, { type: 'gainCard', cardId: 'trouble_relatives' }, { type: 'gainCard', cardId: 'trouble_ex' }, { type: 'relation', factionId: 'crow', delta: -20 }, { type: 'setFlag', flag: 'famous_rich' }] } },
   },
   {
     id: 'ev_bank_buy_villa', energy: 1, locationId: 'bank', icon: '🏡', once: true, weight: 0,
@@ -201,6 +224,16 @@ export const prologueEvents: EventDef[] = [
       common: { text: { zh: '他们答应买点米。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }] },
       fine: { text: { zh: '爸爸说"你从小就有主意"。第二天他们提着行李来了，还带了三万块。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 30000 }] },
       rare: { text: { zh: '爸爸转了你十万，然后和妈妈一起搬了过来。"别问，拿着。"' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 100000 }] },
+    },
+  },
+  {
+    id: 'ev_home_change_number', energy: 2, locationId: 'home', icon: '📵', once: true, weight: 0,
+    title: { zh: '换号、搬东西、闭嘴' }, text: { zh: '把所有人拉黑，把值钱的东西转移，对外说钱都拿去还债了。' },
+    conditions: [P, { type: 'hasCard', cardId: 'trouble_relatives' }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['mind', 'charm'] },
+    outcomes: {
+      fail: { text: { zh: '你妈把新号码告诉了你姨。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] },
+      common: { text: { zh: '清静了一半。' }, effects: [{ type: 'loseCard', cardId: 'trouble_relatives' }] },
+      fine: { text: { zh: '你成了"那个中奖后就消失的女的"。' }, effects: [{ type: 'loseCard', cardId: 'trouble_relatives' }, { type: 'stat', stat: 'exposure', delta: -15 }] },
     },
   },
   {

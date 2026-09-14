@@ -13,6 +13,7 @@ export const startTraits: StartTraitDef[] = [
   { id: 'trait_dog', cost: 1, name: { zh: '狗主人' }, desc: { zh: '开局带一条狗' }, effects: [{ type: 'adoptPet', petId: 'pet_dog' }] },
   { id: 'trait_armed', cost: 1, name: { zh: '户外爱好者' }, desc: { zh: '开局一把砍刀和一把弩' }, effects: [{ type: 'gainCard', cardId: 'equip_machete' }, { type: 'gainCard', cardId: 'equip_crossbow' }] },
   { id: 'trait_space', cost: 4, name: { zh: '空间更大' }, desc: { zh: '空间从优良档开始' }, effects: [{ type: 'powerUp', powerId: 'power_space' }] },
+  { id: 'trait_lottery', cost: 6, name: { zh: '记得中奖号码' }, desc: { zh: '你记得前世那期大乐透。序章可去兑奖：税后 400 万，但全城都会知道你' }, effects: [{ type: 'setFlag', flag: 'lottery_memory' }] },
   { id: 'trait_known', cost: 2, name: { zh: '江野的青梅' }, desc: { zh: '江野初始好感 +20' }, effects: [{ type: 'affection', npcId: 'jiangye', delta: 20 }] },
   // 负面
   { id: 'trait_weak', cost: -2, name: { zh: '体弱' }, desc: { zh: '体力 -1' }, effects: [{ type: 'attr', target: 'hero', attr: 'strength', delta: -1 }] },

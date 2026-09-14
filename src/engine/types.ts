@@ -99,8 +99,12 @@ export interface SupplyCardDef extends CardDefBase {
   units?: number
   /** 序章价格（钱）。末日后按晶核/物资汇率换算 */
   basePrice: number
-  /** 序章是否能买到（枪 = false，只能黑市/门路） */
+  /** 序章能否网购（枪 = false 只能黑市/门路；生鲜 = false 只能自产） */
   buyable: boolean
+  /** 网购到货周数（默认 1；大件 2） */
+  deliveryWeeks?: number
+  /** 每周限购件数（默认 5） */
+  weeklyLimit?: number
   /** 可主动使用（咖啡、功能饮料、维生素…）：使用时的效果，用掉一份 */
   onUse?: Effect[]
 }
@@ -118,6 +122,8 @@ export interface EquipmentCardDef extends CardDefBase {
   firearm?: boolean
   basePrice: number
   buyable: boolean
+  deliveryWeeks?: number
+  weeklyLimit?: number
 }
 
 /** 装备随机词缀 */
@@ -258,7 +264,7 @@ export type ModuleEffect =
   | { type: 'heal'; perWeek: number }
   | { type: 'trainBonus'; attr: Attr; dice: number }
   | { type: 'counters'; crisisKind: CrisisKind; points: number }
-  | { type: 'unlock'; feature: 'diplomacy' | 'research' | 'quarantine' | 'escape' }
+  | { type: 'unlock'; feature: 'diplomacy' | 'research' | 'quarantine' | 'escape' | 'cold' }
   | { type: 'population'; value: number }
 
 export interface BaseDef {
@@ -557,7 +563,15 @@ export interface HeroState {
 export interface BaseState {
   type: BaseType
   modules: Array<{ moduleId: string; damaged: boolean }>
+  /** 在建模块（一次只能建一个），完工后进入 modules */
   building?: { moduleId: string; weeksLeft: number }
+}
+
+/** 网购订单 */
+export interface Order {
+  cardDefId: string
+  count: number
+  arrivesAtTurn: Turn
 }
 
 export interface PetState {
@@ -602,6 +616,10 @@ export interface WeekReport {
   upkeep: { money: number; food: number; water: number; health: number; loyalty: number }
   spoiled: CardInstance[]
   produced: CardInstance[]
+  /** 本周到货的网购 */
+  delivered: CardInstance[]
+  /** 本周完工的模块 */
+  builtModuleId?: string
   crisisResult?: { crisisKind: CrisisKind; rarity: Rarity; survived: boolean; text: LocalizedText }
   deaths: string[]
   ending?: string
@@ -630,6 +648,10 @@ export interface GameState {
   drawnEvents: Record<string, string[]>
   /** 周初弹出的即时选择事件（必须先处理才能过周） */
   pendingChoice: string | null
+  /** 在路上的网购（序章）。末日一到全部丢失 */
+  orders: Order[]
+  /** 本周各商品已下单件数（限购） */
+  orderedThisWeek: Record<string, number>
   placements: Placement[]
   flags: Record<string, boolean>
   unlockedEvents: string[]

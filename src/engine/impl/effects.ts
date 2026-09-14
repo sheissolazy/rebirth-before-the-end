@@ -2,7 +2,7 @@ import type { Effect, GameState, CardInstance, Rarity, SupplyKind, PersonState, 
 import { RARITY_POINTS, RARITY_ORDER } from '../types'
 import type { ContentIndex } from './content'
 import { Rng } from './rng'
-import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName } from './helpers'
+import { clamp, hasRoom, cardSize, rarityIndex, shiftRarity, isCompanion, personName, hasCold } from './helpers'
 
 export interface EffectCtx {
   ci: ContentIndex
@@ -18,7 +18,7 @@ export function grantCard(ctx: EffectCtx, defId: string, opts: { affix?: boolean
   const { ci, state, rng } = ctx
   const def = ci.card(defId)
   const inst: CardInstance = { instanceId: rng.id('c'), defId }
-  if (def.kind === 'supply' && def.shelfLifeWeeks) inst.expiresAtTurn = state.turn + def.shelfLifeWeeks
+  if (def.kind === 'supply' && def.shelfLifeWeeks) inst.expiresAtTurn = state.turn + def.shelfLifeWeeks * (def.shelfLifeWeeks <= 8 && hasCold(ci, state) ? 2 : 1)
   if (def.kind === 'supply' && (def.supplyKind === 'food' || def.supplyKind === 'water' || def.units !== undefined)) inst.unitsLeft = def.units ?? 1
   if (def.kind === 'equipment' && opts.affix && ci.pack.affixes.length && rng.chance(0.5)) {
     inst.affixIds = [rng.pick(ci.pack.affixes).id]

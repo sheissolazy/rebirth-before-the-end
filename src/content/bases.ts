@@ -37,7 +37,7 @@ export const modules: ModuleDef[] = [
   // 地下堡垒
   { id: 'bunker_vent', baseType: 'bunker', name: { zh: '通风净化' }, desc: { zh: '不然一个月就得出去。' }, icon: '🌬️', cost: { materialPoints: 16, labor: 4, weeks: 3 }, provides: [{ type: 'counters', crisisKind: 'plague', points: 4 }] },
   { id: 'bunker_water', baseType: 'bunker', name: { zh: '水循环' }, desc: { zh: '闭环。' }, icon: '💧', cost: { materialPoints: 16, labor: 4, weeks: 3 }, provides: [{ type: 'produce', supplyKind: 'water', cardId: 'supply_well_water', perWeek: 6 }] },
-  { id: 'bunker_cold', baseType: 'bunker', name: { zh: '冷库' }, desc: { zh: '食物保质期翻倍。' }, icon: '🧊', cost: { materialPoints: 12, labor: 3, weeks: 2 }, provides: [{ type: 'storage', value: 40 }] },
+  { id: 'bunker_cold', baseType: 'bunker', name: { zh: '冷库' }, desc: { zh: '食物保质期翻倍。' }, icon: '🧊', cost: { materialPoints: 12, labor: 3, weeks: 2 }, provides: [{ type: 'storage', value: 40 }, { type: 'unlock', feature: 'cold' }] },
   { id: 'bunker_armory', baseType: 'bunker', name: { zh: '武器库' }, desc: { zh: '有了它才配叫堡垒。' }, icon: '🔫', cost: { materialPoints: 12, labor: 3, weeks: 2 }, provides: [{ type: 'defense', value: 4 }, { type: 'counters', crisisKind: 'human', points: 4 }] },
   { id: 'bunker_lab', baseType: 'bunker', name: { zh: '实验室' }, desc: { zh: '疫苗线必需。' }, icon: '🔬', cost: { materialPoints: 20, labor: 4, weeks: 4 }, provides: [{ type: 'unlock', feature: 'research' }] },
   { id: 'bunker_radio', baseType: 'bunker', name: { zh: '无线电室' }, desc: { zh: '联络其他基地。' }, icon: '📻', cost: { materialPoints: 10, labor: 2, weeks: 2 }, provides: [{ type: 'unlock', feature: 'diplomacy' }] },

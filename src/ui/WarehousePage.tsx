@@ -31,7 +31,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
     return (
       <li className={`rounded border p-2 text-xs ${RARITY_CLASS[d.rarity]} ${equipped ? 'bg-amber-950/30' : 'bg-zinc-900'}`}>
         <div className="font-medium">{cardName(c)} {equipped && '（已装备）'}</div>
-        <div className="text-zinc-500">{lt(d.desc)}{c.expiresAtTurn !== undefined && ` · ${Math.max(0, c.expiresAtTurn - state.turn)} 周后过期`}</div>
+        <div className="text-zinc-500">{lt(d.desc)}{c.expiresAtTurn !== undefined && ` · ${Math.max(0, c.expiresAtTurn - state.turn)} 周后过期${st.cold ? '（有冰箱）' : ''}`}</div>
         <div className="mt-1 flex flex-wrap gap-1">
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.moveToSpace(s, c.instanceId, !c.inSpace))}>{c.inSpace ? t('action.fromSpace') : t('action.toSpace')}</button>
           {d.kind === 'equipment' && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.equip(s, 'hero', c.instanceId))}>{t('action.equip')}</button>}
@@ -81,14 +81,26 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
 
       {shopOpen && (
         <section className="rounded-lg border border-amber-900 p-3">
-          <h3 className="font-semibold">{state.time.phase === 'prologue' ? `商店（物价 ×${state.priceMultiplier}）` : '以物易物（用晶核分换）'}</h3>
+          <h3 className="font-semibold">{state.time.phase === 'prologue' ? `${t('shop.online')}（物价 ×${state.priceMultiplier}）` : '以物易物（用晶核分换）'}</h3>
+          {state.time.phase === 'prologue' && <p className="mt-1 text-xs text-zinc-500">{t('shop.onlineHint')}</p>}
+          {state.orders.length > 0 && (
+            <p className="mt-1 text-xs text-amber-300">{t('shop.orders')}：{state.orders.map((o) => `${lt(cardDefs.get(o.cardDefId)?.name ?? { zh: o.cardDefId })}×${o.count}（${t('shop.arrives', { n: Math.max(0, o.arrivesAtTurn - state.turn) })}）`).join('、')}</p>
+          )}
           <ul className="mt-2 grid gap-1 sm:grid-cols-2">
             {content.cards.filter((c) => c.kind === 'supply' || c.kind === 'equipment').filter((c) => state.time.phase === 'apocalypse' || c.buyable).map((c) => {
-              const price = state.time.phase === 'prologue' ? Math.round(c.basePrice * state.priceMultiplier) : ({ common: 1, fine: 2, rare: 4, legendary: 8 }[c.rarity] * (content.factions.find((f) => f.id === faction)?.tradeRate ?? 2))
+              const price = state.time.phase === 'prologue' ? Math.round(c.basePrice * state.priceMultiplier * 1.1) : ({ common: 1, fine: 2, rare: 4, legendary: 8 }[c.rarity] * (content.factions.find((f) => f.id === faction)?.tradeRate ?? 2))
+              const ordered = state.orderedThisWeek[c.id] ?? 0
+              const limit = c.weeklyLimit ?? 5
+              const meta = state.time.phase === 'prologue'
+                ? [t('shop.arrives', { n: c.deliveryWeeks ?? 1 }), c.kind === 'supply' && c.shelfLifeWeeks ? t('shop.shelf', { n: c.shelfLifeWeeks }) : '', `${t('shop.limit', { n: limit })}${ordered ? ` 已订 ${ordered}` : ''}`].filter(Boolean).join(' · ')
+                : ''
               return (
-                <li key={c.id} className={`flex items-center justify-between rounded border p-2 text-xs ${RARITY_CLASS[c.rarity]}`}>
-                  <span>{c.icon} {lt(c.name)} <span className="text-zinc-500">{state.time.phase === 'prologue' ? `￥${price}` : `💎${price}`}</span></span>
-                  <button className="rounded bg-amber-700 px-2 py-0.5" onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
+                <li key={c.id} className={`flex items-center justify-between gap-2 rounded border p-2 text-xs ${RARITY_CLASS[c.rarity]}`}>
+                  <span>
+                    <div>{c.icon} {lt(c.name)} <span className="text-zinc-400">{state.time.phase === 'prologue' ? `￥${price}` : `💎${price}`}</span></div>
+                    <div className="text-zinc-500">{lt(c.desc)}{meta && ` · ${meta}`}</div>
+                  </span>
+                  <button className="shrink-0 rounded bg-amber-700 px-2 py-0.5 disabled:opacity-40" disabled={state.time.phase === 'prologue' && ordered >= limit} onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
                 </li>
               )
             })}

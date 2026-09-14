@@ -8,20 +8,20 @@ import { crises } from './crises'
 export const cards: CardDef[] = [
   // 物资
   { id: 'supply_rice_5kg', kind: 'supply', rarity: 'fine', supplyKind: 'food', size: 1, units: 5, shelfLifeWeeks: 48, basePrice: 45, buyable: true, icon: '🍚', name: { zh: '大米 5kg' }, desc: { zh: '囤货的起点。' } },
-  { id: 'supply_veg', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 1, shelfLifeWeeks: 2, basePrice: 10, buyable: true, icon: '🥬', name: { zh: '新鲜蔬菜' }, desc: { zh: '两周就蔫。' } },
-  { id: 'supply_eggs', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 2, shelfLifeWeeks: 4, basePrice: 15, buyable: true, icon: '🥚', name: { zh: '鸡蛋' }, desc: { zh: '畜栏产的。' } },
+  { id: 'supply_veg', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 1, shelfLifeWeeks: 2, basePrice: 10, buyable: false, icon: '🥬', name: { zh: '新鲜蔬菜' }, desc: { zh: '菜箱和菜地产的。两周就蔫，有冰箱四周。' } },
+  { id: 'supply_eggs', kind: 'supply', rarity: 'common', supplyKind: 'food', size: 1, units: 2, shelfLifeWeeks: 4, basePrice: 15, buyable: false, icon: '🥚', name: { zh: '鸡蛋' }, desc: { zh: '畜栏产的。四周，有冰箱八周。' } },
   { id: 'supply_water_box', kind: 'supply', rarity: 'fine', supplyKind: 'water', size: 1, units: 4, shelfLifeWeeks: 96, basePrice: 30, buyable: true, icon: '💧', name: { zh: '一箱矿泉水' }, desc: { zh: '24 瓶。' } },
   { id: 'supply_well_water', kind: 'supply', rarity: 'common', supplyKind: 'water', size: 1, units: 2, basePrice: 0, buyable: false, icon: '🚰', name: { zh: '井水' }, desc: { zh: '基地产的。' } },
   { id: 'supply_compressed_biscuit', kind: 'supply', rarity: 'rare', supplyKind: 'food', size: 1, units: 8, shelfLifeWeeks: 144, basePrice: 120, buyable: true, icon: '🍪', name: { zh: '压缩饼干（军用）' }, desc: { zh: '难吃，但能活。' } },
   { id: 'supply_antibiotics', kind: 'supply', rarity: 'rare', supplyKind: 'medicine', size: 1, shelfLifeWeeks: 72, basePrice: 90, buyable: true, icon: '💊', name: { zh: '广谱抗生素' }, desc: { zh: '药店限购一盒。' } },
   { id: 'supply_battery', kind: 'supply', rarity: 'common', supplyKind: 'energy', size: 1, basePrice: 20, buyable: true, icon: '🔋', name: { zh: '充满的电池组' }, desc: { zh: '一周的灯和收音机。' } },
-  { id: 'supply_generator', kind: 'supply', rarity: 'legendary', supplyKind: 'energy', size: 3, basePrice: 3200, buyable: true, icon: '⚡', name: { zh: '小型汽油发电机' }, desc: { zh: '吵，但停电时它就是神。' } },
-  { id: 'supply_steel', kind: 'supply', rarity: 'fine', supplyKind: 'material', size: 2, basePrice: 200, buyable: true, icon: '🧱', name: { zh: '钢材' }, desc: { zh: '加固用。' } },
+  { id: 'supply_generator', kind: 'supply', rarity: 'legendary', supplyKind: 'energy', size: 3, basePrice: 3200, buyable: true, deliveryWeeks: 2, weeklyLimit: 1, icon: '⚡', name: { zh: '小型汽油发电机' }, desc: { zh: '吵，但停电时它就是神。' } },
+  { id: 'supply_steel', kind: 'supply', rarity: 'fine', supplyKind: 'material', size: 2, basePrice: 200, buyable: true, deliveryWeeks: 2, icon: '🧱', name: { zh: '钢材' }, desc: { zh: '材料 2 分。建模块用。物流两周。' } },
   { id: 'supply_bolts', kind: 'supply', rarity: 'common', supplyKind: 'weapon', size: 1, basePrice: 40, buyable: true, icon: '🏹', name: { zh: '一捆弩箭' }, desc: { zh: '工坊能造。' } },
   { id: 'supply_winter_clothes', kind: 'supply', rarity: 'fine', supplyKind: 'daily', size: 1, basePrice: 300, buyable: true, icon: '🧥', name: { zh: '羽绒服' }, desc: { zh: '极寒时一件顶一条命。' } },
   // 装备
   { id: 'equip_machete', kind: 'equipment', rarity: 'fine', slot: 'weapon', bonusDice: 1, forAttr: 'strength', basePrice: 150, buyable: true, icon: '🔪', name: { zh: '砍刀' }, desc: { zh: '五金店就有。' } },
-  { id: 'equip_crossbow', kind: 'equipment', rarity: 'rare', slot: 'weapon', bonusDice: 2, forAttr: 'strength', basePrice: 1800, buyable: true, icon: '🏹', name: { zh: '复合弩' }, desc: { zh: '安静，可回收。' } },
+  { id: 'equip_crossbow', kind: 'equipment', rarity: 'rare', slot: 'weapon', bonusDice: 2, forAttr: 'strength', basePrice: 1800, buyable: true, deliveryWeeks: 2, weeklyLimit: 1, icon: '🏹', name: { zh: '复合弩' }, desc: { zh: '安静，可回收。' } },
   { id: 'equip_shotgun', kind: 'equipment', rarity: 'legendary', slot: 'weapon', bonusDice: 4, forAttr: 'strength', firearm: true, basePrice: 60000, buyable: false, icon: '🔫', name: { zh: '猎枪' }, desc: { zh: '黑市六万，或者有门路。' } },
   { id: 'equip_vest', kind: 'equipment', rarity: 'rare', slot: 'armor', bonusDice: 1, basePrice: 2500, buyable: true, icon: '🦺', name: { zh: '防刺服' }, desc: { zh: '防咬也防刀。' } },
   // 晶核
@@ -44,12 +44,12 @@ export const cards: CardDef[] = [
 /** 第二批卡（引擎/事件需要）。 */
 export const cardsBatch2: CardDef[] = [
   { id: 'supply_canned', kind: 'supply', rarity: 'fine', supplyKind: 'food', size: 1, units: 4, shelfLifeWeeks: 200, basePrice: 60, buyable: true, icon: '🥫', name: { zh: '一箱罐头' }, desc: { zh: '午餐肉和豆子。末日的硬通货。' } },
-  { id: 'supply_water_filter', kind: 'supply', rarity: 'rare', supplyKind: 'water', size: 1, units: 12, basePrice: 800, buyable: true, icon: '🧪', name: { zh: '户外净水器' }, desc: { zh: '河水也能喝。' } },
+  { id: 'supply_water_filter', kind: 'supply', rarity: 'rare', supplyKind: 'water', size: 1, units: 12, basePrice: 800, buyable: true, deliveryWeeks: 2, weeklyLimit: 2, icon: '🧪', name: { zh: '户外净水器' }, desc: { zh: '河水也能喝。' } },
   { id: 'supply_gasoline', kind: 'supply', rarity: 'fine', supplyKind: 'energy', size: 2, basePrice: 150, buyable: true, icon: '🛢️', name: { zh: '一桶汽油' }, desc: { zh: '发电机的命。' } },
   { id: 'supply_bandage', kind: 'supply', rarity: 'common', supplyKind: 'medicine', size: 1, basePrice: 20, buyable: true, icon: '🩹', name: { zh: '绷带和碘伏' }, desc: { zh: '小伤够用。' } },
   { id: 'supply_medkit', kind: 'supply', rarity: 'fine', supplyKind: 'medicine', size: 1, shelfLifeWeeks: 100, basePrice: 200, buyable: true, icon: '🧰', name: { zh: '急救箱' }, desc: { zh: '缝合、止血、退烧。' } },
-  { id: 'supply_wood', kind: 'supply', rarity: 'common', supplyKind: 'material', size: 2, basePrice: 60, buyable: true, icon: '🪵', name: { zh: '木板' }, desc: { zh: '钉窗户用。' } },
-  { id: 'supply_cement', kind: 'supply', rarity: 'fine', supplyKind: 'material', size: 2, basePrice: 120, buyable: true, icon: '🧱', name: { zh: '水泥和砂' }, desc: { zh: '砌墙。' } },
+  { id: 'supply_wood', kind: 'supply', rarity: 'common', supplyKind: 'material', size: 2, basePrice: 60, buyable: true, icon: '🪵', name: { zh: '木板' }, desc: { zh: '材料 1 分。钉窗户用。' } },
+  { id: 'supply_cement', kind: 'supply', rarity: 'fine', supplyKind: 'material', size: 2, basePrice: 120, buyable: true, deliveryWeeks: 2, icon: '🧱', name: { zh: '水泥和砂' }, desc: { zh: '材料 2 分。砌墙。物流两周。' } },
   { id: 'supply_soap', kind: 'supply', rarity: 'common', supplyKind: 'daily', size: 1, basePrice: 15, buyable: true, icon: '🧼', name: { zh: '肥皂和卫生用品' }, desc: { zh: '不体面的死法太多了。' } },
   { id: 'supply_blanket', kind: 'supply', rarity: 'common', supplyKind: 'daily', size: 1, basePrice: 80, buyable: true, icon: '🛏️', name: { zh: '毛毯' }, desc: { zh: '一人一条。' } },
   { id: 'supply_coffee', kind: 'supply', rarity: 'common', supplyKind: 'daily', size: 1, units: 5, basePrice: 40, buyable: true, icon: '☕', name: { zh: '速溶咖啡' }, desc: { zh: '用一份：本周精力 +1。' }, onUse: [{ type: 'energy', delta: 1 }] },
@@ -62,5 +62,6 @@ export const cardsBatch2: CardDef[] = [
   { id: 'intel_xielin_note', kind: 'intel', rarity: 'rare', icon: '📝', effect: { type: 'revealCrisisRarity', monthsAhead: 1 }, name: { zh: '谢临的便条' }, desc: { zh: '"下个月比你记得的更糟。"看穿下月危机档位。' } },
   { id: 'intel_memory_fix', kind: 'intel', rarity: 'fine', icon: '🧠', effect: { type: 'fixMemory' }, name: { zh: '静下来回忆' }, desc: { zh: '蝴蝶效应 -20。' } },
   { id: 'trouble_ex', kind: 'trouble', rarity: 'fine', size: 0, weeklyExposureDelta: 2, icon: '📱', resolvedByEventIds: ['ev_home_block_ex'], name: { zh: '周明宇的消息' }, desc: { zh: '他一直在打听你囤了多少。每周暴露 +2。' } },
+  { id: 'trouble_relatives', kind: 'trouble', rarity: 'rare', size: 0, weeklyMoneyDelta: -5000, weeklyExposureDelta: 3, icon: '🧧', resolvedByEventIds: ['ev_home_change_number'], name: { zh: '借钱的亲戚' }, desc: { zh: '中奖上了新闻。八竿子打不着的亲戚都来了。序章每周 -5000，暴露 +3。' } },
   { id: 'trouble_parents', kind: 'trouble', rarity: 'common', size: 0, weeklyMoneyDelta: -800, icon: '☎️', resolvedByEventIds: ['ev_home_call_parents'], name: { zh: '爸妈的电话' }, desc: { zh: '你没法解释为什么突然买这么多东西。序章每周 -800。' } },
 ]

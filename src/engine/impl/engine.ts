@@ -10,7 +10,7 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold,
 } from './helpers'
 import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
@@ -64,7 +64,7 @@ export function createEngine(content: ContentPack): GameEngine {
       factions: Object.fromEntries(content.factions.map((f) => [f.id, { relation: f.initialRelation }])),
       crisis: null,
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
-      drawnEvents: {}, pendingChoice: null, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
+      drawnEvents: {}, pendingChoice: null, orders: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
       lastReport: null, rebirthPointsEarned: 0, ending: null,
     }
@@ -90,12 +90,16 @@ export function createEngine(content: ContentPack): GameEngine {
     if (def.kind !== 'supply' && def.kind !== 'equipment') throw new EngineError('NOT_FOR_SALE', cardDefId)
     const ctx: EffectCtx = { ci, state: s, rng }
     if (s.time.phase === 'prologue') {
+      // 网购：不耗精力，下周到货（大件两周），有运费溢价和每周限购
       if (!def.buyable) throw new EngineError('NOT_BUYABLE', cardDefId)
-      const price = Math.round(def.basePrice * s.priceMultiplier) * count
-      if (s.money < price) throw new EngineError('NO_MONEY', `need ${price}`)
-      for (let i = 0; i < count; i++) if (!hasRoom(ci, s, cardSize(ci, { instanceId: '', defId: cardDefId }), false) && !hasRoom(ci, s, 1, true)) throw new EngineError('NO_ROOM', 'warehouse full')
+      const limit = def.weeklyLimit ?? 5
+      const already = s.orderedThisWeek[cardDefId] ?? 0
+      if (already + count > limit) throw new EngineError('LIMIT', `本周限购 ${limit} 件，已下单 ${already}`)
+      const price = Math.round(def.basePrice * s.priceMultiplier * 1.1) * count
+      if (s.money < price) throw new EngineError('NO_MONEY', `需要 ${price}`)
       s.money -= price
-      for (let i = 0; i < count; i++) grantCard(ctx, cardDefId)
+      s.orderedThisWeek[cardDefId] = already + count
+      s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) })
     } else {
       const f = factionId ? ci.factions.get(factionId) : undefined
       if (!f) throw new EngineError('NO_FACTION', 'trade needs a faction')
@@ -134,6 +138,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (s.base.modules.some((x) => x.moduleId === moduleId && !x.damaged)) throw new EngineError('ALREADY_BUILT', moduleId)
       if (s.base.building) throw new EngineError('BUSY_BUILDING', s.base.building.moduleId)
       if (m.cost.money && s.money < m.cost.money) throw new EngineError('NO_MONEY', moduleId)
+      if (s.hero.energy < 1) throw new EngineError('NO_ENERGY', '开工要 1 点精力')
       // 材料
       const mats = s.warehouse.filter((c) => { const d = ci.card(c.defId); return d.kind === 'supply' && d.supplyKind === 'material' }).sort((a, b) => cardPoints(ci, a) - cardPoints(ci, b))
       const total = mats.reduce((t, c) => t + cardPoints(ci, c), 0)
@@ -141,11 +146,8 @@ export function createEngine(content: ContentPack): GameEngine {
       let left = m.cost.materialPoints
       for (const c of mats) { if (left <= 0) break; left -= cardPoints(ci, c); s.warehouse.splice(s.warehouse.indexOf(c), 1) }
       if (m.cost.money) s.money -= m.cost.money
-      const damaged = s.base.modules.find((x) => x.moduleId === moduleId)
-      if (damaged) damaged.damaged = false
-      else s.base.modules.push({ moduleId, damaged: false })
-      s.base.building = { moduleId, weeksLeft: 0 }
-      s.base.building = undefined
+      s.hero.energy -= 1
+      s.base.building = { moduleId, weeksLeft: Math.max(1, m.cost.weeks) }
     }),
     endWeek: (state) => {
       const r = withState(state, (s, rng) => endWeek(ci, s, rng))
@@ -249,6 +251,8 @@ export function createEngine(content: ContentPack): GameEngine {
     },
     stats: (state) => ({
       energyMax: energyMax(state),
+      materialPoints: supplyPoints(ci, state, ['material']),
+      cold: hasCold(ci, state),
       defense: baseDefense(ci, state),
       storageUsed: usedStorage(ci, state, false), storageCap: baseStorage(ci, state),
       spaceUsed: usedStorage(ci, state, true), spaceCap: spaceStorage(state),

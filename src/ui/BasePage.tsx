@@ -37,7 +37,9 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
       </section>
 
       <section className="rounded-lg border border-zinc-800 p-3">
-        <h3 className="font-semibold">模块</h3>
+        <h3 className="font-semibold">模块 <span className="text-xs font-normal text-zinc-400">{t('base.materials', { have: st.materialPoints })}{st.cold ? ' · 有冰箱' : ' · 没电，没冰箱'}</span></h3>
+        <p className="text-xs text-zinc-500">{t('base.buildHint')}</p>
+        {state.base.building && <p className="mt-1 text-xs text-amber-300">{t('base.building', { name: lt(moduleDefs.get(state.base.building.moduleId)?.name ?? { zh: '' }), n: state.base.building.weeksLeft })}</p>}
         <ul className="mt-2 space-y-2 text-sm">
           {available.map((m) => {
             const b = built.get(m.id)
@@ -45,14 +47,15 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
               <li key={m.id} className="flex items-start justify-between gap-2">
                 <div>
                   <div>{m.icon} {lt(m.name)} {b && <span className={`text-xs ${b.damaged ? 'text-red-400' : 'text-emerald-400'}`}>{b.damaged ? '已损毁' : '已建'}</span>}</div>
-                  <div className="text-xs text-zinc-500">{lt(m.desc)} · 材料 {m.cost.materialPoints} 分{m.cost.money ? ` · ￥${m.cost.money}` : ''}</div>
+                  <div className="text-xs text-zinc-500">{lt(m.desc)} · 材料 {m.cost.materialPoints} 分 · {m.cost.weeks} 周{m.cost.money ? ` · ￥${m.cost.money}` : ''}{st.materialPoints < m.cost.materialPoints ? ` · 还差 ${m.cost.materialPoints - st.materialPoints} 分` : ''}</div>
                 </div>
-                {(!b || b.damaged) && <button className="shrink-0 rounded bg-zinc-700 px-3 py-1" onClick={() => store.act((s) => engine.build(s, m.id))}>{b ? '修复' : t('action.build')}</button>}
+                {(!b || b.damaged) && state.base.building?.moduleId !== m.id && <button className="shrink-0 rounded bg-zinc-700 px-3 py-1 disabled:opacity-40" disabled={!!state.base.building || st.materialPoints < m.cost.materialPoints} onClick={() => store.act((s) => engine.build(s, m.id))}>{b ? '修复' : t('action.build')}</button>}
+                {state.base.building?.moduleId === m.id && <span className="shrink-0 text-xs text-amber-300">在建</span>}
               </li>
             )
           })}
         </ul>
-        <p className="mt-2 text-xs text-zinc-500">材料 = 仓库里"材料"维度物资的分值。{Object.keys(moduleDefs).length ? '' : ''}</p>
+
       </section>
     </div>
   )

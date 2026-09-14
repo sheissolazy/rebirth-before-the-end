@@ -81,4 +81,13 @@ export const zh = {
   'trait.title': '开局特质',
   'trait.budget': '预算 {have} 点，已用 {spent} 点',
   'action.use': '使用',
+  'shop.online': '网购',
+  'shop.onlineHint': '手机下单不耗精力，下周到货（大件两周），运费加一成，每件每周限购。末日一到，在路上的快递全部丢失。地图上的采购事件是亲自去搬，当场到手。',
+  'shop.arrives': '{n} 周后到',
+  'shop.shelf': '保质 {n} 周',
+  'shop.limit': '限购 {n}/周',
+  'shop.orders': '在路上',
+  'base.materials': '材料 {have} 分',
+  'base.building': '在建：{name}，还要 {n} 周',
+  'base.buildHint': '建模块要"材料"维度的物资（木板 1 分、钢材 2 分、水泥 2 分），开工花你 1 点精力，然后按周数完工。',
 } as const
