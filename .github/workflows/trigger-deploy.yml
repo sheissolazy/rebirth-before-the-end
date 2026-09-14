@@ -1,0 +1,17 @@
+name: Trigger deploy from next
+
+# next 分支推送后，触发 main 上的部署工作流（它会同时构建 main 和 next）。
+on:
+  push:
+    branches: [next]
+
+permissions:
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
