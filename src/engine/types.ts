@@ -279,6 +279,10 @@ export interface BaseDef {
   baseDefense: number
   storage: number
   population: number
+  /** 离城远：去城里的地点（家和农场以外）每个事件多耗的精力 */
+  travelPenalty?: number
+  /** 离城远：序章网购多等的周数 */
+  deliveryDelay?: number
 }
 
 // ---------- 势力 ----------

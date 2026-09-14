@@ -29,7 +29,7 @@ export function MapPage({ state, store }: { state: GameState; store: Store }) {
         <span className="font-medium">{e.icon} {lt(e.title)} {placedIds.has(e.id) && <span className="text-xs text-amber-400">进行中</span>}</span>
         <span className="shrink-0 text-xs text-zinc-500">
           <span className={`mr-1 rounded px-1 ${KIND_TAG[kindOf(e)]}`}>{t(`event.${kindOf(e)}` as 'event.main')}{timeLeft(e)}</span>
-          {e.slots.some((sl) => sl.accepts.kind === 'hero') ? `⚡${e.energy ?? 2}` : `👥⚡${e.energy ?? 2}`}
+          {e.slots.some((sl) => sl.accepts.kind === 'hero') ? `⚡${engine.eventEnergy(state, e.id)}` : `👥⚡${engine.eventEnergy(state, e.id)}`}
         </span>
       </div>
       <div className="line-clamp-2 text-xs text-zinc-400">{lt(e.text)}{e.resolvesCrisis ? ` （可解决${t(`crisisKind.${e.resolvesCrisis}`)}危机）` : ''}</div>

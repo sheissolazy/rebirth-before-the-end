@@ -137,6 +137,13 @@ describe('apocalypse transition and crises', () => {
     expect(s.crisis?.crisisKind).toBe('horde')
     expect(s.hero.employed).toBe(false)
   })
+  it('prologue trouble cards vanish when the apocalypse begins', () => {
+    let s = engine.newGame(content, { seed: 'tr', build: 'balanced', meta })
+    expect(s.hand.some((c) => c.defId === 'trouble_parents')).toBe(true)
+    for (let i = 0; i < 4; i++) s = week(s).state
+    expect(s.time.phase).toBe('apocalypse')
+    expect(s.hand.some((c) => ['trouble_loan', 'trouble_parents', 'trouble_relatives'].includes(c.defId))).toBe(false)
+  })
   it('resolves the crisis at month end', () => {
     let s = engine.newGame(content, { seed: 'cr', build: 'balanced', meta })
     s = engine.buy(s, 'supply_rice_5kg', 4)

@@ -301,6 +301,9 @@ function apocalypseBegins(ci: ContentIndex, state: GameState, rng: Rng, report: 
   state.hero.debt = 0
   state.hero.employed = false
   report.news.push({ zh: '病毒爆发了。一周之内，城市失守。你的贷款再也不用还了。' })
+  // 序章的麻烦（催收、唠叨、亲戚借钱）随秩序一起消失
+  const gone = state.hand.filter((c) => ['trouble_loan', 'trouble_parents', 'trouble_relatives'].includes(c.defId))
+  if (gone.length) { state.hand = state.hand.filter((c) => !gone.includes(c)); report.news.push({ zh: `${gone.map((c) => ci.card(c.defId).name.zh).join('、')}：再也没人打这些电话了。` }) }
   // 准备度检定：防御 + 武器分 + 食水分
   const readiness = baseDefense(ci, state) + supplyPoints(ci, state, ['weapon']) + Math.min(10, supplyPoints(ci, state, ['food', 'water']) / 2)
   if (readiness < 6) {

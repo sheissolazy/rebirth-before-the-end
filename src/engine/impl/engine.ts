@@ -5,7 +5,7 @@ import { RARITY_POINTS, RARITY_ORDER } from '../types'
 import { EngineError, turnToTime, PROLOGUE_DEFAULT_WEEKS, type GameEngine } from '../api'
 import { ContentIndex } from './content'
 import { Rng, seedToState } from './rng'
-import { availableEvents, eligibleCards, place, unplace, drawEvents, diceFor, drawChoice, resolveChoice } from './events'
+import { availableEvents, eligibleCards, place, unplace, drawEvents, diceFor, drawChoice, resolveChoice, eventEnergyFor } from './events'
 import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
@@ -102,7 +102,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (size > free) throw new EngineError('NO_ROOM', `仓库放不下：还剩 ${free} 格（含在路上的），这单要 ${size} 格。丢掉没用的、建储物间，或换更大的房子`)
       s.money -= price
       s.orderedThisWeek[cardDefId] = already + count
-      s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) })
+      s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) + (ci.bases.get(s.base.type)?.deliveryDelay ?? 0) })
     } else {
       const f = factionId ? ci.factions.get(factionId) : undefined
       if (!f) throw new EngineError('NO_FACTION', 'trade needs a faction')
@@ -348,6 +348,7 @@ export function createEngine(content: ContentPack): GameEngine {
       crisisNeed: state.crisis ? CRISIS_POINTS[state.crisis.rarity] : 0,
       corePoints: state.warehouse.filter((c) => ci.card(c.defId).kind === 'core').reduce((t, c) => t + cardPoints(ci, c), 0),
     }),
+    eventEnergy: (state, eventId) => eventEnergyFor(ci, state, ci.event(eventId)),
     previewDice: (state, eventId, assignments) => diceFor(ci, state, ci.event(eventId), { eventId, assignments, startedTurn: state.turn, resolvesAtTurn: state.turn + 1 }),
     settle: (state, meta) => {
       const ending = state.ending ? ci.pack.endings.find((e) => e.id === state.ending) : undefined

@@ -1,9 +1,9 @@
 import type { BaseDef, ModuleDef } from '../engine/types'
 
 export const bases: BaseDef[] = [
-  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 5 },
-  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '带院子的独栋。' }, icon: '🏡', price: 3_000_000, baseDefense: 5, storage: 120, population: 6 },
-  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '有地，有井，离城远。' }, icon: '🌾', price: 1_500_000, baseDefense: 6, storage: 200, population: 12 },
+  { type: 'apartment', name: { zh: '出租屋' }, desc: { zh: '六楼，两室一厅。在城里，去哪都近。' }, icon: '🏠', price: 0, baseDefense: 2, storage: 60, population: 5 },
+  { type: 'villa', name: { zh: '别墅' }, desc: { zh: '城里带院子的独栋，两米围墙。贵在地段：去哪都近，网购当周到。' }, icon: '🏡', price: 3_000_000, baseDefense: 6, storage: 120, population: 8 },
+  { type: 'farmhouse', name: { zh: '郊区自建房' }, desc: { zh: '离城四十公里，有地有井，能种能养。便宜在偏远：进城做事每次多耗 1 精力，序章网购多等 1 周，围栏一开始挡不住什么。' }, icon: '🌾', price: 1_500_000, baseDefense: 4, storage: 200, population: 12, travelPenalty: 1, deliveryDelay: 1 },
   { type: 'bunker', name: { zh: '地下堡垒' }, desc: { zh: '冷战遗留的防空洞改造。' }, icon: '🛡️', price: 20_000_000, baseDefense: 12, storage: 400, population: 20 },
 ]
 

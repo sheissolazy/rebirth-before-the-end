@@ -36,7 +36,7 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
   const leaderSlot = event.slots.find((s) => s.accepts.kind === 'person')
   const heroSlot = event.slots.find((s) => s.accepts.kind === 'hero' || s.accepts.kind === 'person')
   const heroBlocked = !placed && heroSlot && options[heroSlot.id].length === 0
-  const heroReason = state.hero.incapacitatedWeeks > 0 ? '你受伤了，这周不能行动。' : `精力不够：需要 ${event.energy ?? 2}，剩 ${state.hero.energy}。喝咖啡或下周再来。`
+  const heroReason = state.hero.incapacitatedWeeks > 0 ? '你受伤了，这周不能行动。' : `精力不够：需要 ${engine.eventEnergy(state, event.id)}，剩 ${state.hero.energy}。喝咖啡或下周再来。`
   return (
     <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/60 sm:items-center" onClick={onClose}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-900 p-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
@@ -46,7 +46,7 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
         {event.check && <p className="text-xs text-zinc-600">{t('event.diceNote')}</p>}
         {leaderSlot && <p className="mt-1 text-xs text-zinc-500">{t('event.leaderHint')}</p>}
         <p className="mt-1 text-xs text-zinc-500">
-          耗时 {event.durationWeeks} 周 · {t('event.energy', { n: event.energy ?? 2 })}（剩 {state.hero.energy}）
+          耗时 {event.durationWeeks} 周 · {t('event.energy', { n: engine.eventEnergy(state, event.id) })}{engine.eventEnergy(state, event.id) > (event.energy ?? 2) ? '（离城远 +1）' : ''}（剩 {state.hero.energy}）
           {event.check && ` · 检定 ${event.check.attrs.map((a) => t(`attr.${a}`)).join('+')} · 掷 ${dice} 骰`}
           {event.storylineNpcId && ' · 剧情线'}
           {event.resolvesCrisis && ` · 可解决${t(`crisisKind.${event.resolvesCrisis}`)}危机`}

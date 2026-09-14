@@ -17,7 +17,7 @@ export function BasePage({ state, store }: { state: GameState; store: Store }) {
     <div className="space-y-4 p-4">
       <section className="rounded-lg border border-zinc-800 p-3">
         <h3 className="font-semibold">{base.icon} {lt(base.name)} <span className="text-xs text-zinc-500">{lt(base.desc)}</span></h3>
-        <p className="text-sm text-zinc-300">{t('stat.defense')} {st.defense} · {t('warehouse.capacity', { used: st.storageUsed, cap: st.storageCap })} · 人口上限 {base.population}</p>
+        <p className="text-sm text-zinc-300">{t('stat.defense')} {st.defense} · {t('warehouse.capacity', { used: st.storageUsed, cap: st.storageCap })} · 人口上限 {base.population}{base.travelPenalty ? ` · 进城每事件 +${base.travelPenalty} 精力` : ''}{base.deliveryDelay ? ` · 网购多等 ${base.deliveryDelay} 周` : ''}</p>
       </section>
 
       <section className="rounded-lg border border-zinc-800 p-3">

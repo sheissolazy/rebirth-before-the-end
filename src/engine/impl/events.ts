@@ -84,6 +84,13 @@ function assignedIds(state: GameState): Set<string> {
 }
 
 export function eventEnergy(e: EventDef): number { return e.energy ?? 2 }
+/** 含基地位置的实际精力：离城远的基地去城里的地点多耗 */
+export function eventEnergyFor(ci: ContentIndex, state: GameState, e: EventDef): number {
+  const base = ci.bases.get(state.base.type)
+  const penalty = base?.travelPenalty ?? 0
+  const local = e.locationId === 'home' || e.locationId === 'farm' || e.locationId === ''
+  return eventEnergy(e) + (local ? 0 : penalty)
+}
 
 export function eligibleForSlot(ci: ContentIndex, state: GameState, slot: SlotDef, exclude: Set<string>, event?: EventDef): string[] {
   const f: CardFilter = slot.accepts
@@ -91,10 +98,10 @@ export function eligibleForSlot(ci: ContentIndex, state: GameState, slot: SlotDe
   const out: string[] = []
   switch (f.kind) {
     case 'hero':
-      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergy(event) : 1)) out.push('hero')
+      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergyFor(ci, state, event) : 1)) out.push('hero')
       break
     case 'person':
-      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergy(event) : 1)) out.push('hero')
+      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergyFor(ci, state, event) : 1)) out.push('hero')
       for (const p of Object.values(state.people)) {
         if (!p.alive || !p.inBase || p.busyWithEventId || exclude.has(p.id) || p.injury >= 2) continue
         out.push(p.id)
@@ -187,10 +194,10 @@ export function place(ci: ContentIndex, state: GameState, placement: Omit<Placem
     }
     if (usedHere.has(v)) throw new EngineError('DUPLICATE', `${v} used twice`)
     const ok = eligibleForSlot(ci, state, slot, exclude, e)
-    if (!ok.includes(v)) throw new EngineError('NOT_ELIGIBLE', v === 'hero' ? `精力不够（需要 ${eventEnergy(e)}）` : `${v} cannot go in ${slot.id}`)
+    if (!ok.includes(v)) throw new EngineError('NOT_ELIGIBLE', v === 'hero' ? `精力不够（需要 ${eventEnergyFor(ci, state, e)}）` : `${v} cannot go in ${slot.id}`)
     usedHere.add(v)
   }
-  if (usedHere.has('hero')) state.hero.energy -= eventEnergy(e)
+  if (usedHere.has('hero')) state.hero.energy -= eventEnergyFor(ci, state, e)
   for (const v of usedHere) if (state.people[v]) state.people[v].busyWithEventId = e.id
   state.placements.push({ eventId: e.id, assignments: { ...placement.assignments }, startedTurn: state.turn, resolvesAtTurn: state.turn + Math.max(1, e.durationWeeks) })
 }
@@ -201,7 +208,7 @@ export function unplace(ci: ContentIndex, state: GameState, eventId: string): vo
   if (state.placements[i].startedTurn !== state.turn) throw new EngineError('IN_PROGRESS', `${eventId} already in progress`)
   const p = state.placements.splice(i, 1)[0]
   for (const v of Object.values(p.assignments)) if (state.people[v]) state.people[v].busyWithEventId = undefined
-  if (Object.values(p.assignments).includes('hero')) state.hero.energy += eventEnergy(ci.event(eventId))
+  if (Object.values(p.assignments).includes('hero')) state.hero.energy += eventEnergyFor(ci, state, ci.event(eventId))
 }
 
 /** 每次检定固定加的基础骰（常识和运气），让低属性也有成长机会 */

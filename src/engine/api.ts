@@ -55,6 +55,8 @@ export interface GameEngine {
   stats(state: GameState): DerivedStats
   /** 当前（或指定类型）危机的分数账本：每一分从哪来 */
   crisisBreakdown(state: GameState, kind?: CrisisKind): CrisisBreakdown
+  /** 某事件对当前基地的实际精力消耗（离城远多耗） */
+  eventEnergy(state: GameState, eventId: string): number
   /** 某事件在给定放卡下会掷几个骰子 */
   previewDice(state: GameState, eventId: string, assignments: Record<string, string>): number
 }
