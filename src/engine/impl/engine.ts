@@ -10,7 +10,7 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown,
 } from './helpers'
 import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
@@ -210,6 +210,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (def.kind !== 'equipment') throw new EngineError('NOT_EQUIPMENT', instanceId)
       const target = personId === 'hero' ? s.hero : s.people[personId]
       if (!target) throw new EngineError('NO_PERSON', personId)
+      if (personId !== 'hero') { const p = s.people[personId]; if (!p.alive || !p.inBase) throw new EngineError('NOT_IN_BASE', '他不在基地，没法给他装备') }
       for (const p of [s.hero, ...Object.values(s.people)]) for (const [slot, id] of Object.entries(p.equipment)) if (id === instanceId) delete p.equipment[slot as keyof typeof p.equipment]
       target.equipment[def.slot] = instanceId
     }),
@@ -266,8 +267,27 @@ export function createEngine(content: ContentPack): GameEngine {
       const r = withState(state, (s, rng) => resolveChoice(ci, s, rng, choiceId))
       return { state: r.state, result: r.result }
     },
+    crisisBreakdown: (state, kind) => {
+      const k = kind ?? state.crisis?.crisisKind ?? null
+      if (!k) return { kind: null, need: null, have: 0, items: [] }
+      const mem = state.time.phase === 'apocalypse' ? ci.pack.memories.find((m) => m.month === state.time.month) : undefined
+      const known = state.crisis && state.crisis.crisisKind === k && state.crisis.revealed
+      return {
+        kind: k,
+        need: known && state.crisis ? CRISIS_POINTS[state.crisis.rarity] : null,
+        baseline: mem?.crisisKind === k ? mem.baseRarity : undefined,
+        have: crisisPoints(ci, state, k),
+        items: crisisBreakdown(ci, state, k),
+      }
+    },
     stats: (state) => ({
       energyMax: energyMax(state),
+      ...(() => {
+        const mouths = 1 + Object.values(state.people).filter((p) => p.alive && p.inBase).length
+        const petMouths = state.pets.filter((p) => p.alive).reduce((t, p) => t + (ci.pets.get(p.defId)?.weeklyFood ?? 1), 0)
+        const units = (kind: 'food' | 'water') => state.warehouse.reduce((t, c) => { const d = ci.card(c.defId); return d.kind === 'supply' && d.supplyKind === kind && (c.spoiled ?? 0) < 2 ? t + (c.unitsLeft ?? 1) : t }, 0)
+        return { mouths, petMouths, weeklyFood: mouths + petMouths, weeklyWater: mouths, foodUnits: units('food'), waterUnits: units('water') }
+      })(),
       materialPoints: supplyPoints(ci, state, ['material']),
       cold: hasCold(ci, state),
       defense: baseDefense(ci, state),

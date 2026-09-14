@@ -4,7 +4,7 @@
  */
 import type {
   ContentPack, GameState, NewGameOptions, Placement, WeekReport, EventDef, GameTime, Turn,
-  CompanionJob, MetaProgress, EventResult,
+  CompanionJob, MetaProgress, EventResult, LocalizedText, Rarity, CrisisKind,
 } from './types'
 
 export const PROLOGUE_DEFAULT_WEEKS = 4
@@ -47,12 +47,31 @@ export interface GameEngine {
   settle(state: GameState, meta: MetaProgress): MetaProgress
   /** UI 展示用的派生数据（防御、仓库占用、危机分、检定预览） */
   stats(state: GameState): DerivedStats
+  /** 当前（或指定类型）危机的分数账本：每一分从哪来 */
+  crisisBreakdown(state: GameState, kind?: CrisisKind): CrisisBreakdown
   /** 某事件在给定放卡下会掷几个骰子 */
   previewDice(state: GameState, eventId: string, assignments: Record<string, string>): number
 }
 
+export interface CrisisBreakdown {
+  kind: CrisisKind | null
+  /** 需要分；档位未知时为 null */
+  need: number | null
+  /** 记忆里的基准档（未看穿时给玩家参考） */
+  baseline?: Rarity
+  have: number
+  items: Array<{ label: LocalizedText; points: number }>
+}
+
 export interface DerivedStats {
   energyMax: number
+  /** 每周消耗与库存（份） */
+  mouths: number
+  petMouths: number
+  weeklyFood: number
+  weeklyWater: number
+  foodUnits: number
+  waterUnits: number
   /** 仓库里"材料"维度物资的总分 */
   materialPoints: number
   /** 有没有冷藏（有电就有冰箱） */

@@ -189,17 +189,6 @@ export const apocalypseEvents: EventDef[] = [
       rare: { text: { zh: '阳台上有人挥手。他在等人来。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 3 }, { type: 'recruitRandom' }] },
     },
   },
-  {
-    id: 'ev_apartments_family', locationId: 'apartments', icon: '👨‍👧', weight: 4,
-    title: { zh: '带孩子的男人' }, text: { zh: '他求你收留他们。孩子在发烧。' },
-    conditions: [A], durationWeeks: 1, slots: [HERO, GIFT('medicine', '给药')], check: { attrs: ['charm'] },
-    outcomes: {
-      fail: { text: { zh: '你没敢。第二天那扇门再也没开过。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 2 }] },
-      common: { text: { zh: '你给了药，没带他们走。' }, effects: [{ type: 'relation', factionId: 'alliance', delta: 5 }] },
-      fine: { text: { zh: '他跟你回去了。他说他会修任何东西。' }, effects: [{ type: 'recruitRandom', rarityWeights: { common: 30, fine: 50, rare: 20 } }] },
-      rare: { text: { zh: '孩子退烧了。他跪下来的时候你把他拉了起来。' }, effects: [{ type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }, { type: 'loyalty', target: 'all', delta: 5 }] },
-    },
-  },
   // ---- 工厂 ----
   {
     id: 'ev_factory_materials', energy: 3, locationId: 'factory', icon: '🏭', repeatable: true, weight: 10,
@@ -277,6 +266,63 @@ export const apocalypseEvents: EventDef[] = [
       common: { text: { zh: '守了一夜。' }, effects: [{ type: 'relation', factionId: 'army', delta: 8 }, { type: 'gainRandom', table: 'loot_zombie', count: 1 }] },
       fine: { text: { zh: '你打掉的比旁边的兵还多。' }, effects: [{ type: 'relation', factionId: 'army', delta: 12 }, { type: 'gainRandom', table: 'loot_zombie', count: 2 }, { type: 'affection', npcId: 'guchen', delta: 3 }] },
       rare: { text: { zh: '顾沉在墙上看了你很久。' }, effects: [{ type: 'relation', factionId: 'army', delta: 15 }, { type: 'gainRandom', table: 'loot_zombie', count: 3 }, { type: 'affection', npcId: 'guchen', delta: 8 }] },
+    },
+  },
+  {
+    id: 'ev_army_task_meds', locationId: 'armygate', icon: '📋', repeatable: true, weight: 6,
+    title: { zh: '军区委托：送药到前哨' }, text: { zh: '布告栏上贴着：急需抗生素，送到东门前哨，军区记账。' },
+    conditions: [A, { type: 'relationAtLeast', factionId: 'army', value: 0 }, { type: 'hasSupplyKind', supplyKind: 'medicine', minPoints: 2 }], durationWeeks: 1,
+    slots: [HERO, { id: 'meds', label: { zh: '送的药' }, required: true, accepts: { kind: 'supply', supplyKind: 'medicine' }, consumes: true }, HELPER, WEAPON], check: { attrs: ['strength', 'mind'] },
+    outcomes: {
+      fail: { text: { zh: '路上遇到尸群，药丢了一半。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }, { type: 'relation', factionId: 'army', delta: 3 }] },
+      common: { text: { zh: '送到了。前哨的兵给你敬了个礼。' }, effects: [{ type: 'relation', factionId: 'army', delta: 8 }, { type: 'affection', npcId: 'guchen', delta: 3 }, { type: 'gainCard', cardId: 'supply_compressed_biscuit' }] },
+      fine: { text: { zh: '送到了，还顺手帮他们处理了两个伤员。' }, effects: [{ type: 'relation', factionId: 'army', delta: 12 }, { type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'gainCard', cardId: 'supply_compressed_biscuit', count: 2 }, { type: 'gainCard', cardId: 'core_common' }] },
+      rare: { text: { zh: '顾沉正好在前哨。他把你的名字记进了名册。' }, effects: [{ type: 'relation', factionId: 'army', delta: 15 }, { type: 'affection', npcId: 'guchen', delta: 8 }, { type: 'gainCard', cardId: 'supply_compressed_biscuit', count: 2 }, { type: 'gainCard', cardId: 'core_fine' }] },
+    },
+  },
+  {
+    id: 'ev_army_task_scout', locationId: 'armygate', icon: '🔭', repeatable: true, weight: 6,
+    title: { zh: '军区委托：侦察尸群动向' }, text: { zh: '他们缺人手去河东数丧尸。带回来的情报换物资。' },
+    conditions: [A, { type: 'relationAtLeast', factionId: 'army', value: 10 }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['mind', 'strength'] },
+    outcomes: {
+      fail: { text: { zh: '你被发现了。跑回来时丢了背包。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }, { type: 'loseCard', cardId: 'supply_water_box' }] },
+      common: { text: { zh: '数了个大概。' }, effects: [{ type: 'relation', factionId: 'army', delta: 6 }, { type: 'gainCard', cardId: 'supply_battery', count: 2 }] },
+      fine: { text: { zh: '你画的地图比他们的准。' }, effects: [{ type: 'relation', factionId: 'army', delta: 10 }, { type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'gainCard', cardId: 'intel_army_radio' }, { type: 'gainCard', cardId: 'supply_battery', count: 2 }] },
+      rare: { text: { zh: '你发现了一群往城里挤的尸潮。军区提前一周布防。' }, effects: [{ type: 'relation', factionId: 'army', delta: 15 }, { type: 'affection', npcId: 'guchen', delta: 8 }, { type: 'gainCard', cardId: 'intel_army_radio' }, { type: 'revealCrisis', monthsAhead: 1 }, { type: 'gainCard', cardId: 'supply_gasoline' }] },
+    },
+  },
+  {
+    id: 'ev_army_task_rescue', locationId: 'armygate', icon: '🆘', repeatable: true, weight: 4,
+    title: { zh: '军区委托：找回失联小队' }, text: { zh: '一个班三天没回来。最后位置在工厂。' },
+    conditions: [A, { type: 'relationAtLeast', factionId: 'army', value: 20 }, { type: 'month', from: 3, to: 12 }], durationWeeks: 2, energy: 3, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength', 'mind'] },
+    outcomes: {
+      fail: { text: { zh: '你找到了他们。他们已经不是人了。' }, effects: [{ type: 'injure', target: 'hero', severity: 2 }, { type: 'relation', factionId: 'army', delta: 5 }] },
+      common: { text: { zh: '找到两个活的。' }, effects: [{ type: 'relation', factionId: 'army', delta: 12 }, { type: 'affection', npcId: 'guchen', delta: 6 }, { type: 'gainRandom', table: 'loot_zombie', count: 2 }] },
+      fine: { text: { zh: '全找回来了。其中一个想跟你走。' }, effects: [{ type: 'relation', factionId: 'army', delta: 18 }, { type: 'affection', npcId: 'guchen', delta: 10 }, { type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }, { type: 'gainCard', cardId: 'equip_helmet' }] },
+      rare: { text: { zh: '你不仅找回了人，还找回了他们丢的枪。顾沉说这把归你。' }, effects: [{ type: 'relation', factionId: 'army', delta: 20 }, { type: 'affection', npcId: 'guchen', delta: 12 }, { type: 'gainCard', cardId: 'equip_shotgun' }, { type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }] },
+    },
+  },
+  // ---- 幸存者联盟 / 教团 委托（挂在居民楼与农场） ----
+  {
+    id: 'ev_alliance_task_pump', locationId: 'apartments', icon: '🔧', repeatable: true, weight: 5,
+    title: { zh: '联盟委托：修水泵' }, text: { zh: '三号楼的人凑了东西，求个会修水泵的。' },
+    conditions: [A, { type: 'month', from: 2, to: 12 }], durationWeeks: 1, slots: [HERO, HELPER, { id: 'part', label: { zh: '带零件' }, required: false, accepts: { kind: 'supply', supplyKind: 'material' }, consumes: true, bonusDice: 2 }], check: { attrs: ['mind', 'strength'] },
+    outcomes: {
+      fail: { text: { zh: '修坏了。他们脸色很难看。' }, effects: [{ type: 'relation', factionId: 'alliance', delta: -5 }] },
+      common: { text: { zh: '修好了一半。' }, effects: [{ type: 'relation', factionId: 'alliance', delta: 6 }, { type: 'gainCard', cardId: 'supply_rice_5kg' }] },
+      fine: { text: { zh: '水出来了。整栋楼给你鼓掌。' }, effects: [{ type: 'relation', factionId: 'alliance', delta: 12 }, { type: 'gainCard', cardId: 'supply_rice_5kg', count: 2 }, { type: 'gainCard', cardId: 'supply_well_water', count: 2 }, { type: 'stat', stat: 'exposure', delta: 3 }] },
+      rare: { text: { zh: '你顺手教会了他们怎么修。以后他们会记得你。' }, effects: [{ type: 'relation', factionId: 'alliance', delta: 18 }, { type: 'gainCard', cardId: 'supply_rice_5kg', count: 2 }, { type: 'gainCard', cardId: 'supply_well_water', count: 2 }, { type: 'attr', target: 'hero', attr: 'mind', delta: 1 }] },
+    },
+  },
+  {
+    id: 'ev_dawn_task_letter', locationId: 'farm', icon: '✉️', repeatable: true, weight: 4,
+    title: { zh: '教团委托：送一封信' }, text: { zh: '新黎明的人在农场等你。信封着，他们说别拆。' },
+    conditions: [A, { type: 'month', from: 3, to: 12 }], durationWeeks: 1, slots: [HERO, HELPER, WEAPON], check: { attrs: ['charm', 'mind'] },
+    outcomes: {
+      fail: { text: { zh: '你拆了。里面是一份名单，有你的名字。' }, effects: [{ type: 'relation', factionId: 'dawn', delta: -10 }, { type: 'stat', stat: 'exposure', delta: 10 }] },
+      common: { text: { zh: '送到了。他们给了你一袋米和一个微笑。' }, effects: [{ type: 'relation', factionId: 'dawn', delta: 8 }, { type: 'gainCard', cardId: 'supply_rice_5kg' }] },
+      fine: { text: { zh: '送到了。收信的人是个医生，他多看了你两眼。' }, effects: [{ type: 'relation', factionId: 'dawn', delta: 12 }, { type: 'gainCard', cardId: 'supply_antibiotics' }, { type: 'affection', npcId: 'shenyan', delta: 3 }] },
+      rare: { text: { zh: '你没拆，但你记住了封印的图案。' }, effects: [{ type: 'relation', factionId: 'dawn', delta: 15 }, { type: 'gainCard', cardId: 'supply_antibiotics' }, { type: 'gainCard', cardId: 'core_fine' }, { type: 'setFlag', flag: 'dawn_seal_seen' }] },
     },
   },
   // ---- 黑鸦地盘 ----

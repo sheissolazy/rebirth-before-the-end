@@ -81,6 +81,36 @@ export function moduleCounters(ci: ContentIndex, state: GameState, kind: CrisisK
   return p
 }
 
+/** 危机分账本 */
+export function crisisBreakdown(ci: ContentIndex, state: GameState, kind: CrisisKind): Array<{ label: { zh: string }; points: number }> {
+  const items: Array<{ label: { zh: string }; points: number }> = []
+  const kinds = CRISIS_ACCEPTS[kind]
+  const byKind: Record<string, number> = {}
+  for (const inst of state.warehouse) {
+    const def = ci.card(inst.defId)
+    if (def.kind === 'supply' && kinds.includes(def.supplyKind)) byKind[def.supplyKind] = (byKind[def.supplyKind] ?? 0) + cardPoints(ci, inst)
+  }
+  const KIND_ZH: Record<string, string> = { food: '食物', water: '水', medicine: '药品', energy: '能源', weapon: '武器', material: '材料', daily: '日用', seed: '种子' }
+  for (const k of kinds) items.push({ label: { zh: `${KIND_ZH[k]}物资` }, points: byKind[k] ?? 0 })
+  for (const m of state.base.modules) {
+    if (m.damaged) continue
+    const def = ci.modules.get(m.moduleId)
+    for (const e of def?.provides ?? []) if (e.type === 'counters' && e.crisisKind === kind) items.push({ label: { zh: `模块：${def?.name.zh}` }, points: e.points })
+  }
+  if (kind === 'horde' || kind === 'human') {
+    const base = ci.bases.get(state.base.type)
+    items.push({ label: { zh: `基地基础（${base?.name.zh ?? ''}）` }, points: base?.baseDefense ?? 0 })
+    for (const m of state.base.modules) {
+      if (m.damaged) continue
+      const def = ci.modules.get(m.moduleId)
+      for (const e of def?.provides ?? []) if (e.type === 'defense') items.push({ label: { zh: `模块：${def?.name.zh}` }, points: e.value })
+    }
+    for (const p of Object.values(state.people)) if (p.alive && p.inBase && p.job === 'guard') items.push({ label: { zh: `守卫：${personName(ci, p).zh}` }, points: 2 + Math.floor(p.attrs.strength / 3) })
+    for (const pet of state.pets) if (pet.alive && ci.pets.get(pet.defId)?.species === 'dog') items.push({ label: { zh: '狗' }, points: 1 })
+  }
+  return items
+}
+
 /** 顶危机的总分 */
 export function crisisPoints(ci: ContentIndex, state: GameState, kind: CrisisKind): number {
   let p = supplyPoints(ci, state, CRISIS_ACCEPTS[kind]) + moduleCounters(ci, state, kind)

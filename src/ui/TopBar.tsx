@@ -28,7 +28,7 @@ export function TopBar({ state }: { state: GameState }) {
         <div className="mt-1">
           <div className="flex justify-between text-xs text-zinc-400">
             <span>{t('crisis.title')}：{t(`crisisKind.${c.crisisKind}`)} · {c.revealed ? t(`rarity.${c.rarity}`) : '？'}{c.resolved ? ' · 已解决' : ''}</span>
-            <span>{t('crisis.points', { need: c.revealed ? st.crisisNeed : '?', have: st.crisisHave })}</span>
+            <span>{t('crisis.points', { need: c.revealed ? st.crisisNeed : `?（记忆约 ${{ common: 2, fine: 4, rare: 8, legendary: 16 }[engine.crisisBreakdown(state).baseline ?? 'common']}）`, have: st.crisisHave })}</span>
           </div>
           <div className="mt-0.5 h-1.5 w-full rounded bg-zinc-800">
             <div className={`h-1.5 rounded ${c.resolved || st.crisisHave >= st.crisisNeed ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min(100, (st.crisisHave / Math.max(1, st.crisisNeed)) * 100)}%` }} />

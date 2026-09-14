@@ -71,6 +71,20 @@ export const choiceEvents: EventDef[] = [
     ],
   },
   {
+    id: 'ch_family', locationId: 'home', instant: true, weight: 7, icon: '👨‍👧',
+    title: { zh: '带孩子的男人' }, text: { zh: '他在你门口跪下来，求你收留。孩子在发烧。他说他会修任何东西。' },
+    conditions: [A], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    choices: [
+      { id: 'take', label: { zh: '收留他们（两张嘴，一个会修东西的人）' }, check: { attrs: ['charm', 'mind'] }, outcomes: {
+        fail: { text: { zh: '孩子没撑过去。他第二天走了，没带走任何东西。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 3 }] },
+        fine: { text: { zh: '孩子退烧了。他成了基地里最勤快的人。' }, effects: [{ type: 'recruitRandom', rarityWeights: { common: 30, fine: 50, rare: 20 } }] },
+        rare: { text: { zh: '孩子退烧了。他跪下来的时候你把他拉了起来。' }, effects: [{ type: 'recruitRandom', rarityWeights: { fine: 50, rare: 50 } }, { type: 'loyalty', target: 'all', delta: 5 }] },
+      } },
+      { id: 'meds', label: { zh: '只给药，不收人' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'medicine', minPoints: 1 }], outcomes: { fine: { text: { zh: '你给了药，关上了门。他在门外说了声谢谢。' }, effects: [{ type: 'loseCard', cardId: 'supply_bandage' }, { type: 'relation', factionId: 'alliance', delta: 5 }] } } },
+      { id: 'refuse', label: { zh: '拒绝' }, outcomes: { fine: { text: { zh: '第二天那扇门再也没开过。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 2 }] } } },
+    ],
+  },
+  {
     id: 'ch_bitten', locationId: 'home', instant: true, weight: 6, icon: '🩸',
     title: { zh: '他的袖子' }, text: { zh: '一个伙伴的袖子上有血。他说是刮的。' },
     conditions: [A, { type: 'month', from: 2, to: 12 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
