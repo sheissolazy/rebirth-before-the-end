@@ -20,7 +20,7 @@ export interface SimResult {
   maxAffection: number
 }
 
-export function emptyMeta(): MetaProgress { return { rebirthPoints: 0, rebirths: 0, unlockedEndings: [], purchased: {} } }
+export function emptyMeta(): MetaProgress { return { rebirthPoints: 0, traitPoints: 0, rebirths: 0, unlockedEndings: [], purchased: {} } }
 
 export function simulateOne(engine: GameEngine, content: ContentPack, seed: string, meta = emptyMeta(), maxTurns = 60): SimResult {
   let s = engine.newGame(content, { seed, build: 'balanced', meta })
@@ -41,6 +41,15 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
   }
 
   for (let i = 0; i < maxTurns && !s.ending; i++) {
+    // 突发选择：选第一个能选的
+    if (s.pendingChoice) {
+      const e = content.events.find((x) => x.id === s.pendingChoice)
+      const choices = [...(e?.choices ?? [])]
+      // 机器人：随机顺序尝试，避免总选第一个
+      for (let k = choices.length - 1; k > 0; k--) { const j = (i * 7 + k * 13) % (k + 1); [choices[k], choices[j]] = [choices[j], choices[k]] }
+      for (const c of choices) { try { s = engine.choose(s, c.id).state; break } catch { /* next */ } }
+      if (s.pendingChoice) s = { ...s, pendingChoice: null }
+    }
     // 序章：买东西
     if (s.time.phase === 'prologue') {
       const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_compressed_biscuit', 'supply_antibiotics', 'supply_battery', 'supply_steel', 'equip_machete', 'supply_winter_clothes', 'supply_bolts']
@@ -69,9 +78,12 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
       if (e.id.includes('scavenge') || e.id.includes('ruin')) sc += 4
       return sc
     }
+    // 精力够就继续放；受伤时只做基地内的事
     for (const e of [...events].sort((a, b) => score(b) - score(a))) {
+      if (s.hero.energy <= 0) break
+      if (s.hero.health <= 4 && e.locationId !== 'home' && e.locationId !== 'office') continue
       const ns = tryPlace(s, e)
-      if (ns) { s = ns; break }
+      if (ns) s = ns
     }
     const { state, report } = engine.endWeek(s)
     s = state

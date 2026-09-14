@@ -137,3 +137,8 @@ export function removeCard(state: GameState, instanceId: string): CardInstance |
 }
 
 export function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)) }
+
+/** 精力上限 = 2 + 体力/2 + 永久加成 */
+export function energyMax(state: GameState): number {
+  return Math.max(1, 2 + Math.floor(state.hero.attrs.strength / 2) + state.hero.energyBonus)
+}

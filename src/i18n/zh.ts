@@ -74,4 +74,11 @@ export const zh = {
   'report.title': '本周结算',
   'ending.rebirth': '再一次睁开眼',
   'shop.title': '重生点',
+  'stat.energy': '精力',
+  'event.story': '剧情',
+  'event.energy': '精力 {n}',
+  'choice.title': '突发',
+  'trait.title': '开局特质',
+  'trait.budget': '预算 {have} 点，已用 {spent} 点',
+  'action.use': '使用',
 } as const

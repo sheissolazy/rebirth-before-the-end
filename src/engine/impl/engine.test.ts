@@ -7,6 +7,15 @@ import { EngineError } from '../api'
 const engine = createEngine(content)
 const meta = emptyMeta()
 
+/** 周初突发选择：选第一个能选的 */
+function settleChoice(s: ReturnType<typeof engine.newGame>) {
+  if (!s.pendingChoice) return s
+  const e = content.events.find((x) => x.id === s.pendingChoice)!
+  for (const c of e.choices ?? []) { try { return engine.choose(s, c.id).state } catch { /* next */ } }
+  return s
+}
+const week = (s: ReturnType<typeof engine.newGame>) => engine.endWeek(settleChoice(s))
+
 describe('newGame', () => {
   it('starts in prologue with 4 weeks and drawn events', () => {
     const s = engine.newGame(content, { seed: 'a', build: 'balanced', meta })
@@ -19,8 +28,8 @@ describe('newGame', () => {
     const a = engine.newGame(content, { seed: 'same', build: 'mind', meta })
     const b = engine.newGame(content, { seed: 'same', build: 'mind', meta })
     expect(JSON.stringify(a)).toBe(JSON.stringify(b))
-    const ra = engine.endWeek(engine.place(a, { eventId: 'ev_office_work', assignments: { hero: 'hero' } }))
-    const rb = engine.endWeek(engine.place(b, { eventId: 'ev_office_work', assignments: { hero: 'hero' } }))
+    const ra = week(engine.place(a, { eventId: 'ev_office_work', assignments: { hero: 'hero' } }))
+    const rb = week(engine.place(b, { eventId: 'ev_office_work', assignments: { hero: 'hero' } }))
     expect(JSON.stringify(ra)).toBe(JSON.stringify(rb))
   })
   it('longer prologue from rebirth shop', () => {
@@ -31,13 +40,22 @@ describe('newGame', () => {
 })
 
 describe('placing and resolving', () => {
-  it('work pays salary next week and hero can only be placed once', () => {
+  it('work pays salary next week and energy limits how much the hero does', () => {
     let s = engine.newGame(content, { seed: 'w', build: 'balanced', meta })
     const money = s.money
+    const energy = s.hero.energy
     s = engine.place(s, { eventId: 'ev_office_work', assignments: { hero: 'hero' } })
-    expect(() => engine.place(s, { eventId: 'ev_bank_stock', assignments: { hero: 'hero' } })).toThrow(EngineError)
-    const { state, report } = engine.endWeek(s)
-    expect(report.eventResults[0].eventId).toBe('ev_office_work')
+    expect(s.hero.energy).toBe(energy - 2)
+    // 精力耗尽后不能再放
+    let blocked = false
+    for (let i = 0; i < 5; i++) {
+      const e = engine.availableEvents(s).find((x) => !s.placements.some((p) => p.eventId === x.id) && x.slots.some((sl) => sl.accepts.kind === 'hero'))
+      if (!e) break
+      try { s = engine.place(s, { eventId: e.id, assignments: { hero: 'hero' } }) } catch (err) { blocked = err instanceof EngineError; break }
+    }
+    expect(blocked || s.hero.energy === 0).toBe(true)
+    const { state, report } = week(s)
+    expect(report.eventResults.some((r) => r.eventId === 'ev_office_work')).toBe(true)
     expect(state.money).toBeGreaterThan(money - 1000)
     expect(state.time.weeksBeforeEnd).toBe(3)
   })
@@ -52,7 +70,7 @@ describe('placing and resolving', () => {
     const s = engine.newGame(content, { seed: 'w', build: 'balanced', meta })
     const before = JSON.stringify(s)
     engine.place(s, { eventId: 'ev_office_work', assignments: { hero: 'hero' } })
-    engine.endWeek(s)
+    week(s)
     expect(JSON.stringify(s)).toBe(before)
   })
 })
@@ -85,7 +103,7 @@ describe('economy', () => {
 describe('apocalypse transition and crises', () => {
   it('enters apocalypse after the prologue and draws a crisis', () => {
     let s = engine.newGame(content, { seed: 'ap', build: 'balanced', meta })
-    for (let i = 0; i < 4; i++) s = engine.endWeek(s).state
+    for (let i = 0; i < 4; i++) s = week(s).state
     expect(s.time.phase).toBe('apocalypse')
     expect(s.time).toMatchObject({ year: 1, month: 1, week: 1 })
     expect(s.crisis?.crisisKind).toBe('horde')
@@ -95,12 +113,42 @@ describe('apocalypse transition and crises', () => {
     let s = engine.newGame(content, { seed: 'cr', build: 'balanced', meta })
     s = engine.buy(s, 'supply_rice_5kg', 4)
     s = engine.buy(s, 'supply_water_box', 4)
-    for (let i = 0; i < 7; i++) s = engine.endWeek(s).state
+    for (let i = 0; i < 7; i++) s = week(s).state
     expect(s.hero.health).toBeGreaterThan(0)
-    const { state, report } = engine.endWeek(s)
+    const { state, report } = week(s)
     expect(report.crisisResult).toBeDefined()
     expect(state.time.month).toBe(2)
     expect(state.crisis?.crisisKind).toBe('scarcity')
+  })
+})
+
+describe('traits and choices', () => {
+  it('rejects traits over budget and applies balanced ones', () => {
+    expect(() => engine.newGame(content, { seed: 't', build: 'balanced', meta, traits: ['trait_strong'] })).toThrow('TRAIT_BUDGET')
+    const s = engine.newGame(content, { seed: 't', build: 'balanced', meta, traits: ['trait_strong', 'trait_shy'] })
+    expect(s.hero.attrs.strength).toBe(3)
+    expect(s.hero.attrs.charm).toBe(1)
+  })
+  it('blocks endWeek while a choice is pending and resolves it', () => {
+    // 找一个开局就有突发的种子
+    let s = engine.newGame(content, { seed: 'c1', build: 'balanced', meta })
+    for (let i = 0; i < 20 && !s.pendingChoice; i++) s = engine.newGame(content, { seed: `c${i}`, build: 'balanced', meta })
+    expect(s.pendingChoice).toBeTruthy()
+    expect(() => engine.endWeek(s)).toThrow('PENDING_CHOICE')
+    const e = content.events.find((x) => x.id === s.pendingChoice)!
+    const { state, result } = engine.choose(s, e.choices![0].id)
+    expect(state.pendingChoice).toBeNull()
+    expect(result.eventId).toBe(e.id)
+  })
+  it('coffee restores energy', () => {
+    let s = engine.newGame(content, { seed: 'k', build: 'balanced', meta })
+    s = engine.buy(s, 'supply_coffee', 1)
+    s = engine.place(s, { eventId: 'ev_office_work', assignments: { hero: 'hero' } })
+    const before = s.hero.energy
+    const coffee = s.warehouse.find((c) => c.defId === 'supply_coffee')!
+    s = engine.useItem(s, coffee.instanceId)
+    expect(s.hero.energy).toBe(before + 1)
+    expect(s.warehouse.find((c) => c.defId === 'supply_coffee')?.unitsLeft).toBe(4)
   })
 })
 

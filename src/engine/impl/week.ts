@@ -2,17 +2,20 @@ import type { GameState, WeekReport, CardInstance } from '../types'
 import type { ContentIndex } from './content'
 import { Rng } from './rng'
 import { turnToTime } from '../api'
-import { drawEvents, resolvePlacement } from './events'
+import { drawEvents, resolvePlacement, drawChoice } from './events'
+import { energyMax } from './helpers'
 import { drawCrisis, resolveCrisis } from './crisis'
 import { grantCard, grantFromLoot, loseRandomCards, type EffectCtx } from './effects'
 import { isCompanion, isRomanceable, baseDefense, supplyPoints, cardPoints, personName, clamp } from './helpers'
 import { checkAll } from './conditions'
+import { EngineError } from '../api'
 
 function emptyReport(state: GameState): WeekReport {
   return { time: state.time, news: [], eventResults: [], upkeep: { money: 0, food: 0, water: 0, health: 0, loyalty: 0 }, spoiled: [], produced: [], deaths: [] }
 }
 
 export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekReport {
+  if (state.pendingChoice) throw new EngineError('PENDING_CHOICE', '先处理这周的突发事件')
   const report = emptyReport(state)
   const wasPrologue = state.time.phase === 'prologue'
 
@@ -77,10 +80,11 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
     report.ending = state.ending
   }
 
-  // 13. 日记 & 抽新事件
+  // 13. 精力恢复、日记、抽新事件与突发选择
+  state.hero.energy = state.hero.incapacitatedWeeks > 0 ? 0 : energyMax(state)
   if (report.eventResults.length) state.diary.push({ turn: state.turn, text: report.eventResults[0].text })
-  if (!state.ending) drawEvents(ci, state, rng)
-  else state.drawnEvents = {}
+  if (!state.ending) { drawEvents(ci, state, rng); drawChoice(ci, state, rng) }
+  else { state.drawnEvents = {}; state.pendingChoice = null }
   state.lastReport = report
   return report
 }

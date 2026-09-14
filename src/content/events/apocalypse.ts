@@ -28,7 +28,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_read_apoc', locationId: 'home', icon: '📚', repeatable: true, weight: 4,
+    id: 'ev_home_read_apoc', energy: 1, locationId: 'home', icon: '📚', repeatable: true, weight: 4,
     title: { zh: '翻找有用的书' }, text: { zh: '你从隔壁搬来了半个书架。' },
     conditions: [A], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['mind'] },
     outcomes: {
@@ -63,7 +63,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_quarantine', locationId: 'home', icon: '🚷', repeatable: true, weight: 0, resolvesCrisis: 'plague',
+    id: 'ev_home_quarantine', energy: 1, locationId: 'home', icon: '🚷', repeatable: true, weight: 0, resolvesCrisis: 'plague',
     title: { zh: '严格隔离' }, text: { zh: '所有人分开住，东西煮开了再碰。' },
     conditions: [A, { type: 'crisisActive', crisisKind: 'plague' }, { type: 'hasSupplyKind', supplyKind: 'daily', minPoints: 2 }], durationWeeks: 2,
     slots: [HERO, { id: 'soap', label: { zh: '消毒用品' }, required: true, accepts: { kind: 'supply', supplyKind: 'daily' }, consumes: true }], check: { attrs: ['mind', 'charm'] },
@@ -87,7 +87,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_ration', locationId: 'home', icon: '🥣', repeatable: true, weight: 0, resolvesCrisis: 'scarcity',
+    id: 'ev_home_ration', energy: 1, locationId: 'home', icon: '🥣', repeatable: true, weight: 0, resolvesCrisis: 'scarcity',
     title: { zh: '定量配给' }, text: { zh: '每人每天一碗。你自己半碗。' },
     conditions: [A, { type: 'crisisActive', crisisKind: 'scarcity' }], durationWeeks: 2, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {
@@ -134,7 +134,7 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 军械库 ----
   {
-    id: 'ev_armory_raid', locationId: 'armory', icon: '🔫', repeatable: true, weight: 8,
+    id: 'ev_armory_raid', energy: 3, locationId: 'armory', icon: '🔫', repeatable: true, weight: 8,
     title: { zh: '摸军械库' }, text: { zh: '军区撤走时没搬完。黑鸦也盯着。' },
     conditions: [A], durationWeeks: 2, slots: [HERO, HELPER, WEAPON], check: { attrs: ['strength', 'mind'] },
     outcomes: {
@@ -169,7 +169,7 @@ export const apocalypseEvents: EventDef[] = [
   },
   // ---- 工厂 ----
   {
-    id: 'ev_factory_materials', locationId: 'factory', icon: '🏭', repeatable: true, weight: 10,
+    id: 'ev_factory_materials', energy: 3, locationId: 'factory', icon: '🏭', repeatable: true, weight: 10,
     title: { zh: '拆工厂' }, text: { zh: '钢材、柴油、零件。要人手。' },
     conditions: [A], durationWeeks: 2, slots: [HERO, HELPER, WEAPON], check: { attrs: ['strength'] },
     outcomes: {
@@ -204,7 +204,7 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_farm_move', locationId: 'farm', icon: '🚚', once: true, weight: 0,
+    id: 'ev_farm_move', energy: 3, locationId: 'farm', icon: '🚚', once: true, weight: 0,
     title: { zh: '搬去农场' }, text: { zh: '老农的邀请还有效。搬家要一次搬完。' },
     conditions: [A, { type: 'flag', flag: 'farm_invite' }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 2, slots: [HERO, HELPER], check: { attrs: ['strength', 'mind'] },
     outcomes: {

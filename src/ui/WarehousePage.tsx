@@ -35,6 +35,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
         <div className="mt-1 flex flex-wrap gap-1">
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.moveToSpace(s, c.instanceId, !c.inSpace))}>{c.inSpace ? t('action.fromSpace') : t('action.toSpace')}</button>
           {d.kind === 'equipment' && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.equip(s, 'hero', c.instanceId))}>{t('action.equip')}</button>}
+          {d.kind === 'supply' && d.onUse && <button className="rounded bg-emerald-900 px-2 py-0.5" onClick={() => store.act((s) => engine.useItem(s, c.instanceId))}>{t('action.use')}</button>}
           {giftTarget && d.kind === 'supply' && <button className="rounded bg-pink-900 px-2 py-0.5" onClick={() => store.act((s) => engine.gift(s, giftTarget, c.instanceId))}>{t('action.gift')}</button>}
           {(d.kind === 'supply' || d.kind === 'equipment') && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.sell(s, c.instanceId, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.sell')}</button>}
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.discard(s, c.instanceId))}>{t('action.discard')}</button>

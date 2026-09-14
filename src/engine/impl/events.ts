@@ -17,7 +17,7 @@ export function drawEvents(ci: ContentIndex, state: GameState, rng: Rng): void {
   const inProgress = new Set(state.placements.map((p) => p.eventId))
   for (const loc of ci.pack.locations) {
     if (loc.phase !== 'both' && loc.phase !== state.time.phase) continue
-    const pool = ci.pack.events.filter((e) => e.locationId === loc.id && isEventEligible(ci, state, e, rng))
+    const pool = ci.pack.events.filter((e) => !e.instant && e.locationId === loc.id && isEventEligible(ci, state, e, rng))
     const fixed = pool.filter((e) => e.weight <= 0 || inProgress.has(e.id))
     let random = pool.filter((e) => e.weight > 0 && !inProgress.has(e.id))
     const picked: EventDef[] = [...fixed]
@@ -32,6 +32,36 @@ export function drawEvents(ci: ContentIndex, state: GameState, rng: Rng): void {
   state.drawnEvents = drawn
 }
 
+/** 周初抽一个即时选择事件（50% 概率） */
+export function drawChoice(ci: ContentIndex, state: GameState, rng: Rng): void {
+  state.pendingChoice = null
+  if (!rng.chance(0.5)) return
+  const pool = ci.pack.events.filter((e) => e.instant && e.choices?.length && isEventEligible(ci, state, e, rng))
+  const e = rng.weighted(pool, (x) => Math.max(1, x.weight))
+  if (e) state.pendingChoice = e.id
+}
+
+export function resolveChoice(ci: ContentIndex, state: GameState, rng: Rng, choiceId: string): EventResult {
+  if (!state.pendingChoice) throw new EngineError('NO_CHOICE', 'no pending choice')
+  const e = ci.event(state.pendingChoice)
+  const choice = e.choices?.find((c) => c.id === choiceId)
+  if (!choice) throw new EngineError('NO_CHOICE', choiceId)
+  if (choice.conditions && !checkAll(ci, state, choice.conditions, rng)) throw new EngineError('NOT_ELIGIBLE', choiceId)
+  let dice = 0, successes = 0
+  let outcome: Outcome = 'fine'
+  if (choice.check) {
+    dice = Math.max(0, attrSum(state.hero.attrs, choice.check.attrs) + equipmentDice(ci, state, state.hero.equipment, choice.check.attrs) - (state.hero.health <= 3 ? 1 : 0))
+    successes = rng.roll(dice, choice.check.successChance ?? 0.5)
+    outcome = outcomeFromSuccesses(successes, choice.check.legendaryAt)
+  }
+  const picked = pickBranch(choice, outcome)
+  applyEffects({ ci, state, rng, actorId: 'hero' }, picked.branch.effects)
+  if (e.once) state.usedOnceEvents.push(e.id)
+  state.pendingChoice = null
+  state.diary.push({ turn: state.turn, text: picked.branch.text })
+  return { eventId: e.id, outcome: picked.outcome, successes, diceCount: dice, text: picked.branch.text, effects: picked.branch.effects }
+}
+
 export function isEventEligible(ci: ContentIndex, state: GameState, e: EventDef, rng?: Rng): boolean {
   if (e.once && state.usedOnceEvents.includes(e.id)) return false
   if (ci.lockedEvents.has(e.id) && !state.unlockedEvents.includes(e.id)) return false
@@ -43,19 +73,22 @@ export function availableEvents(ci: ContentIndex, state: GameState): EventDef[] 
   return ids.map((id) => ci.events.get(id)).filter((e): e is EventDef => !!e)
 }
 
+/** 已被本周其它放卡占用的 id（主角可以多次参与，靠精力限制） */
 function assignedIds(state: GameState): Set<string> {
   const s = new Set<string>()
-  for (const p of state.placements) for (const v of Object.values(p.assignments)) s.add(v)
+  for (const p of state.placements) for (const v of Object.values(p.assignments)) if (v !== 'hero') s.add(v)
   return s
 }
 
-export function eligibleForSlot(ci: ContentIndex, state: GameState, slot: SlotDef, exclude: Set<string>): string[] {
+export function eventEnergy(e: EventDef): number { return e.energy ?? 2 }
+
+export function eligibleForSlot(ci: ContentIndex, state: GameState, slot: SlotDef, exclude: Set<string>, event?: EventDef): string[] {
   const f: CardFilter = slot.accepts
   const equipped = new Set([...Object.values(state.hero.equipment), ...Object.values(state.people).flatMap((p) => Object.values(p.equipment))])
   const out: string[] = []
   switch (f.kind) {
     case 'hero':
-      if (state.hero.incapacitatedWeeks <= 0 && !exclude.has('hero')) out.push('hero')
+      if (state.hero.incapacitatedWeeks <= 0 && state.hero.energy >= (event ? eventEnergy(event) : 1)) out.push('hero')
       break
     case 'npc':
       for (const p of Object.values(state.people)) {
@@ -127,7 +160,7 @@ export function eligibleCards(ci: ContentIndex, state: GameState, eventId: strin
   const e = ci.event(eventId)
   const slot = e.slots.find((s) => s.id === slotId)
   if (!slot) throw new EngineError('NO_SLOT', `slot ${slotId} not in ${eventId}`)
-  return eligibleForSlot(ci, state, slot, assignedIds(state))
+  return eligibleForSlot(ci, state, slot, assignedIds(state), e)
 }
 
 export function place(ci: ContentIndex, state: GameState, placement: Omit<Placement, 'startedTurn' | 'resolvesAtTurn'>): void {
@@ -143,20 +176,22 @@ export function place(ci: ContentIndex, state: GameState, placement: Omit<Placem
       continue
     }
     if (usedHere.has(v)) throw new EngineError('DUPLICATE', `${v} used twice`)
-    const ok = eligibleForSlot(ci, state, slot, exclude)
-    if (!ok.includes(v)) throw new EngineError('NOT_ELIGIBLE', `${v} cannot go in ${slot.id}`)
+    const ok = eligibleForSlot(ci, state, slot, exclude, e)
+    if (!ok.includes(v)) throw new EngineError('NOT_ELIGIBLE', v === 'hero' ? `精力不够（需要 ${eventEnergy(e)}）` : `${v} cannot go in ${slot.id}`)
     usedHere.add(v)
   }
+  if (usedHere.has('hero')) state.hero.energy -= eventEnergy(e)
   for (const v of usedHere) if (state.people[v]) state.people[v].busyWithEventId = e.id
   state.placements.push({ eventId: e.id, assignments: { ...placement.assignments }, startedTurn: state.turn, resolvesAtTurn: state.turn + Math.max(1, e.durationWeeks) })
 }
 
-export function unplace(state: GameState, eventId: string): void {
+export function unplace(ci: ContentIndex, state: GameState, eventId: string): void {
   const i = state.placements.findIndex((p) => p.eventId === eventId)
   if (i < 0) throw new EngineError('NOT_PLACED', `${eventId} not placed`)
   if (state.placements[i].startedTurn !== state.turn) throw new EngineError('IN_PROGRESS', `${eventId} already in progress`)
   const p = state.placements.splice(i, 1)[0]
   for (const v of Object.values(p.assignments)) if (state.people[v]) state.people[v].busyWithEventId = undefined
+  if (Object.values(p.assignments).includes('hero')) state.hero.energy += eventEnergy(ci.event(eventId))
 }
 
 export function outcomeFromSuccesses(s: number, legendaryAt?: number): Outcome {
@@ -169,7 +204,7 @@ export function outcomeFromSuccesses(s: number, legendaryAt?: number): Outcome {
 
 const OUTCOME_ORDER: Outcome[] = ['fail', 'common', 'fine', 'rare', 'legendary']
 
-function pickBranch(e: EventDef, o: Outcome) {
+export function pickBranch(e: { outcomes: EventDef['outcomes'] }, o: Outcome) {
   let i = OUTCOME_ORDER.indexOf(o)
   while (i >= 0) {
     const b = e.outcomes[OUTCOME_ORDER[i]]

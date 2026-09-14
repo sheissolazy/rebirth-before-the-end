@@ -11,6 +11,7 @@ import { powers } from './powers'
 import { endings } from './endings'
 import { survivorTraits, survivorNames } from './survivors'
 import { lootTables, affixes } from './loot'
+import { startTraits } from './traits'
 
 /** 当前内容包。空数组的部分按 docs/tasks 逐步填。 */
 export const content: ContentPack = {
@@ -29,6 +30,7 @@ export const content: ContentPack = {
   factions,
   memories: memoriesYear1,
   endings,
+  startTraits,
   rebirthShop: [
     { id: 'shop_weeks', name: { zh: '更早醒来' }, desc: { zh: '序章 +4 周，最多到 48 周。' }, cost: [10, 20, 40, 80, 120, 160, 200, 250, 300, 350, 400], effect: { type: 'prologueWeeks', delta: 4 } },
     { id: 'shop_money', name: { zh: '一笔意外之财' }, desc: { zh: '开局 +5 万。' }, cost: [10, 20, 40, 80], effect: { type: 'money', delta: 50000 } },
@@ -37,5 +39,6 @@ export const content: ContentPack = {
     { id: 'shop_affection', name: { zh: '他好像记得你' }, desc: { zh: '选一位男主，初始好感 +20。' }, cost: [30, 60, 120], effect: { type: 'affection', delta: 20 } },
     { id: 'shop_dog', name: { zh: '它先找到了你' }, desc: { zh: '开局带一条狗。' }, cost: [20], effect: { type: 'pet', species: 'dog' } },
     { id: 'shop_keep', name: { zh: '带过去' }, desc: { zh: '一件装备跟你重生。' }, cost: [300], effect: { type: 'keepEquipment' } },
+    { id: 'shop_trait', name: { zh: '更清晰的自己' }, desc: { zh: '开局特质预算 +1。' }, cost: [15, 30, 60, 120, 200], effect: { type: 'traitPoints', delta: 1 } },
   ],
 }

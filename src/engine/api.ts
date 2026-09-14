@@ -4,7 +4,7 @@
  */
 import type {
   ContentPack, GameState, NewGameOptions, Placement, WeekReport, EventDef, GameTime, Turn,
-  CompanionJob, MetaProgress,
+  CompanionJob, MetaProgress, EventResult,
 } from './types'
 
 export const PROLOGUE_DEFAULT_WEEKS = 4
@@ -37,6 +37,10 @@ export interface GameEngine {
   /** 把卡放进/拿出空间 */
   moveToSpace(state: GameState, instanceId: string, inSpace: boolean): GameState
   discard(state: GameState, instanceId: string): GameState
+  /** 使用消耗品（咖啡等） */
+  useItem(state: GameState, instanceId: string): GameState
+  /** 处理周初的即时选择事件 */
+  choose(state: GameState, choiceId: string): { state: GameState; result: EventResult }
   /** 一世结束后结算重生点 */
   settle(state: GameState, meta: MetaProgress): MetaProgress
   /** UI 展示用的派生数据（防御、仓库占用、危机分、检定预览） */
@@ -46,6 +50,7 @@ export interface GameEngine {
 }
 
 export interface DerivedStats {
+  energyMax: number
   defense: number
   storageUsed: number
   storageCap: number

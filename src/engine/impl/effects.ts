@@ -19,7 +19,7 @@ export function grantCard(ctx: EffectCtx, defId: string, opts: { affix?: boolean
   const def = ci.card(defId)
   const inst: CardInstance = { instanceId: rng.id('c'), defId }
   if (def.kind === 'supply' && def.shelfLifeWeeks) inst.expiresAtTurn = state.turn + def.shelfLifeWeeks
-  if (def.kind === 'supply' && (def.supplyKind === 'food' || def.supplyKind === 'water')) inst.unitsLeft = def.units ?? 1
+  if (def.kind === 'supply' && (def.supplyKind === 'food' || def.supplyKind === 'water' || def.units !== undefined)) inst.unitsLeft = def.units ?? 1
   if (def.kind === 'equipment' && opts.affix && ci.pack.affixes.length && rng.chance(0.5)) {
     inst.affixIds = [rng.pick(ci.pack.affixes).id]
   }
@@ -150,6 +150,10 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     case 'adoptPet': if (ci.pets.has(ef.petId)) state.pets.push({ id: rng.id('pet'), defId: ef.petId, alive: true }); break
     case 'losePet': { const p = state.pets.find((x) => x.defId === ef.petId && x.alive); if (p) p.alive = false; break }
     case 'rebirthPoints': state.rebirthPointsEarned += ef.delta; break
+    case 'energy':
+      if (ef.permanent) h.energyBonus += ef.delta
+      h.energy = Math.max(0, h.energy + ef.delta)
+      break
     case 'ending': state.ending = ef.endingId; break
   }
   void report

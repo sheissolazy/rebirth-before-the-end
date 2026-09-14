@@ -47,9 +47,15 @@ describe('content integrity', () => {
       if (!e.outcomes.fine) problems.push(`${e.id}: missing fine outcome`)
       if (e.check && !e.outcomes.fail) problems.push(`${e.id}: check without fail outcome`)
       if (e.storylineNpcId && !npcIds.has(e.storylineNpcId)) problems.push(`${e.id}: storyline ${e.storylineNpcId}`)
-      if (!e.slots.some((s) => s.required)) problems.push(`${e.id}: no required slot`)
+      if (!e.instant && !e.slots.some((s) => s.required)) problems.push(`${e.id}: no required slot`)
+      if (e.instant && !e.choices?.length) problems.push(`${e.id}: instant without choices`)
       for (const c of e.conditions) checkCondition(e.id, c, problems)
       for (const [k, b] of Object.entries(e.outcomes)) for (const ef of b?.effects ?? []) checkEffect(`${e.id}.${k}`, ef, problems)
+      for (const ch of e.choices ?? []) {
+        for (const c of ch.conditions ?? []) checkCondition(`${e.id}/${ch.id}`, c, problems)
+        if (ch.check && !ch.outcomes.fail) problems.push(`${e.id}/${ch.id}: check without fail outcome`)
+        for (const [k, b] of Object.entries(ch.outcomes)) for (const ef of b?.effects ?? []) checkEffect(`${e.id}/${ch.id}.${k}`, ef, problems)
+      }
     }
     expect(problems).toEqual([])
   })
@@ -66,6 +72,7 @@ describe('content integrity', () => {
     }
     for (const m of content.modules) for (const e of m.provides) if (e.type === 'produce' && !cardIds.has(e.cardId)) problems.push(`${m.id}: produce ${e.cardId}`)
     for (const l of content.lootTables) for (const e of l.entries) if (!cardIds.has(e.cardId)) problems.push(`${l.id}: ${e.cardId}`)
+    for (const t of content.startTraits) for (const ef of t.effects) checkEffect(`trait ${t.id}`, ef, problems)
     for (const f of content.factions) if (f.leaderNpcId && !npcIds.has(f.leaderNpcId)) problems.push(`${f.id}: leader ${f.leaderNpcId}`)
     expect(problems).toEqual([])
   })

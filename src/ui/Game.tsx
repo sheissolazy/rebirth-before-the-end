@@ -9,6 +9,7 @@ import { WarehousePage } from './WarehousePage'
 import { PeoplePage } from './PeoplePage'
 import { DiaryPage } from './DiaryPage'
 import { WeekReportModal } from './WeekReportModal'
+import { ChoiceModal } from './ChoiceModal'
 
 type Tab = 'map' | 'base' | 'warehouse' | 'people' | 'diary'
 const TABS: Tab[] = ['map', 'base', 'warehouse', 'people', 'diary']
@@ -34,6 +35,7 @@ export function Game({ state, store }: { state: GameState; store: Store }) {
         </div>
       </nav>
       {store.report && <WeekReportModal report={store.report} state={state} onClose={store.dismissReport} />}
+      {!store.report && (state.pendingChoice || store.choiceResult) && <ChoiceModal state={state} store={store} />}
       {store.error && (
         <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded bg-red-800 px-4 py-2 text-sm" onClick={store.clearError}>{store.error}</div>
       )}

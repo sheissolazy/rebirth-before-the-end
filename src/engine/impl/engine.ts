@@ -5,13 +5,14 @@ import { RARITY_POINTS, RARITY_ORDER } from '../types'
 import { EngineError, turnToTime, PROLOGUE_DEFAULT_WEEKS, type GameEngine } from '../api'
 import { ContentIndex } from './content'
 import { Rng, seedToState } from './rng'
-import { availableEvents, eligibleCards, place, unplace, drawEvents, diceFor } from './events'
+import { availableEvents, eligibleCards, place, unplace, drawEvents, diceFor, drawChoice, resolveChoice } from './events'
 import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax,
 } from './helpers'
+import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
 
 const BUILDS: Record<NewGameOptions['build'], { strength: number; mind: number; charm: number }> = {
@@ -52,7 +53,7 @@ export function createEngine(content: ContentPack): GameEngine {
     const state: GameState = {
       seed, rngState: rngHolder.rngState, prologueWeeks, turn: 0, time: turnToTime(0, prologueWeeks),
       hero: {
-        name: { zh: '林知夏' }, attrs, health: 10, exposure: 0, butterfly: 0, employed: true, skippedWorkStreak: 0, incapacitatedWeeks: 0,
+        name: { zh: '林知夏' }, attrs, energy: 0, energyBonus: 0, health: 10, exposure: 0, butterfly: 0, employed: true, skippedWorkStreak: 0, incapacitatedWeeks: 0,
         equipment: {}, spaceRarity: bought('shop_space') > 0 ? 'fine' : 'common', debt: 0,
       },
       money: 50000 + bought('shop_money') * 50000,
@@ -63,7 +64,7 @@ export function createEngine(content: ContentPack): GameEngine {
       factions: Object.fromEntries(content.factions.map((f) => [f.id, { relation: f.initialRelation }])),
       crisis: null,
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
-      drawnEvents: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
+      drawnEvents: {}, pendingChoice: null, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
       lastReport: null, rebirthPointsEarned: 0, ending: null,
     }
@@ -71,7 +72,15 @@ export function createEngine(content: ContentPack): GameEngine {
     // 开局手里有点东西
     for (const id of ['supply_rice_5kg', 'supply_water_box', 'supply_veg']) if (ci.cards.has(id)) grantCard(ctx, id)
     if (bought('shop_dog') > 0 && ci.pets.has('pet_dog')) state.pets.push({ id: rng.id('pet'), defId: 'pet_dog', alive: true })
+    // 开局特质
+    const traits = (options.traits ?? []).map((id) => content.startTraits.find((t) => t.id === id)).filter((t): t is NonNullable<typeof t> => !!t)
+    const budget = meta.traitPoints + bought('shop_trait')
+    const spent = traits.reduce((t, x) => t + x.cost, 0)
+    if (spent > budget) throw new EngineError('TRAIT_BUDGET', `特质需要 ${spent} 点，只有 ${budget} 点`)
+    for (const t of traits) applyEffects(ctx, t.effects)
+    state.hero.energy = energyMax(state)
     drawEvents(ci, state, rng)
+    drawChoice(ci, state, rng)
     state.rngState = rngHolder.rngState
     return state
   }
@@ -111,7 +120,7 @@ export function createEngine(content: ContentPack): GameEngine {
     availableEvents: (state) => availableEvents(ci, state),
     eligibleCards: (state, eventId, slotId) => eligibleCards(ci, state, eventId, slotId),
     place: (state, placement) => mutate(state, (s) => place(ci, s, placement)),
-    unplace: (state, eventId) => mutate(state, (s) => unplace(s, eventId)),
+    unplace: (state, eventId) => mutate(state, (s) => unplace(ci, s, eventId)),
     assignJob: (state, personId, job: CompanionJob) => mutate(state, (s) => {
       const p = s.people[personId]
       if (!p || !p.alive || !p.inBase) throw new EngineError('NO_PERSON', personId)
@@ -225,7 +234,21 @@ export function createEngine(content: ContentPack): GameEngine {
       inst.inSpace = inSpace
     }),
     discard: (state, instanceId) => mutate(state, (s) => { if (!removeCard(s, instanceId)) throw new EngineError('NO_CARD', instanceId) }),
+    useItem: (state, instanceId) => mutate(state, (s, rng) => {
+      const inst = findCard(s, instanceId)
+      if (!inst) throw new EngineError('NO_CARD', instanceId)
+      const def = ci.card(inst.defId)
+      if (def.kind !== 'supply' || !def.onUse) throw new EngineError('NOT_USABLE', instanceId)
+      applyEffects({ ci, state: s, rng, actorId: 'hero' }, def.onUse)
+      if (inst.unitsLeft !== undefined && inst.unitsLeft > 1) inst.unitsLeft--
+      else removeCard(s, instanceId)
+    }),
+    choose: (state, choiceId) => {
+      const r = withState(state, (s, rng) => resolveChoice(ci, s, rng, choiceId))
+      return { state: r.state, result: r.result }
+    },
     stats: (state) => ({
+      energyMax: energyMax(state),
       defense: baseDefense(ci, state),
       storageUsed: usedStorage(ci, state, false), storageCap: baseStorage(ci, state),
       spaceUsed: usedStorage(ci, state, true), spaceCap: spaceStorage(state),
@@ -239,6 +262,7 @@ export function createEngine(content: ContentPack): GameEngine {
       const pts = state.rebirthPointsEarned + (ending?.rebirthPoints ?? 0)
       return {
         rebirthPoints: meta.rebirthPoints + pts,
+        traitPoints: (meta.traitPoints ?? 0) + 1,
         rebirths: meta.rebirths + 1,
         unlockedEndings: state.ending && !meta.unlockedEndings.includes(state.ending) ? [...meta.unlockedEndings, state.ending] : meta.unlockedEndings,
         purchased: { ...meta.purchased },

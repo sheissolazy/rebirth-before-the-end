@@ -101,6 +101,8 @@ export interface SupplyCardDef extends CardDefBase {
   basePrice: number
   /** 序章是否能买到（枪 = false，只能黑市/门路） */
   buyable: boolean
+  /** 可主动使用（咖啡、功能饮料、维生素…）：使用时的效果，用掉一份 */
+  onUse?: Effect[]
 }
 
 export type EquipSlot = 'weapon' | 'armor' | 'accessory'
@@ -384,11 +386,21 @@ export type Effect =
   | { type: 'adoptPet'; petId: string }
   | { type: 'losePet'; petId: string }
   | { type: 'rebirthPoints'; delta: number }
+  | { type: 'energy'; delta: number; permanent?: boolean }
   | { type: 'ending'; endingId: string }
 
 export interface OutcomeBranch {
   text: LocalizedText
   effects: Effect[]
+}
+
+/** 选择事件的一个选项 */
+export interface ChoiceDef {
+  id: string
+  label: LocalizedText
+  conditions?: Condition[]
+  check?: CheckDef
+  outcomes: Partial<Record<Outcome, OutcomeBranch>> & { fine: OutcomeBranch }
 }
 
 export interface EventDef {
@@ -397,6 +409,11 @@ export interface EventDef {
   title: LocalizedText
   text: LocalizedText
   icon?: string
+  /** 女主参与需要的精力（默认 2）。伙伴不耗精力 */
+  energy?: number
+  /** 即时选择事件：周初弹出，当场选一个选项结算，不占槽位。locationId 可为 '' */
+  instant?: boolean
+  choices?: ChoiceDef[]
   conditions: Condition[]
   /** 事件牌堆权重（剧情事件设 0 = 必出） */
   weight: number
@@ -435,6 +452,15 @@ export interface EndingDef {
   rebirthPoints: number
 }
 
+/** 开局特质：cost > 0 花预算，cost < 0 给预算 */
+export interface StartTraitDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  cost: number
+  effects: Effect[]
+}
+
 /** 重生点商店条目 */
 export interface RebirthShopItemDef {
   id: string
@@ -450,6 +476,7 @@ export interface RebirthShopItemDef {
     | { type: 'affection'; delta: number }      // 选一位男主
     | { type: 'pet'; species: 'dog' | 'cat' }
     | { type: 'keepEquipment' }
+    | { type: 'traitPoints'; delta: number }
 }
 
 /** 内容包 */
@@ -470,6 +497,7 @@ export interface ContentPack {
   memories: MemoryEntryDef[]
   endings: EndingDef[]
   rebirthShop: RebirthShopItemDef[]
+  startTraits: StartTraitDef[]
 }
 
 // ---------- 运行时状态 ----------
@@ -510,6 +538,10 @@ export interface PersonState {
 export interface HeroState {
   name: LocalizedText
   attrs: Attrs
+  /** 本周剩余精力 */
+  energy: number
+  /** 永久精力上限加成（特质、稀有药） */
+  energyBonus: number
   health: number       // 0~10
   exposure: number     // 0~100
   butterfly: number    // 0~100
@@ -596,6 +628,8 @@ export interface GameState {
   forecast: Array<{ month: number; crisisKind: CrisisKind; rarity?: Rarity; memory: LocalizedText }>
   /** 本周各地点抽出的事件 */
   drawnEvents: Record<string, string[]>
+  /** 周初弹出的即时选择事件（必须先处理才能过周） */
+  pendingChoice: string | null
   placements: Placement[]
   flags: Record<string, boolean>
   unlockedEvents: string[]
@@ -610,6 +644,8 @@ export interface GameState {
 
 export interface MetaProgress {
   rebirthPoints: number
+  /** 开局特质预算（每过一世 +1，商店可买） */
+  traitPoints: number
   rebirths: number
   unlockedEndings: string[]
   purchased: Record<string, number>   // shopItemId -> 次数
@@ -618,6 +654,8 @@ export interface MetaProgress {
 export interface NewGameOptions {
   seed?: string
   build: 'balanced' | 'strength' | 'mind' | 'charm'
+  /** 选中的开局特质 id */
+  traits?: string[]
   meta: MetaProgress
   /** 本世应用的商店效果 */
   bonusNpcId?: string

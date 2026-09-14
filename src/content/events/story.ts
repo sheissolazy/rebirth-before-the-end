@@ -44,7 +44,7 @@ export const storyEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_guchen_05', locationId: 'home', icon: '⚡', once: true, weight: 0, storylineNpcId: 'guchen',
+    id: 'ev_guchen_05', energy: 1, locationId: 'home', icon: '⚡', once: true, weight: 0, storylineNpcId: 'guchen',
     title: { zh: '"住到我这里来"' }, text: { zh: '他站在你门口，说的是军区。你说的是这里。' },
     conditions: [A, { type: 'affectionAtLeast', npcId: 'guchen', rank: 'crush' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
@@ -88,7 +88,7 @@ export const storyEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_shenyan_04', locationId: 'home', icon: '🩺', once: true, weight: 0, storylineNpcId: 'shenyan',
+    id: 'ev_shenyan_04', energy: 1, locationId: 'home', icon: '🩺', once: true, weight: 0, storylineNpcId: 'shenyan',
     title: { zh: '实验室搬进你家' }, text: { zh: '他需要一个稳定的地方。你有。' },
     conditions: [A, { type: 'affectionAtLeast', npcId: 'shenyan', rank: 'crush' }], durationWeeks: 1, slots: [HERO, GIFT('energy', '给实验室供电')],
     check: { attrs: ['charm', 'mind'] },
@@ -111,7 +111,7 @@ export const storyEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_xielin_02', locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
+    id: 'ev_xielin_02', energy: 1, locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
     title: { zh: '交换记忆' }, text: { zh: '他知道第三年以后的事。你知道他不知道的细节。谁先说？' },
     conditions: [A, { type: 'month', from: 1, to: 4 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
     outcomes: {
@@ -133,7 +133,7 @@ export const storyEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_xielin_04', locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
+    id: 'ev_xielin_04', energy: 1, locationId: 'home', icon: '⏳', once: true, weight: 0, storylineNpcId: 'xielin',
     title: { zh: '两个重生者的基地' }, text: { zh: '"分开囤，两边都不够。"他说，"合起来。"' },
     conditions: [A, { type: 'affectionAtLeast', npcId: 'xielin', rank: 'crush' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
     outcomes: {
@@ -167,7 +167,7 @@ export const storyEvents: EventDef[] = [
   },
   // ================= 阿寂 =================
   {
-    id: 'ev_aji_01', locationId: 'home', icon: '🧟', once: true, weight: 0, storylineNpcId: 'aji',
+    id: 'ev_aji_01', energy: 1, locationId: 'home', icon: '🧟', once: true, weight: 0, storylineNpcId: 'aji',
     title: { zh: '不会腐烂的男人' }, text: { zh: '十二月。极寒。尸潮外面站着一个人。所有丧尸绕开他走。他抬头看着你的窗。' },
     conditions: [A, { type: 'month', from: 12, to: 12 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {
@@ -179,7 +179,7 @@ export const storyEvents: EventDef[] = [
   },
   // ================= 修罗场 =================
   {
-    id: 'ev_home_confrontation', locationId: 'home', icon: '💔', once: true, weight: 0,
+    id: 'ev_home_confrontation', energy: 1, locationId: 'home', icon: '💔', once: true, weight: 0,
     title: { zh: '他们在同一张桌子上' }, text: { zh: '谁都没说话。你知道他们都知道。' },
     conditions: [A, { type: 'flag', flag: 'two_crushes' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {

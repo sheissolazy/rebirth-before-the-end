@@ -1,5 +1,5 @@
 import type { EventDef } from '../../engine/types'
-import { HERO, GIFT, LEAD } from './_slots'
+import { HERO, GIFT, LEAD, HELPER } from './_slots'
 
 const P = { type: 'phase', phase: 'prologue' } as const
 
@@ -23,16 +23,16 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_office_quit', locationId: 'office', icon: '🚪', once: true, weight: 0,
+    id: 'ev_office_quit', energy: 1, locationId: 'office', icon: '🚪', once: true, weight: 0,
     title: { zh: '辞职' }, text: { zh: '把最后四周留给自己。' },
     conditions: [P, { type: 'employed', value: true }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '你交了工牌。走出大楼时，风很大。' }, effects: [{ type: 'employment', value: false }, { type: 'money', delta: 3000 }] } },
   },
   // ---- 超市 ----
   {
-    id: 'ev_supermarket_bulk', locationId: 'supermarket', icon: '🛒', repeatable: true, weight: 10,
+    id: 'ev_supermarket_bulk', energy: 3, locationId: 'supermarket', icon: '🛒', repeatable: true, weight: 10,
     title: { zh: '大宗采购' }, text: { zh: '推三辆车。收银员多看了你一眼。' },
-    conditions: [P, { type: 'moneyAtLeast', amount: 2000 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['strength', 'mind'] },
+    conditions: [P, { type: 'moneyAtLeast', amount: 2000 }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '限购。你只带回来一点。' }, effects: [{ type: 'money', delta: -500 }, { type: 'gainCard', cardId: 'supply_rice_5kg' }, { type: 'gainCard', cardId: 'supply_water_box' }] },
       common: { text: { zh: '搬了两趟。' }, effects: [{ type: 'money', delta: -1500 }, { type: 'gainCard', cardId: 'supply_rice_5kg', count: 3 }, { type: 'gainCard', cardId: 'supply_water_box', count: 3 }, { type: 'gainCard', cardId: 'supply_canned', count: 2 }] },
@@ -55,7 +55,7 @@ export const prologueEvents: EventDef[] = [
   {
     id: 'ev_pharmacy_limit', locationId: 'pharmacy', icon: '💊', repeatable: true, weight: 10,
     title: { zh: '买药' }, text: { zh: '抗生素限购一盒。你跑了三家。' },
-    conditions: [P, { type: 'moneyAtLeast', amount: 300 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
+    conditions: [P, { type: 'moneyAtLeast', amount: 300 }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['mind', 'charm'] },
     outcomes: {
       fail: { text: { zh: '店员要处方。' }, effects: [{ type: 'money', delta: -60 }, { type: 'gainCard', cardId: 'supply_bandage', count: 2 }] },
       common: { text: { zh: '买到一盒。' }, effects: [{ type: 'money', delta: -200 }, { type: 'gainCard', cardId: 'supply_antibiotics' }, { type: 'gainCard', cardId: 'supply_bandage', count: 2 }] },
@@ -67,7 +67,7 @@ export const prologueEvents: EventDef[] = [
   {
     id: 'ev_hardware_tools', locationId: 'hardware', icon: '🔧', repeatable: true, weight: 10,
     title: { zh: '买工具和材料' }, text: { zh: '钢条、木板、消防斧。老板问你是不是装修。' },
-    conditions: [P, { type: 'moneyAtLeast', amount: 500 }], durationWeeks: 1, slots: [HERO], check: { attrs: ['strength', 'mind'] },
+    conditions: [P, { type: 'moneyAtLeast', amount: 500 }], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '你搬不动。' }, effects: [{ type: 'money', delta: -200 }, { type: 'gainCard', cardId: 'supply_wood', count: 2 }] },
       common: { text: { zh: '雇了辆三轮车。' }, effects: [{ type: 'money', delta: -600 }, { type: 'gainCard', cardId: 'supply_steel', count: 2 }, { type: 'gainCard', cardId: 'supply_wood', count: 2 }] },
@@ -76,14 +76,14 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_hardware_generator', locationId: 'hardware', icon: '⚡', once: true, weight: 0,
+    id: 'ev_hardware_generator', energy: 3, locationId: 'hardware', icon: '⚡', once: true, weight: 0,
     title: { zh: '订一台发电机' }, text: { zh: '三千二。老板说要等一周。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 3200 }], durationWeeks: 2, slots: [HERO],
     outcomes: { fine: { text: { zh: '发电机到了。你一个人搬上了六楼。' }, effects: [{ type: 'money', delta: -3200 }, { type: 'gainCard', cardId: 'supply_generator' }, { type: 'gainCard', cardId: 'supply_gasoline', count: 2 }] } },
   },
   // ---- 黑市 ----
   {
-    id: 'ev_blackmarket_find', locationId: 'blackmarket', icon: '🕶️', once: true, weight: 0,
+    id: 'ev_blackmarket_find', energy: 3, locationId: 'blackmarket', icon: '🕶️', once: true, weight: 0,
     title: { zh: '找到那扇门' }, text: { zh: '上一世你听说过这个地方。地址在一个已经拆掉的网吧后面。' },
     conditions: [P], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind', 'charm'] },
     outcomes: {
@@ -123,31 +123,31 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_bank_repay', locationId: 'bank', icon: '💸', once: true, weight: 0,
+    id: 'ev_bank_repay', energy: 1, locationId: 'bank', icon: '💸', once: true, weight: 0,
     title: { zh: '提前还清' }, text: { zh: '催收电话一天十个。你可以还清，也可以等末日替你还。' },
     conditions: [P, { type: 'hasCard', cardId: 'trouble_loan' }, { type: 'moneyAtLeast', amount: 20000 }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '还清了。世界清静了四周。' }, effects: [{ type: 'money', delta: -20000 }, { type: 'loseCard', cardId: 'trouble_loan' }] } },
   },
   {
-    id: 'ev_bank_sell_car', locationId: 'bank', icon: '🚗', once: true, weight: 0,
+    id: 'ev_bank_sell_car', energy: 1, locationId: 'bank', icon: '🚗', once: true, weight: 0,
     title: { zh: '卖车' }, text: { zh: '末日之后没有加油站。' },
     conditions: [P], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '二手贩子压价压得很狠。你没还价。' }, effects: [{ type: 'money', delta: 40000 }, { type: 'stat', stat: 'butterfly', delta: 3 }] } },
   },
   {
-    id: 'ev_bank_lottery', locationId: 'bank', icon: '🎟️', once: true, weight: 0,
+    id: 'ev_bank_lottery', energy: 1, locationId: 'bank', icon: '🎟️', once: true, weight: 0,
     title: { zh: '买那张彩票' }, text: { zh: '你记得号码。一世只能中一次。' },
     conditions: [P], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '五百万。你的脸上了本地新闻。' }, effects: [{ type: 'money', delta: 5000000 }, { type: 'stat', stat: 'butterfly', delta: 25 }, { type: 'stat', stat: 'exposure', delta: 30 }, { type: 'gainCard', cardId: 'trouble_ex' }] } },
   },
   {
-    id: 'ev_bank_buy_villa', locationId: 'bank', icon: '🏡', once: true, weight: 0,
+    id: 'ev_bank_buy_villa', energy: 1, locationId: 'bank', icon: '🏡', once: true, weight: 0,
     title: { zh: '全款买别墅' }, text: { zh: '带院子，围墙两米。三百万。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 3000000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '你搬了家。中介说你是他见过最痛快的客户。' }, effects: [{ type: 'money', delta: -3000000 }, { type: 'moveBase', baseType: 'villa' }] } },
   },
   {
-    id: 'ev_bank_buy_farm', locationId: 'bank', icon: '🌾', once: true, weight: 0,
+    id: 'ev_bank_buy_farm', energy: 1, locationId: 'bank', icon: '🌾', once: true, weight: 0,
     title: { zh: '买郊区自建房' }, text: { zh: '有地，有井，离城四十公里。一百五十万。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 1500000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '房主是个老太太。她说"你一个女孩子住这么远做什么"。' }, effects: [{ type: 'money', delta: -1500000 }, { type: 'moveBase', baseType: 'farmhouse' }] } },
@@ -176,7 +176,7 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_social', locationId: 'home', icon: '💬', repeatable: true, weight: 4,
+    id: 'ev_home_social', energy: 1, locationId: 'home', icon: '💬', repeatable: true, weight: 4,
     title: { zh: '跟邻居混熟' }, text: { zh: '帮王阿姨拎菜，跟楼下小孩玩。' },
     conditions: [], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
@@ -187,24 +187,24 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
-    id: 'ev_home_adopt_cat', locationId: 'home', icon: '🐈', once: true, weight: 3,
+    id: 'ev_home_adopt_cat', energy: 1, locationId: 'home', icon: '🐈', once: true, weight: 3,
     title: { zh: '楼道里的猫' }, text: { zh: '它已经在你门口蹲了三天。' },
     conditions: [], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '你开了门。它进来的样子像是回家。' }, effects: [{ type: 'adoptPet', petId: 'pet_cat' }] } },
   },
   {
-    id: 'ev_home_call_parents', locationId: 'home', icon: '☎️', once: true, weight: 0,
+    id: 'ev_home_call_parents', energy: 1, locationId: 'home', icon: '☎️', once: true, weight: 0,
     title: { zh: '跟爸妈说清楚' }, text: { zh: '你不能说实话。但你可以让他们也囤点东西。' },
-    conditions: [P], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
+    conditions: [P, { type: 'npcInBase', npcId: 'dad', value: false }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
     outcomes: {
       fail: { text: { zh: '妈妈哭了。她觉得你被骗了。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 3 }] },
       common: { text: { zh: '他们答应买点米。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }] },
-      fine: { text: { zh: '爸爸说"你从小就有主意"。他们开始囤了。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }] },
-      rare: { text: { zh: '爸爸转了你十万。"别问，拿着。"' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'money', delta: 100000 }] },
+      fine: { text: { zh: '爸爸说"你从小就有主意"。第二天他们提着行李来了，还带了三万块。' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 30000 }] },
+      rare: { text: { zh: '爸爸转了你十万，然后和妈妈一起搬了过来。"别问，拿着。"' }, effects: [{ type: 'loseCard', cardId: 'trouble_parents' }, { type: 'setFlag', flag: 'parents_prepared' }, { type: 'npcJoin', npcId: 'dad' }, { type: 'npcJoin', npcId: 'mom' }, { type: 'money', delta: 100000 }] },
     },
   },
   {
-    id: 'ev_home_block_ex', locationId: 'home', icon: '🚫', once: true, weight: 0,
+    id: 'ev_home_block_ex', energy: 1, locationId: 'home', icon: '🚫', once: true, weight: 0,
     title: { zh: '拉黑周明宇' }, text: { zh: '他又发来消息："听说你最近很有钱？"' },
     conditions: [{ type: 'hasCard', cardId: 'trouble_ex' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['mind'] },
     outcomes: {

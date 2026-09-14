@@ -45,6 +45,18 @@ export const npcs: NpcDef[] = [
     skillCardIds: [], initialAffection: 30, factionId: 'army',
   },
   {
+    id: 'dad', name: { zh: '爸爸' }, title: { zh: '退休工人' }, icon: '👨', rarity: 'fine',
+    bio: { zh: '话不多，手很稳。你没法告诉他真相，但他会信你。' },
+    romanceable: false, attrs: { strength: 3, mind: 2, charm: 2 }, needs: 'medicine',
+    skillCardIds: [], initialAffection: 60,
+  },
+  {
+    id: 'mom', name: { zh: '妈妈' }, title: { zh: '退休会计' }, icon: '👩', rarity: 'fine',
+    bio: { zh: '精打细算。末日后她管仓库比你管得好。' },
+    romanceable: false, attrs: { strength: 1, mind: 3, charm: 3 }, needs: 'daily',
+    skillCardIds: [], initialAffection: 60,
+  },
+  {
     id: 'auntwang', name: { zh: '王阿姨' }, title: { zh: '楼长' }, icon: '👵', rarity: 'common',
     bio: { zh: '小区里什么都管，也什么都知道。' },
     romanceable: false, attrs: { strength: 1, mind: 2, charm: 3 }, needs: 'daily',

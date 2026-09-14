@@ -11,6 +11,7 @@ export function TopBar({ state }: { state: GameState }) {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <span className="font-semibold">{timeLabel(state)}</span>
         <span>{state.time.phase === 'prologue' ? `💰 ${state.money.toLocaleString()}` : `💎 ${st.corePoints}`}</span>
+        <span>⚡ {state.hero.energy}/{st.energyMax}</span>
         <span>❤️ {state.hero.health}/10</span>
         <span>👁 {state.hero.exposure}</span>
         <span>🛡 {st.defense}</span>
