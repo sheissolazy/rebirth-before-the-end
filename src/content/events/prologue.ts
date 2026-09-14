@@ -201,7 +201,7 @@ export const prologueEvents: EventDef[] = [
   {
     id: 'ev_home_social', energy: 1, locationId: 'home', icon: '💬', repeatable: true, weight: 4,
     title: { zh: '跟邻居混熟' }, text: { zh: '帮王阿姨拎菜，跟楼下小孩玩。' },
-    conditions: [{ type: 'not', cond: { type: 'baseType', baseType: 'farmhouse' } }, { type: 'not', cond: { type: 'baseType', baseType: 'bunker' } }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    conditions: [P, { type: 'not', cond: { type: 'baseType', baseType: 'farmhouse' } }, { type: 'not', cond: { type: 'baseType', baseType: 'bunker' } }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '王阿姨问你是不是传销。' }, effects: [] },
       common: { text: { zh: '你知道了谁家有老人、谁家有狗。' }, effects: [{ type: 'affection', npcId: 'auntwang', delta: 5 }] },
@@ -212,7 +212,7 @@ export const prologueEvents: EventDef[] = [
   {
     id: 'ev_home_village', locationId: 'home', icon: '🧑‍🌾', repeatable: true, weight: 4,
     title: { zh: '跟村里人混熟' }, text: { zh: '帮隔壁老张修水泵，听他讲哪块地涝。' },
-    conditions: [{ type: 'baseType', baseType: 'farmhouse' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    conditions: [P, { type: 'baseType', baseType: 'farmhouse' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '他们觉得城里来的姑娘待不久。' }, effects: [] },
       common: { text: { zh: '老张送了你一筐土豆。' }, effects: [{ type: 'gainCard', cardId: 'supply_seed_potato' }] },

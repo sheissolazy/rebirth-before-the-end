@@ -108,7 +108,8 @@ function runJobs(ci: ContentIndex, state: GameState, rng: Rng, report: WeekRepor
   if (state.time.phase !== 'apocalypse') return
   const ctx: EffectCtx = { ci, state, rng, report }
   const farmMods = state.base.modules.some((m) => !m.damaged && ci.modules.get(m.moduleId)?.provides.some((e) => e.type === 'produce' && e.supplyKind === 'food'))
-  const trainBonus = state.base.modules.reduce((s, m) => s + (m.damaged ? 0 : (ci.modules.get(m.moduleId)?.provides.find((e) => e.type === 'trainBonus')?.type === 'trainBonus' ? 2 : 0)), 0)
+  const hasTrainingGround = state.base.modules.some((m) => !m.damaged && ci.modules.get(m.moduleId)?.provides.some((e) => e.type === 'trainBonus'))
+  const trainCap = hasTrainingGround ? 8 : 6
   for (const p of Object.values(state.people)) {
     if (!p.alive || !p.inBase || p.busyWithEventId) continue
     switch (p.job) {
@@ -120,8 +121,11 @@ function runJobs(ci: ContentIndex, state: GameState, rng: Rng, report: WeekRepor
         break
       }
       case 'train': {
+        // 约 12%（有训练场 25%）每周 +1，越高越难；上限 6 / 8
         const attr = rng.pick(['strength', 'mind', 'charm'] as const)
-        if (rng.roll(2 + trainBonus, 0.5) >= 2) p.attrs[attr] = clamp(p.attrs[attr] + 1, 1, 10)
+        if (p.attrs[attr] >= trainCap) break
+        const chance = (hasTrainingGround ? 0.25 : 0.12) * (4 / (p.attrs[attr] + 1))
+        if (rng.chance(Math.min(0.5, chance))) p.attrs[attr] = clamp(p.attrs[attr] + 1, 1, trainCap)
         break
       }
       default: break

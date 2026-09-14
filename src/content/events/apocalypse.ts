@@ -50,6 +50,28 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
+    id: 'ev_home_neighbors_apoc', locationId: 'home', icon: '🏘️', repeatable: true, weight: 4,
+    title: { zh: '跟楼里的幸存者打交道' }, text: { zh: '还活着的几户人，谁有什么、谁缺什么，得摸清。' },
+    conditions: [A, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, energy: 1, slots: [HERO], check: { attrs: ['charm'] },
+    outcomes: {
+      fail: { text: { zh: '有人怀疑你囤了很多。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] },
+      common: { text: { zh: '换了点东西。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 1 }, { type: 'relation', factionId: 'alliance', delta: 3 }] },
+      fine: { text: { zh: '你们约好尸潮来时互相照应。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'relation', factionId: 'alliance', delta: 8 }] },
+      rare: { text: { zh: '四楼那家想搬来跟你一起住。' }, effects: [{ type: 'recruitRandom' }, { type: 'relation', factionId: 'alliance', delta: 8 }] },
+    },
+  },
+  {
+    id: 'ev_hunt_cores', locationId: 'apartments', icon: '💎', repeatable: true, weight: 0,
+    title: { zh: '猎杀丧尸取晶核' }, text: { zh: '晶核在丧尸后脑。一刀，一挖。这是末日后唯一的硬通货，也是升级异能的唯一办法。' },
+    conditions: [A], durationWeeks: 1, slots: [HERO, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    outcomes: {
+      fail: { text: { zh: '你被扑倒了。狗把它拖开的。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+      common: { text: { zh: '两颗。手上全是黑血。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 2 }] },
+      fine: { text: { zh: '五颗。你开始熟练了。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 4 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
+      rare: { text: { zh: '你遇到一只不一样的。它的晶核是蓝色的。' }, effects: [{ type: 'gainRandom', table: 'loot_zombie', count: 4 }, { type: 'gainCard', cardId: 'core_rare' }] },
+    },
+  },
+  {
     id: 'ev_home_train_all', locationId: 'home', icon: '🎯', repeatable: true, weight: 4,
     title: { zh: '带大家训练' }, text: { zh: '沙袋、木刀、绕楼跑。' },
     conditions: [A], durationWeeks: 1, slots: [HERO, HELPER], check: { attrs: ['strength', 'charm'] },
