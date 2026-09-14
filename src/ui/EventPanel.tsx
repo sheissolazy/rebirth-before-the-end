@@ -3,6 +3,7 @@ import type { EventDef, GameState } from '../engine/types'
 import { engine, type Store } from './store'
 import { t, lt } from '../i18n'
 import { optionLabel } from './lookup'
+import { describeEffects } from './effects'
 
 export function EventPanel({ state, event, store, onClose }: { state: GameState; event: EventDef; store: Store; onClose: () => void }) {
   const placed = state.placements.find((p) => p.eventId === event.id)
@@ -44,6 +45,12 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
           {event.resolvesCrisis && ` · 可解决${t(`crisisKind.${event.resolvesCrisis}`)}危机`}
         </p>
         {heroBlocked && <p className="mt-2 rounded bg-red-900/40 p-2 text-xs">{heroReason}</p>}
+        <details className="mt-2 text-xs text-zinc-500">
+          <summary className="cursor-pointer">各档结果能拿到什么</summary>
+          <ul className="mt-1 space-y-0.5">
+            {(['fail', 'common', 'fine', 'rare', 'legendary'] as const).map((k) => event.outcomes[k] ? <li key={k}><span className="text-zinc-300">{t(`outcome.${k}`)}</span>：{describeEffects(event.outcomes[k]!.effects) || '无直接效果'}</li> : null)}
+          </ul>
+        </details>
         <div className="mt-3 space-y-2">
           {event.slots.map((slot) => (
             <label key={slot.id} className="block text-sm">

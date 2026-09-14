@@ -629,6 +629,8 @@ export interface WeekReport {
   delivered: CardInstance[]
   /** 本周完工的模块 */
   builtModuleId?: string
+  /** 状态变化明细：健康/精力/忠诚/好感 的增减及原因 */
+  changes: Array<{ label: LocalizedText; delta: number; reason: LocalizedText }>
   crisisResult?: { crisisKind: CrisisKind; rarity: Rarity; survived: boolean; text: LocalizedText }
   deaths: string[]
   ending?: string
@@ -667,6 +669,9 @@ export interface GameState {
   usedOnceEvents: string[]
   diary: Array<{ turn: Turn; text: LocalizedText }>
   lastReport: WeekReport | null
+  /** 最近一次操作的反馈（用情报卡、送礼、装备、升级…），UI 弹一下 */
+  lastNotice: LocalizedText | null
+  noticeSeq: number
   rebirthPointsEarned: number
   ending: string | null
 }

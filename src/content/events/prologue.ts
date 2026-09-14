@@ -221,6 +221,17 @@ export const prologueEvents: EventDef[] = [
     },
   },
   {
+    id: 'ev_home_talk', kind: 'routine', energy: 1, locationId: 'home', icon: '🗣️', repeatable: true, weight: 0,
+    title: { zh: '练口才' }, text: { zh: '跟房东砍租、跟物业扯皮、在业主群里带节奏。末日后，会说话比会打架更能活。' },
+    conditions: [P], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
+    outcomes: {
+      fail: { text: { zh: '你被物业怼回来了。' }, effects: [] },
+      common: { text: { zh: '房东少收了两百。' }, effects: [{ type: 'money', delta: 200 }] },
+      fine: { text: { zh: '你发现自己越来越会说了。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }] },
+      rare: { text: { zh: '业主群里开始有人听你的。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'affection', npcId: 'auntwang', delta: 10 }] },
+    },
+  },
+  {
     id: 'ev_home_adopt_dog', kind: 'routine', energy: 1, locationId: 'home', icon: '🐕', once: true, weight: 0,
     title: { zh: '去收容所领养一条狗' }, text: { zh: '五百块领养费。末日后它会在尸潮来之前叫，守夜时比人靠得住。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 500 }, { type: 'not', cond: { type: 'hasPet', species: 'dog' } }], durationWeeks: 1, slots: [HERO],

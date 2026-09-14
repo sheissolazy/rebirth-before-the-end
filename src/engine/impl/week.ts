@@ -11,7 +11,21 @@ import { checkAll } from './conditions'
 import { EngineError } from '../api'
 
 function emptyReport(state: GameState): WeekReport {
-  return { time: state.time, news: [], eventResults: [], upkeep: { money: 0, food: 0, water: 0, health: 0, loyalty: 0 }, spoiled: [], produced: [], delivered: [], deaths: [] }
+  return { time: state.time, news: [], eventResults: [], upkeep: { money: 0, food: 0, water: 0, health: 0, loyalty: 0 }, spoiled: [], produced: [], delivered: [], deaths: [], changes: [] }
+}
+
+/** 记录一段逻辑前后 健康/忠诚/好感 的变化 */
+function track(ci: ContentIndex, state: GameState, report: WeekReport, reason: string, fn: () => void): void {
+  const h0 = state.hero.health
+  const loy = Object.fromEntries(Object.values(state.people).map((p) => [p.id, p.loyalty]))
+  const aff = Object.fromEntries(Object.values(state.people).map((p) => [p.id, p.affection]))
+  fn()
+  if (state.hero.health !== h0) report.changes.push({ label: { zh: '健康' }, delta: state.hero.health - h0, reason: { zh: reason } })
+  for (const p of Object.values(state.people)) {
+    const name = personName(ci, p).zh
+    if (p.loyalty !== loy[p.id] && isCompanion(ci, p)) report.changes.push({ label: { zh: `${name} 忠诚` }, delta: p.loyalty - loy[p.id], reason: { zh: reason } })
+    if (p.affection !== aff[p.id] && isRomanceable(ci, p)) report.changes.push({ label: { zh: `${name} 好感` }, delta: p.affection - aff[p.id], reason: { zh: reason } })
+  }
 }
 
 export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekReport {
@@ -34,7 +48,7 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   // 3. 结算到期事件
   const due = state.placements.filter((p) => p.resolvesAtTurn <= state.turn)
   state.placements = state.placements.filter((p) => p.resolvesAtTurn > state.turn)
-  for (const p of due) report.eventResults.push(resolvePlacement(ci, state, rng, p, report))
+  for (const p of due) track(ci, state, report, `事件「${ci.event(p.eventId).title.zh}」`, () => { report.eventResults.push(resolvePlacement(ci, state, rng, p, report)) })
 
   // 3b. 网购到货（序章）与建造进度
   deliverOrders(ci, state, rng, report)
@@ -52,10 +66,10 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   }
 
   // 4. 派工
-  runJobs(ci, state, rng, report)
+  track(ci, state, report, '派工（搜刮受伤 / 训练）', () => runJobs(ci, state, rng, report))
 
   // 5. 生产
-  produce(ci, state, rng, report)
+  track(ci, state, report, '医务室治疗', () => produce(ci, state, rng, report))
 
   // 6. 消耗与忠诚
   upkeep(ci, state, rng, report)
@@ -64,11 +78,11 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
   spoil(ci, state, report)
 
   // 8. 序章 → 末日 过渡
-  if (wasPrologue && state.time.phase === 'apocalypse') apocalypseBegins(ci, state, rng, report)
+  if (wasPrologue && state.time.phase === 'apocalypse') track(ci, state, report, '末日降临第一晚', () => apocalypseBegins(ci, state, rng, report))
 
   // 9. 危机：月末结算 / 月初抽卡
   if (state.time.phase === 'apocalypse') {
-    if (state.crisis && state.turn > state.crisis.dueTurn) resolveCrisis(ci, state, rng, report)
+    if (state.crisis && state.turn > state.crisis.dueTurn) track(ci, state, report, '月末危机结算', () => resolveCrisis(ci, state, rng, report))
     if (!state.crisis && state.time.week === 1 && state.hero.health > 0) drawCrisis(ci, state, rng, report)
   }
 
@@ -174,13 +188,16 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
     report.upkeep.water = mouths - waterShort
     if (foodShort > 0 || waterShort > 0) {
       const dmg = Math.min(3, foodShort + waterShort)
+      const why = `缺${foodShort > 0 ? `食物 ${foodShort} 份` : ''}${foodShort > 0 && waterShort > 0 ? '、' : ''}${waterShort > 0 ? `水 ${waterShort} 份` : ''}`
+      const h0 = state.hero.health
       state.hero.health = clamp(state.hero.health - dmg, 0, 10)
       report.upkeep.health = -dmg
-      for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) { p.loyalty = clamp(p.loyalty - 8, 0, 100); report.upkeep.loyalty -= 8 }
+      if (state.hero.health !== h0) report.changes.push({ label: { zh: '健康' }, delta: state.hero.health - h0, reason: { zh: why } })
+      for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) { const l0 = p.loyalty; p.loyalty = clamp(p.loyalty - 8, 0, 100); report.upkeep.loyalty -= 8; if (p.loyalty !== l0) report.changes.push({ label: { zh: `${personName(ci, p).zh} 忠诚` }, delta: p.loyalty - l0, reason: { zh: '挨饿' } }) }
       if (foodShort > 0) for (const pet of state.pets) if (pet.alive && rng.chance(0.2)) { pet.alive = false; report.news.push({ zh: `${ci.pets.get(pet.defId)?.name.zh ?? '宠物'}饿死了。` }) }
     } else {
-      for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) p.loyalty = clamp(p.loyalty + 1, 0, 100)
-      if (state.hero.health < 10) state.hero.health++
+      for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p) && p.loyalty < 100) { p.loyalty++; report.changes.push({ label: { zh: `${personName(ci, p).zh} 忠诚` }, delta: 1, reason: { zh: '吃饱了' } }) }
+      if (state.hero.health < 10) { state.hero.health++; report.changes.push({ label: { zh: '健康' }, delta: 1, reason: { zh: '吃饱休息' } }) }
     }
   } else {
     // 序章：吃饭花钱，麻烦卡扣钱
@@ -192,7 +209,7 @@ function upkeep(ci: ContentIndex, state: GameState, rng: Rng, report: WeekReport
     const d = ci.card(c.defId)
     if (d.kind !== 'trouble') continue
     if (d.weeklyMoneyDelta && state.time.phase === 'prologue') { state.money = Math.max(0, state.money + d.weeklyMoneyDelta); report.upkeep.money += d.weeklyMoneyDelta }
-    if (d.weeklyLoyaltyDelta) for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) p.loyalty = clamp(p.loyalty + d.weeklyLoyaltyDelta, 0, 100)
+    if (d.weeklyLoyaltyDelta) for (const p of Object.values(state.people)) if (p.alive && p.inBase && isCompanion(ci, p)) { const l0 = p.loyalty; p.loyalty = clamp(p.loyalty + d.weeklyLoyaltyDelta, 0, 100); if (p.loyalty !== l0) report.changes.push({ label: { zh: `${personName(ci, p).zh} 忠诚` }, delta: p.loyalty - l0, reason: { zh: `麻烦卡「${d.name.zh}」` } }) }
     if (d.weeklyExposureDelta) state.hero.exposure = clamp(state.hero.exposure + d.weeklyExposureDelta, 0, 100)
   }
   // 受伤的人慢慢好

@@ -13,6 +13,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', on)
   }, [])
   useEffect(() => { if (store.error) { const id = setTimeout(store.clearError, 2500); return () => clearTimeout(id) } }, [store.error, store.clearError])
+  useEffect(() => { if (store.notice) { const id = setTimeout(store.clearNotice, 5000); return () => clearTimeout(id) } }, [store.notice, store.clearNotice])
 
   if (store.state?.ending && !store.report) return <EndingScreen state={store.state} store={store} />
   if (store.state && hash === '#game') return <Game state={store.state} store={store} />

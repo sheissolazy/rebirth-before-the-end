@@ -66,7 +66,7 @@ export function createEngine(content: ContentPack): GameEngine {
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
       drawnEvents: {}, pendingChoice: null, orders: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
-      lastReport: null, rebirthPointsEarned: 0, ending: null,
+      lastReport: null, lastNotice: null, noticeSeq: 0, rebirthPointsEarned: 0, ending: null,
     }
     const ctx: EffectCtx = { ci, state, rng }
     // 开局手里有点东西
@@ -127,6 +127,9 @@ export function createEngine(content: ContentPack): GameEngine {
     return isRomanceable(ci, p) ? amount : amount * 2
   }
 
+  function notice(s: GameState, zh: string): void { s.lastNotice = { zh }; s.noticeSeq += 1 }
+  const RZH: Record<string, string> = { common: '普通', fine: '优良', rare: '稀有', legendary: '传说' }
+
   function payCores(s: GameState, cost: number): void {
     const cores = s.warehouse.filter((c) => ci.card(c.defId).kind === 'core').sort((a, b) => cardPoints(ci, a) - cardPoints(ci, b))
     const total = cores.reduce((t, c) => t + cardPoints(ci, c), 0)
@@ -169,6 +172,7 @@ export function createEngine(content: ContentPack): GameEngine {
       for (const req of m.cost.requires ?? []) for (let i = 0; i < req.count; i++) { const idx = s.warehouse.findIndex((c) => c.defId === req.cardId); if (idx >= 0) s.warehouse.splice(idx, 1) }
       s.hero.energy -= 1
       s.base.building = { moduleId, weeksLeft: Math.max(1, m.cost.weeks) }
+      notice(s, `开工建${m.name.zh}：消耗材料 ${m.cost.materialPoints} 分和 1 点精力，${m.cost.weeks} 周后完工`)
     }),
     endWeek: (state) => {
       const r = withState(state, (s, rng) => endWeek(ci, s, rng))
@@ -198,9 +202,11 @@ export function createEngine(content: ContentPack): GameEngine {
       if (!p || !p.alive) throw new EngineError('NO_PERSON', personId)
       if (!findCard(s, instanceId)) throw new EngineError('NO_CARD', instanceId)
       const amount = giftValue(s, personId, instanceId)
+      const cardName = ci.card(findCard(s, instanceId)!.defId).name.zh
       removeCard(s, instanceId)
-      if (isRomanceable(ci, p)) p.affection = clamp(p.affection + amount, 0, 100)
-      else p.loyalty = clamp(p.loyalty + amount, 0, 100)
+      const pname = (p.generated?.name ?? ci.npcs.get(p.defId ?? '')?.name)?.zh ?? ''
+      if (isRomanceable(ci, p)) { p.affection = clamp(p.affection + amount, 0, 100); notice(s, `送了${cardName}给${pname}：好感 +${amount}（现在 ${p.affection}）`) }
+      else { p.loyalty = clamp(p.loyalty + amount, 0, 100); notice(s, `送了${cardName}给${pname}：忠诚 +${amount}（现在 ${p.loyalty}）`) }
     }),
     giftValue: (state, personId, instanceId) => giftValue(state, personId, instanceId),
     equip: (state, personId, instanceId) => mutate(state, (s) => {
@@ -213,6 +219,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (personId !== 'hero') { const p = s.people[personId]; if (!p.alive || !p.inBase) throw new EngineError('NOT_IN_BASE', '他不在基地，没法给他装备') }
       for (const p of [s.hero, ...Object.values(s.people)]) for (const [slot, id] of Object.entries(p.equipment)) if (id === instanceId) delete p.equipment[slot as keyof typeof p.equipment]
       target.equipment[def.slot] = instanceId
+      notice(s, `${personId === 'hero' ? '你' : (s.people[personId].generated?.name ?? ci.npcs.get(s.people[personId].defId ?? '')?.name)?.zh}装备了${def.name.zh}：${def.forAttr ? ['体力', '头脑', '魅力'][['strength', 'mind', 'charm'].indexOf(def.forAttr)] + '检定' : '所有检定'} +${def.bonusDice} 骰`)
     }),
     useIntel: (state, instanceId) => mutate(state, (s) => {
       const inst = findCard(s, instanceId)
@@ -222,15 +229,16 @@ export function createEngine(content: ContentPack): GameEngine {
       removeCard(s, instanceId)
       const e = def.effect
       if (e.type === 'revealCrisisRarity') {
-        if (s.crisis) s.crisis.revealed = true
+        const parts: string[] = []
+        if (s.crisis) { s.crisis.revealed = true; const cf = s.forecast.find((x) => x.month === s.time.month); if (cf) cf.rarity = s.crisis.rarity; parts.push(`本月${s.time.month}月危机是${RZH[s.crisis.rarity]}档（需要 ${CRISIS_POINTS[s.crisis.rarity]} 分）`) }
         const month = (s.time.phase === 'apocalypse' ? s.time.month : 0) + e.monthsAhead
         const f = s.forecast.find((x) => x.month === month)
         const mem = ci.pack.memories.find((x) => x.month === month)
-        if (f && mem) f.rarity = mem.baseRarity
-        if (s.crisis && e.monthsAhead === 0) { const cf = s.forecast.find((x) => x.month === s.time.month); if (cf) cf.rarity = s.crisis.rarity }
-      } else if (e.type === 'delayCrisis') { if (s.crisis) s.crisis.dueTurn += 4 }
-      else if (e.type === 'fixMemory') s.hero.butterfly = clamp(s.hero.butterfly - 20, 0, 100)
-      else if (e.type === 'revealFaction') s.flags[`faction_revealed_${e.factionId}`] = true
+        if (f && mem && month !== s.time.month) { f.rarity = mem.baseRarity; parts.push(`${month}月记忆基准是${RZH[mem.baseRarity]}档（需要约 ${CRISIS_POINTS[mem.baseRarity]} 分）`) }
+        notice(s, `用了${def.name.zh}：${parts.join('；') || '这个月没有危机可看'}。基地页"前世记忆"已更新`)
+      } else if (e.type === 'delayCrisis') { if (s.crisis) s.crisis.dueTurn += 4; notice(s, `用了${def.name.zh}：本月危机结算推迟 4 周`) }
+      else if (e.type === 'fixMemory') { s.hero.butterfly = clamp(s.hero.butterfly - 20, 0, 100); notice(s, `用了${def.name.zh}：蝴蝶效应 −20（现在 ${s.hero.butterfly}），危机更接近记忆`) }
+      else if (e.type === 'revealFaction') { s.flags[`faction_revealed_${e.factionId}`] = true; notice(s, `用了${def.name.zh}：看清了${ci.factions.get(e.factionId)?.name.zh ?? ''}的底细`) }
     }),
     upgradePower: (state, powerId, coreInstanceIds) => mutate(state, (s) => {
       const power = ci.powers.get(powerId)
@@ -245,6 +253,7 @@ export function createEngine(content: ContentPack): GameEngine {
       for (const id of coreInstanceIds) removeCard(s, id)
       if (powerId === 'power_space') s.hero.spaceRarity = next.rarity
       else { const p = Object.values(s.people).find((x) => x.defId && ci.npcs.get(x.defId)?.powerId === powerId); if (p) p.powerRarity = next.rarity }
+      notice(s, `${power.name.zh}升到${RZH[next.rarity]}：${next.desc.zh}（消耗 ${pts} 晶核分）`)
     }),
     moveToSpace: (state, instanceId, inSpace) => mutate(state, (s) => {
       const inst = s.warehouse.find((c) => c.instanceId === instanceId)
@@ -252,6 +261,7 @@ export function createEngine(content: ContentPack): GameEngine {
       if (!!inst.inSpace === inSpace) return
       if (!hasRoom(ci, s, cardSize(ci, inst), inSpace)) throw new EngineError('NO_ROOM', inSpace ? 'space full' : 'warehouse full')
       inst.inSpace = inSpace
+      notice(s, inSpace ? `${ci.card(inst.defId).name.zh}放进了空间：抢不走、搜不出` : `${ci.card(inst.defId).name.zh}拿出了空间`)
     }),
     discard: (state, instanceId) => mutate(state, (s) => { if (!removeCard(s, instanceId)) throw new EngineError('NO_CARD', instanceId) }),
     useItem: (state, instanceId) => mutate(state, (s, rng) => {
@@ -259,9 +269,11 @@ export function createEngine(content: ContentPack): GameEngine {
       if (!inst) throw new EngineError('NO_CARD', instanceId)
       const def = ci.card(inst.defId)
       if (def.kind !== 'supply' || !def.onUse) throw new EngineError('NOT_USABLE', instanceId)
+      const before = { energy: s.hero.energy, bonus: s.hero.energyBonus }
       applyEffects({ ci, state: s, rng, actorId: 'hero' }, def.onUse)
       if (inst.unitsLeft !== undefined && inst.unitsLeft > 1) inst.unitsLeft--
       else removeCard(s, instanceId)
+      notice(s, `用了${def.name.zh}：${s.hero.energyBonus > before.bonus ? `精力上限永久 +${s.hero.energyBonus - before.bonus}` : `本周精力 +${s.hero.energy - before.energy}（现在 ${s.hero.energy}）`}`)
     }),
     choose: (state, choiceId) => {
       const r = withState(state, (s, rng) => resolveChoice(ci, s, rng, choiceId))

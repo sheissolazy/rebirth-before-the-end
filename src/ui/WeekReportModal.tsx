@@ -1,6 +1,7 @@
 import type { WeekReport, GameState } from '../engine/types'
 import { t, lt } from '../i18n'
 import { cardName, eventDefs, personName, moduleDefs } from './lookup'
+import { describeEffects } from './effects'
 
 export function WeekReportModal({ report, state, onClose }: { report: WeekReport; state: GameState; onClose: () => void }) {
   return (
@@ -14,6 +15,7 @@ export function WeekReportModal({ report, state, onClose }: { report: WeekReport
             <div key={r.eventId} className="mt-2 rounded border border-zinc-700 p-2 text-sm">
               <div className="font-medium">{e?.icon} {e ? lt(e.title) : r.eventId} · {t(`outcome.${r.outcome}`)}{r.diceCount ? `（${r.successes}/${r.diceCount} 骰）` : ''}</div>
               <div className="text-zinc-300">{lt(r.text)}</div>
+              {r.effects.length > 0 && <div className="mt-1 text-xs text-amber-200">{t('report.effects')}：{describeEffects(r.effects)}</div>}
             </div>
           )
         })}
@@ -21,6 +23,14 @@ export function WeekReportModal({ report, state, onClose }: { report: WeekReport
           <div className={`mt-2 rounded border p-2 text-sm ${report.crisisResult.survived ? 'border-emerald-700' : 'border-red-700'}`}>
             <div className="font-medium">{t(`crisisKind.${report.crisisResult.crisisKind}`)} · {t(`rarity.${report.crisisResult.rarity}`)} · {report.crisisResult.survived ? '顶住了' : '没顶住'}</div>
             <div>{lt(report.crisisResult.text)}</div>
+          </div>
+        )}
+        {report.changes.length > 0 && (
+          <div className="mt-2 rounded border border-zinc-800 p-2 text-xs">
+            <div className="font-medium text-zinc-300">{t('report.changes')}</div>
+            <ul className="mt-1 space-y-0.5">
+              {report.changes.map((c, i) => <li key={i} className={c.delta > 0 ? 'text-emerald-300' : 'text-red-300'}>{lt(c.label)} {c.delta > 0 ? '+' : ''}{c.delta}：<span className="text-zinc-400">{lt(c.reason)}</span></li>)}
+            </ul>
           </div>
         )}
         <p className="mt-2 text-xs text-zinc-400">

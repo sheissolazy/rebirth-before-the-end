@@ -59,6 +59,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
       <section className="rounded-lg border border-zinc-800 p-3">
         <h3 className="font-semibold">{lt(state.hero.name)}（你）</h3>
         <p className="text-sm">💪{state.hero.attrs.strength} 🧠{state.hero.attrs.mind} 💬{state.hero.attrs.charm} · {t('stat.health')} {state.hero.health} · {t('stat.exposure')} {state.hero.exposure} · {t('stat.butterfly')} {state.hero.butterfly} · 空间 {t(`rarity.${state.hero.spaceRarity}`)}</p>
+        <p className="text-xs text-zinc-500">{t('attr.hint')}</p>
         <p className="flex items-center justify-between text-xs text-zinc-500"><span>装备：{equipLine(state.hero.equipment)}{state.time.phase === 'prologue' && ` · ${state.hero.employed ? '在职' : '失业'}`}</span><button className="rounded bg-zinc-700 px-2 py-0.5 text-zinc-200" onClick={() => setEquipping('hero')}>{t('action.equip')}</button></p>
       </section>
 

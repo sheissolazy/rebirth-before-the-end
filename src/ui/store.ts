@@ -12,6 +12,8 @@ export interface Store {
   report: WeekReport | null
   choiceResult: EventResult | null
   error: string | null
+  notice: string | null
+  clearNotice(): void
   newGame(opts: Omit<NewGameOptions, 'meta'>): void
   choose(choiceId: string): void
   dismissChoiceResult(): void
@@ -30,6 +32,7 @@ export function useStore(): Store {
   const [report, setReport] = useState<WeekReport | null>(null)
   const [choiceResult, setChoiceResult] = useState<EventResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const commit = useCallback((s: GameState | null) => { setState(s); saveGame(s) }, [])
   const commitMeta = useCallback((m: MetaProgress) => { setMeta(m); saveMeta(m) }, [])
@@ -41,7 +44,11 @@ export function useStore(): Store {
   const act = useCallback((fn: (s: GameState) => GameState) => {
     setState((prev) => {
       if (!prev) return prev
-      try { const next = fn(prev); saveGame(next); return next } catch (e) { setError((e as Error).message); return prev }
+      try {
+        const next = fn(prev); saveGame(next)
+        if (next.noticeSeq !== prev.noticeSeq && next.lastNotice) setNotice(next.lastNotice.zh)
+        return next
+      } catch (e) { setError((e as Error).message); return prev }
     })
   }, [])
 
@@ -76,8 +83,8 @@ export function useStore(): Store {
   }, [meta, commitMeta])
 
   return useMemo(() => ({
-    state, meta, report, choiceResult, error, newGame, act, endWeek, choose,
+    state, meta, report, choiceResult, error, notice, clearNotice: () => setNotice(null), newGame, act, endWeek, choose,
     dismissReport: () => setReport(null), dismissChoiceResult: () => setChoiceResult(null), finishLife, buyShop,
     clearError: () => setError(null), abandon: () => { commit(null); setReport(null) },
-  }), [state, meta, report, choiceResult, error, newGame, act, endWeek, choose, finishLife, buyShop, commit])
+  }), [state, meta, report, choiceResult, error, notice, newGame, act, endWeek, choose, finishLife, buyShop, commit])
 }

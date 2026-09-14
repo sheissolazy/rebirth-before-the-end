@@ -36,6 +36,9 @@ export function Game({ state, store }: { state: GameState; store: Store }) {
       </nav>
       {store.report && <WeekReportModal report={store.report} state={state} onClose={store.dismissReport} />}
       {!store.report && (state.pendingChoice || store.choiceResult) && <ChoiceModal state={state} store={store} />}
+      {store.notice && (
+        <div className="fixed bottom-20 left-1/2 z-40 w-[90%] max-w-md -translate-x-1/2 rounded border border-amber-700 bg-zinc-900 px-4 py-2 text-sm text-amber-100" onClick={store.clearNotice}>{store.notice}</div>
+      )}
       {store.error && (
         <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded bg-red-800 px-4 py-2 text-sm" onClick={store.clearError}>{store.error}</div>
       )}

@@ -61,6 +61,17 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
+    id: 'ev_home_meeting', kind: 'routine', energy: 1, locationId: 'home', icon: '🗣️', repeatable: true, weight: 0,
+    title: { zh: '开基地会议' }, text: { zh: '分配、争执、安抚。让所有人觉得你说了算，而且说得对。' },
+    conditions: [A], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm', 'mind'] },
+    outcomes: {
+      fail: { text: { zh: '会开成了吵架。' }, effects: [{ type: 'loyalty', target: 'all', delta: -3 }] },
+      common: { text: { zh: '定了下周的分工。' }, effects: [{ type: 'loyalty', target: 'all', delta: 2 }] },
+      fine: { text: { zh: '你说完，没人反对。你自己都有点意外。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'loyalty', target: 'all', delta: 3 }] },
+      rare: { text: { zh: '有人说"跟着你我踏实"。' }, effects: [{ type: 'attr', target: 'hero', attr: 'charm', delta: 1 }, { type: 'loyalty', target: 'all', delta: 6 }] },
+    },
+  },
+  {
     id: 'ev_hunt_cores', kind: 'routine', locationId: 'apartments', icon: '💎', repeatable: true, weight: 0,
     title: { zh: '猎杀丧尸取晶核' }, text: { zh: '晶核在丧尸后脑。一刀，一挖。这是末日后唯一的硬通货，也是升级异能的唯一办法。' },
     conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
