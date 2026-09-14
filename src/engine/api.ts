@@ -1,33 +1,44 @@
 /**
- * 引擎公开 API（签名契约）。
- * 实现在 src/engine/impl/（Claude 负责）。UI 只能调这里的函数。
+ * 引擎公开 API（签名契约）。实现在 src/engine/impl/（Claude 负责）。
  * 所有函数都是纯函数：输入 state 不被修改，返回新 state。
  */
 import type {
-  ContentPack, GameState, NewGameOptions, Placement, WeekReport, EventDef, CardFilter, AbsWeek, GameTime,
+  ContentPack, GameState, NewGameOptions, Placement, WeekReport, EventDef, GameTime, Turn,
+  CompanionJob, MetaProgress,
 } from './types'
 
+export const PROLOGUE_DEFAULT_WEEKS = 4
+export const WEEKS_PER_MONTH = 4
+export const MONTHS_PER_YEAR = 12
+export const WEEKS_PER_YEAR = WEEKS_PER_MONTH * MONTHS_PER_YEAR
+
 export interface GameEngine {
-  /** 开新一世 */
   newGame(content: ContentPack, options: NewGameOptions): GameState
-  /** 本周地图上可见的事件（已按 conditions 过滤） */
+  /** 本周各地点抽出的可见事件（已按 conditions 过滤、按 weight 抽样） */
   availableEvents(state: GameState): EventDef[]
-  /** 某个槽当前能放哪些卡（返回 instanceId / 'hero' / npcId 列表） */
+  /** 某槽当前能放哪些：instanceId / 'hero' / personId / petId */
   eligibleCards(state: GameState, eventId: string, slotId: string): string[]
-  /** 放卡（校验槽位、主角一周一事、NPC 是否空闲）。失败抛 EngineError */
-  place(state: GameState, placement: Omit<Placement, 'startedWeek' | 'resolvesAtWeek'>): GameState
-  /** 撤回本周还没结算的放卡 */
+  place(state: GameState, placement: Omit<Placement, 'startedTurn' | 'resolvesAtTurn'>): GameState
   unplace(state: GameState, eventId: string): GameState
-  /** 过一周：结算事件 → 消耗 → 过期 → 月末危机 → 新闻 → 日记 */
+  /** 给伙伴派工 */
+  assignJob(state: GameState, personId: string, job: CompanionJob): GameState
+  /** 开始建造模块 */
+  build(state: GameState, moduleId: string): GameState
+  /** 过一周 */
   endWeek(state: GameState): { state: GameState; report: WeekReport }
-  /** 买东西（超市等地点 UI 直接调） */
-  buy(state: GameState, cardDefId: string, count: number): GameState
-  /** 送礼（涨好感，卡消失） */
-  gift(state: GameState, npcId: string, instanceId: string): GameState
-  /** 使用情报卡 */
+  /** 序章买东西 / 末日后向势力换东西 */
+  buy(state: GameState, cardDefId: string, count: number, factionId?: string): GameState
+  sell(state: GameState, instanceId: string, factionId?: string): GameState
+  gift(state: GameState, personId: string, instanceId: string): GameState
+  equip(state: GameState, personId: 'hero' | string, instanceId: string): GameState
   useIntel(state: GameState, instanceId: string): GameState
-  /** 丢弃仓库卡（腾格子） */
+  /** 用晶核升级异能 */
+  upgradePower(state: GameState, powerId: string, coreInstanceIds: string[]): GameState
+  /** 把卡放进/拿出空间 */
+  moveToSpace(state: GameState, instanceId: string, inSpace: boolean): GameState
   discard(state: GameState, instanceId: string): GameState
+  /** 一世结束后结算重生点 */
+  settle(state: GameState, meta: MetaProgress): MetaProgress
 }
 
 export class EngineError extends Error {
@@ -38,13 +49,22 @@ export class EngineError extends Error {
   }
 }
 
-/** 工具：时间 <-> 绝对周 */
-export function toAbsWeek(t: GameTime): AbsWeek {
-  return (t.year - 1) * 48 + (t.month - 1) * 4 + (t.week - 1)
-}
-export function fromAbsWeek(w: AbsWeek): GameTime {
-  return { year: Math.floor(w / 48) + 1, month: Math.floor((w % 48) / 4) + 1, week: (w % 4) + 1 }
+/** 回合 <-> 时间。prologueWeeks = 本世序章长度（默认 4）。 */
+export function turnToTime(turn: Turn, prologueWeeks: number = PROLOGUE_DEFAULT_WEEKS): GameTime {
+  if (turn < prologueWeeks) {
+    return { phase: 'prologue', weeksBeforeEnd: prologueWeeks - turn, year: 0, month: 0, week: 0 }
+  }
+  const w = turn - prologueWeeks
+  return {
+    phase: 'apocalypse',
+    weeksBeforeEnd: 0,
+    year: Math.floor(w / WEEKS_PER_YEAR) + 1,
+    month: Math.floor((w % WEEKS_PER_YEAR) / WEEKS_PER_MONTH) + 1,
+    week: (w % WEEKS_PER_MONTH) + 1,
+  }
 }
 
-/** 供 UI 判断某张卡能否进某槽（纯前端预检，引擎 place 时仍会复检） */
-export type { CardFilter }
+export function timeToTurn(t: GameTime, prologueWeeks: number = PROLOGUE_DEFAULT_WEEKS): Turn {
+  if (t.phase === 'prologue') return prologueWeeks - t.weeksBeforeEnd
+  return prologueWeeks + (t.year - 1) * WEEKS_PER_YEAR + (t.month - 1) * WEEKS_PER_MONTH + (t.week - 1)
+}

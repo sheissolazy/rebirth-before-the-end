@@ -1,46 +1,47 @@
 /**
- * 引擎类型契约（Engine Type Contract）
+ * 引擎类型契约（Engine Type Contract）v0.3
  *
- * 这是 UI（Codex 负责）与引擎（Claude 负责）之间的唯一接口。
- * 规则：
- *  - 改这里必须先改 docs/DESIGN.md，再在 PR 里 @ 对方。
- *  - UI 只读 GameState，只通过 engine/api.ts 的函数改状态。
+ * UI（Codex）与引擎（Claude）之间的唯一接口。
+ *  - 改这里必须先改 docs/DESIGN.md 对应小节，提交信息加 `contract:` 前缀。
+ *  - UI 只读 GameState，只通过 engine/api.ts 改状态。
  *  - 所有玩家可见文案都是 LocalizedText，不要在代码里写死中文。
  */
 
 // ---------- 基础 ----------
 
-/** 玩家可见文案。中文必填，英文可选（之后补）。 */
+/** 玩家可见文案。中文必填，英文可选。 */
 export interface LocalizedText {
   zh: string
   en?: string
 }
 
-/** 四档品质，对应苏丹的游戏 石/铜/银/金 */
-export type Tier = 'stone' | 'bronze' | 'silver' | 'gold'
+/** 稀有度四档：普通(白) / 优良(绿) / 稀有(蓝) / 传说(金)。全局通用。 */
+export type Rarity = 'common' | 'fine' | 'rare' | 'legendary'
+export const RARITY_ORDER: Rarity[] = ['common', 'fine', 'rare', 'legendary']
+/** 物资/装备/晶核分值 */
+export const RARITY_POINTS: Record<Rarity, number> = { common: 1, fine: 2, rare: 4, legendary: 8 }
+/** 危机需求分 */
+export const CRISIS_POINTS: Record<Rarity, number> = { common: 2, fine: 4, rare: 8, legendary: 16 }
 
-/** 物资品质分：石1 铜2 银4 金8 */
-export const SUPPLY_TIER_POINTS: Record<Tier, number> = { stone: 1, bronze: 2, silver: 4, gold: 8 }
-/** 危机需求分：石2 铜4 银8 金16 */
-export const CRISIS_TIER_POINTS: Record<Tier, number> = { stone: 2, bronze: 4, silver: 8, gold: 16 }
+/** 危机五类：尸潮 / 匮乏 / 气候 / 疫病 / 人祸 */
+export type CrisisKind = 'horde' | 'scarcity' | 'climate' | 'plague' | 'human'
 
-/** 危机四类：匮乏 / 气候 / 疫病 / 动荡 */
-export type CrisisKind = 'scarcity' | 'climate' | 'plague' | 'unrest'
+/** 物资七维度 */
+export type SupplyKind = 'food' | 'water' | 'medicine' | 'energy' | 'weapon' | 'material' | 'daily'
 
-/** 物资六维度：食物 / 水 / 药品 / 能源 / 安全 / 日用 */
-export type SupplyKind = 'food' | 'water' | 'medicine' | 'energy' | 'security' | 'daily'
-
-/** 每类危机能用哪些维度的物资硬顶 */
+/** 每类危机能用哪些维度硬顶（尸潮/人祸还会算基地防御与守卫战力，见引擎） */
 export const CRISIS_ACCEPTS: Record<CrisisKind, SupplyKind[]> = {
+  horde: ['weapon'],
   scarcity: ['food', 'water'],
   climate: ['energy', 'daily'],
   plague: ['medicine', 'water'],
-  unrest: ['security', 'daily'],
+  human: ['weapon', 'daily'],
 }
 
-/** 主角/NPC 四属性：体力 / 手艺 / 头脑 / 魅力 */
-export type Attr = 'strength' | 'craft' | 'mind' | 'charm'
+/** 三属性：体力 / 头脑 / 魅力 */
+export type Attr = 'strength' | 'mind' | 'charm'
 export type Attrs = Record<Attr, number>
+export const ATTR_MAX = 10
 
 /** 好感档位 */
 export type AffectionRank = 'stranger' | 'acquaintance' | 'friend' | 'crush' | 'lover'
@@ -48,41 +49,86 @@ export const AFFECTION_THRESHOLDS: Record<AffectionRank, number> = {
   stranger: 0, acquaintance: 20, friend: 40, crush: 60, lover: 80,
 }
 
+/** 异能种类 */
+export type PowerKind = 'space' | 'lightning' | 'heal' | 'time' | 'fire' | 'mind' | 'sense' | 'strength'
+
 // ---------- 时间 ----------
 
-/** 年 1..10，月 1..12，周 1..4 */
+/**
+ * 阶段：序章（末日前）/ 末日后。
+ * 序章按"距末日还有 N 周"倒数；末日后按 年/月/周。
+ */
+export type Phase = 'prologue' | 'apocalypse'
+
 export interface GameTime {
+  phase: Phase
+  /** 序章：距末日还有几周（4 → 1）。末日后恒为 0 */
+  weeksBeforeEnd: number
+  /** 末日后：年 1..10，月 1..12，周 1..4。序章时 year=0 */
   year: number
   month: number
   week: number
 }
 
-/** 从第 1 年 1 月第 1 周起算的绝对周数，0 起 */
-export type AbsWeek = number
+/** 绝对回合数，从本世第 1 回合起算，0 起 */
+export type Turn = number
 
 // ---------- 卡牌定义（内容层，静态） ----------
 
-export type CardKind = 'hero' | 'npc' | 'supply' | 'intel' | 'skill' | 'mood' | 'trouble' | 'crisis'
+export type CardKind =
+  | 'supply' | 'equipment' | 'core' | 'intel' | 'skill' | 'trouble' | 'crisis'
 
 export interface CardDefBase {
   id: string
   kind: CardKind
   name: LocalizedText
   desc: LocalizedText
-  tier: Tier
-  /** 卡面图标（emoji 或图片路径），首版用 emoji */
+  rarity: Rarity
+  /** 卡面图标：首版 emoji，之后可换图片路径 */
   icon?: string
 }
 
 export interface SupplyCardDef extends CardDefBase {
   kind: 'supply'
   supplyKind: SupplyKind
-  /** 占仓库格数 1~3 */
+  /** 占格 1~3 */
   size: number
   /** 保质期（周）。undefined = 不过期 */
   shelfLifeWeeks?: number
-  /** 第 1 年 1 月基准价（之后按通胀乘） */
+  /** 序章价格（钱）。末日后按晶核/物资汇率换算 */
   basePrice: number
+  /** 序章是否能买到（枪 = false，只能黑市/门路） */
+  buyable: boolean
+}
+
+export type EquipSlot = 'weapon' | 'armor' | 'accessory'
+
+export interface EquipmentCardDef extends CardDefBase {
+  kind: 'equipment'
+  slot: EquipSlot
+  /** 放进事件白槽或装备后加的骰子 */
+  bonusDice: number
+  /** 适用属性；undefined = 任何检定都加 */
+  forAttr?: Attr
+  /** 是否是枪械（序章极难获得） */
+  firearm?: boolean
+  basePrice: number
+  buyable: boolean
+}
+
+/** 装备随机词缀 */
+export interface AffixDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  bonusDice?: number
+  /** 词缀可带的其它效果（引擎解释） */
+  effects?: Effect[]
+}
+
+/** 晶核：击杀掉落，升级异能 / 硬通货 */
+export interface CoreCardDef extends CardDefBase {
+  kind: 'core'
 }
 
 export interface IntelCardDef extends CardDefBase {
@@ -90,144 +136,251 @@ export interface IntelCardDef extends CardDefBase {
   effect: IntelEffect
 }
 export type IntelEffect =
-  | { type: 'revealCrisisTier'; monthsAhead: number }
+  | { type: 'revealCrisisRarity'; monthsAhead: number }
   | { type: 'delayCrisis' }
   | { type: 'fixMemory' }
+  | { type: 'revealFaction'; factionId: string }
 
+/** 技能卡：男主/伙伴/异能提供，借力顶卡或加骰 */
 export interface SkillCardDef extends CardDefBase {
   kind: 'skill'
-  ownerNpcId: string
-  /** 可代替硬顶的危机类型（借力）。undefined = 只加骰 */
+  /** 归属：npcId 或 'hero' */
+  ownerId: string
+  /** 可代替硬顶的危机类型 */
   counters?: CrisisKind
-  /** 放进白槽时加的骰子数 */
   bonusDice?: number
-}
-
-export interface MoodCardDef extends CardDefBase {
-  kind: 'mood'
-  moraleDelta?: number
-  bonusDice?: number
-  /** 持续周数 */
-  durationWeeks: number
+  forAttr?: Attr
 }
 
 export interface TroubleCardDef extends CardDefBase {
   kind: 'trouble'
-  /** 占仓库格数（0 = 不占） */
   size: number
   weeklyMoneyDelta?: number
-  weeklyMoraleDelta?: number
-  /** 能处理掉它的事件 id */
+  weeklyLoyaltyDelta?: number
+  weeklyExposureDelta?: number
   resolvedByEventIds: string[]
 }
 
 export interface CrisisCardDef extends CardDefBase {
   kind: 'crisis'
   crisisKind: CrisisKind
-  /** 危机文案：抽到时 / 顶住时 / 没顶住时 */
   onDraw: LocalizedText
   onSurvive: LocalizedText
   onFail: LocalizedText
 }
 
 export type CardDef =
-  | SupplyCardDef | IntelCardDef | SkillCardDef | MoodCardDef | TroubleCardDef | CrisisCardDef
+  | SupplyCardDef | EquipmentCardDef | CoreCardDef | IntelCardDef
+  | SkillCardDef | TroubleCardDef | CrisisCardDef
 
-// ---------- NPC 定义 ----------
+// ---------- 异能 ----------
+
+export interface PowerDef {
+  id: string
+  kind: PowerKind
+  name: LocalizedText
+  desc: LocalizedText
+  /** 每档效果说明（UI 展示）与升级所需晶核分 */
+  levels: Array<{ rarity: Rarity; desc: LocalizedText; upgradeCorePoints: number }>
+}
+
+// ---------- 人 ----------
 
 export interface NpcDef {
   id: string
   name: LocalizedText
-  title: LocalizedText          // 身份，如"隔壁程序员"
+  title: LocalizedText
   bio: LocalizedText
   icon?: string
-  /** 是否可攻略 */
+  rarity: Rarity
+  /** 男主 = true */
   romanceable: boolean
   attrs: Attrs
-  /** 他缺的物资维度（送这个最涨好感；同住后带来的也是他不缺的） */
+  /** 缺的物资维度（送这个最涨好感/忠诚） */
   needs: SupplyKind
-  /** 危机技能卡 id（可攻略者才有） */
-  skillCardId?: string
-  /** 初始好感 */
+  powerId?: string
+  skillCardIds: string[]
   initialAffection: number
+  /** 所属势力（男主/领袖用） */
+  factionId?: string
 }
 
-// ---------- 地点与事件定义 ----------
+/** 随机幸存者生成模板 */
+export interface SurvivorTraitDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  attrDelta?: Partial<Attrs>
+  /** 派工时的加成 */
+  jobBonus?: Partial<Record<CompanionJob, number>>
+  /** 每周忠诚变化 */
+  loyaltyDrift?: number
+}
+
+export type CompanionJob = 'guard' | 'farm' | 'scavenge' | 'train' | 'escort' | 'idle'
+
+export interface PetDef {
+  id: string
+  species: 'dog' | 'cat'
+  name: LocalizedText
+  desc: LocalizedText
+  icon?: string
+  rarity: Rarity
+  weeklyFood: number
+  effects: Effect[]
+}
+
+// ---------- 基地 ----------
+
+export type BaseType = 'apartment' | 'villa' | 'farmhouse' | 'bunker'
+
+export interface ModuleDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  icon?: string
+  /** 只能建在哪种基地 */
+  baseType: BaseType
+  /** 建造消耗：材料分 + 人力（伙伴周数）+ 周数 */
+  cost: { materialPoints: number; labor: number; weeks: number; money?: number }
+  /** 建成效果（持续性，引擎每周结算） */
+  provides: ModuleEffect[]
+}
+
+export type ModuleEffect =
+  | { type: 'defense'; value: number }
+  | { type: 'storage'; value: number }
+  | { type: 'produce'; supplyKind: SupplyKind; cardId: string; perWeek: number }
+  | { type: 'heal'; perWeek: number }
+  | { type: 'trainBonus'; attr: Attr; dice: number }
+  | { type: 'counters'; crisisKind: CrisisKind; points: number }
+  | { type: 'unlock'; feature: 'diplomacy' | 'research' | 'quarantine' | 'escape' }
+  | { type: 'population'; value: number }
+
+export interface BaseDef {
+  type: BaseType
+  name: LocalizedText
+  desc: LocalizedText
+  icon?: string
+  price: number
+  baseDefense: number
+  storage: number
+  population: number
+}
+
+// ---------- 势力 ----------
+
+export interface FactionDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  icon?: string
+  leaderNpcId?: string
+  initialRelation: number
+  /** 交易汇率：1 晶核分 = 多少物资分 */
+  tradeRate: number
+}
+
+// ---------- 地点与事件 ----------
 
 export interface LocationDef {
   id: string
   name: LocalizedText
   desc: LocalizedText
   icon?: string
-  /** 地图上的位置（0~100 百分比），UI 用 */
+  /** 序章 / 末日后 / 两者 */
+  phase: Phase | 'both'
+  /** 基地内 = true（不算外出，无遭遇） */
+  inBase?: boolean
   pos: { x: number; y: number }
+  /** 遭遇权重（外出地点）：随机丧尸/幸存者/势力的概率 */
+  encounter?: { zombie: number; survivor: number; faction: number }
 }
 
-/** 条件：全部满足才成立 */
+export type HeroStat = 'health' | 'exposure' | 'butterfly'
+
 export type Condition =
+  | { type: 'phase'; phase: Phase }
+  | { type: 'weeksBeforeEnd'; from: number; to: number }
   | { type: 'month'; from: number; to: number }
   | { type: 'year'; from: number; to: number }
   | { type: 'flag'; flag: string; value?: boolean }
   | { type: 'affectionAtLeast'; npcId: string; rank: AffectionRank }
   | { type: 'npcAlive'; npcId: string }
-  | { type: 'npcCohabiting'; npcId: string; value: boolean }
+  | { type: 'npcInBase'; npcId: string; value: boolean }
   | { type: 'moneyAtLeast'; amount: number }
   | { type: 'statAtLeast'; stat: HeroStat; value: number }
+  | { type: 'statAtMost'; stat: HeroStat; value: number }
+  | { type: 'attrAtLeast'; attr: Attr; value: number }
   | { type: 'hasSupplyKind'; supplyKind: SupplyKind; minPoints: number }
   | { type: 'crisisActive'; crisisKind: CrisisKind }
+  | { type: 'baseType'; baseType: BaseType }
+  | { type: 'hasModule'; moduleId: string }
+  | { type: 'relationAtLeast'; factionId: string; value: number }
+  | { type: 'powerAtLeast'; powerId: string; rarity: Rarity }
   | { type: 'employed'; value: boolean }
+  | { type: 'hasPet'; species: 'dog' | 'cat' }
   | { type: 'not'; cond: Condition }
+  | { type: 'random'; chance: number }
 
-export type HeroStat = 'health' | 'morale' | 'reputation' | 'butterfly'
-
-/** 卡槽能接受什么卡 */
 export type CardFilter =
   | { kind: 'hero' }
   | { kind: 'npc'; npcId?: string; romanceable?: boolean; minRank?: AffectionRank }
-  | { kind: 'supply'; supplyKind?: SupplyKind; minTier?: Tier }
+  | { kind: 'companion'; minLoyalty?: number }
+  | { kind: 'pet'; species?: 'dog' | 'cat' }
+  | { kind: 'supply'; supplyKind?: SupplyKind; minRarity?: Rarity }
+  | { kind: 'equipment'; slot?: EquipSlot }
+  | { kind: 'core'; minRarity?: Rarity }
   | { kind: 'intel' }
-  | { kind: 'skill'; npcId?: string }
-  | { kind: 'mood' }
+  | { kind: 'skill'; ownerId?: string }
   | { kind: 'trouble' }
 
 export interface SlotDef {
   id: string
   label: LocalizedText
-  /** 红槽 = 必填 */
   required: boolean
   accepts: CardFilter
-  /** 放进来的物资卡是否被消耗（送礼/使用） */
+  /** 放进来的卡是否被消耗 */
   consumes?: boolean
-  /** 放进来加几个骰子（物资/情报白槽用） */
   bonusDice?: number
 }
 
-/** 检定 = 掷 (attrs 之和 + 白槽加成) 个骰子，数成功数 */
 export interface CheckDef {
   attrs: Attr[]
-  /** 每骰成功率，默认 0.5 */
   successChance?: number
+  /** 达到传说结果需要的成功数（默认不设 = 无传说档） */
+  legendaryAt?: number
 }
 
-/** 检定结果档：0 = fail, 1~2 = bronze, 3~4 = silver, >=5 = gold */
-export type Outcome = 'fail' | 'bronze' | 'silver' | 'gold'
+export type Outcome = 'fail' | 'common' | 'fine' | 'rare' | 'legendary'
 
 export type Effect =
   | { type: 'money'; delta: number }
   | { type: 'stat'; stat: HeroStat; delta: number }
-  | { type: 'attr'; attr: Attr; delta: number }
+  | { type: 'attr'; target: 'hero' | string; attr: Attr; delta: number }
   | { type: 'gainCard'; cardId: string; count?: number }
+  | { type: 'gainRandom'; table: string; count?: number }          // 掉落表
   | { type: 'loseCard'; cardId: string; count?: number }
   | { type: 'affection'; npcId: string; delta: number }
-  | { type: 'npcCohabit'; npcId: string; value: boolean }
-  | { type: 'npcInjure'; npcId: string; severity: 1 | 2 | 3 }
-  | { type: 'npcDie'; npcId: string }
+  | { type: 'loyalty'; target: string | 'all'; delta: number }
+  | { type: 'npcJoin'; npcId: string }                               // 男主/固定 NPC 入住
+  | { type: 'npcLeave'; npcId: string }
+  | { type: 'recruitRandom'; rarityWeights?: Partial<Record<Rarity, number>> }
+  | { type: 'injure'; target: 'hero' | string; severity: 1 | 2 | 3 }
+  | { type: 'kill'; target: string }
   | { type: 'setFlag'; flag: string; value?: boolean }
-  | { type: 'warehouseCapacity'; delta: number }
   | { type: 'employment'; value: boolean }
-  | { type: 'resolveCrisis' }               // 剧情解：直接顶住本月危机
+  | { type: 'resolveCrisis' }
   | { type: 'revealCrisis'; monthsAhead: number }
   | { type: 'unlockEvent'; eventId: string }
+  | { type: 'relation'; factionId: string; delta: number }
+  | { type: 'moveBase'; baseType: BaseType }
+  | { type: 'buildModule'; moduleId: string }
+  | { type: 'damageModule'; moduleId?: string }
+  | { type: 'powerUp'; powerId: string }
+  | { type: 'adoptPet'; petId: string }
+  | { type: 'losePet'; petId: string }
+  | { type: 'rebirthPoints'; delta: number }
   | { type: 'ending'; endingId: string }
 
 export interface OutcomeBranch {
@@ -241,108 +394,156 @@ export interface EventDef {
   title: LocalizedText
   text: LocalizedText
   icon?: string
-  /** 出现条件 */
   conditions: Condition[]
-  /** 耗时（周）1~2 */
+  /** 事件牌堆权重（剧情事件设 0 = 必出） */
+  weight: number
   durationWeeks: number
   slots: SlotDef[]
-  /** 无检定 = 直接走 outcomes.silver */
   check?: CheckDef
-  outcomes: Partial<Record<Outcome, OutcomeBranch>> & { silver: OutcomeBranch }
-  /** 只能触发一次 */
+  /** 无检定 = 直接走 outcomes.fine */
+  outcomes: Partial<Record<Outcome, OutcomeBranch>> & { fine: OutcomeBranch }
   once?: boolean
-  /** 是否是"上班"这类每周重复事件 */
   repeatable?: boolean
-  /** 属于哪条 NPC 剧情线（UI 标记用） */
   storylineNpcId?: string
+  /** 危机"剧情解"事件：标记对应类型 */
+  resolvesCrisis?: CrisisKind
 }
 
-/** 第 1 年 12 条重生记忆（半固定危机） */
+/** 掉落表 */
+export interface LootTableDef {
+  id: string
+  entries: Array<{ cardId: string; weight: number; count?: [number, number] }>
+  /** 装备是否附随机词缀 */
+  affixChance?: number
+}
+
 export interface MemoryEntryDef {
   month: number
   memory: LocalizedText
   crisisKind: CrisisKind
-  baseTier: Tier
+  baseRarity: Rarity
 }
 
 export interface EndingDef {
   id: string
   title: LocalizedText
   text: LocalizedText
-  /** 判定顺序按数组顺序，先命中先得 */
   conditions: Condition[]
+  rebirthPoints: number
 }
 
-/** 内容包：所有静态内容 */
+/** 重生点商店条目 */
+export interface RebirthShopItemDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  /** 价格随已购次数递增：cost[n] */
+  cost: number[]
+  effect:
+    | { type: 'prologueWeeks'; delta: number }
+    | { type: 'money'; delta: number }
+    | { type: 'spaceRarity'; rarity: Rarity }
+    | { type: 'attrPoint'; count: number }
+    | { type: 'affection'; delta: number }      // 选一位男主
+    | { type: 'pet'; species: 'dog' | 'cat' }
+    | { type: 'keepEquipment' }
+}
+
+/** 内容包 */
 export interface ContentPack {
   locations: LocationDef[]
   events: EventDef[]
   cards: CardDef[]
+  affixes: AffixDef[]
+  lootTables: LootTableDef[]
   npcs: NpcDef[]
+  survivorTraits: SurvivorTraitDef[]
+  survivorNames: LocalizedText[]
+  powers: PowerDef[]
+  pets: PetDef[]
+  bases: BaseDef[]
+  modules: ModuleDef[]
+  factions: FactionDef[]
   memories: MemoryEntryDef[]
   endings: EndingDef[]
+  rebirthShop: RebirthShopItemDef[]
 }
 
 // ---------- 运行时状态 ----------
 
-/** 卡牌实例：仓库/手牌里的一张具体的卡 */
 export interface CardInstance {
   instanceId: string
   defId: string
-  /** 物资：过期周（绝对周）。undefined = 不过期 */
-  expiresAtWeek?: AbsWeek
-  /** 已过期次数（0 正常，1 降档，2 垃圾） */
+  expiresAtTurn?: Turn
+  /** 过期次数（0 正常，1 降档，2 垃圾） */
   spoiled?: number
-  /** 心情卡：失效周 */
-  endsAtWeek?: AbsWeek
+  /** 装备词缀 */
+  affixIds?: string[]
+  /** 在空间里（抢不走） */
+  inSpace?: boolean
 }
 
-export interface NpcState {
+export interface PersonState {
   id: string
-  affection: number
+  /** 固定 NPC = defId；随机幸存者 = 生成的资料 */
+  defId?: string
+  generated?: { name: LocalizedText; rarity: Rarity; traitId: string; needs: SupplyKind; powerId?: string }
+  attrs: Attrs
   alive: boolean
-  /** 受伤等级 0~3 */
-  injury: number
-  cohabiting: boolean
-  /** 本周被派去的事件 id（在事件中 = 忙） */
+  injury: number           // 0~3
+  inBase: boolean
+  /** 男主：好感；伙伴：忠诚 */
+  affection: number
+  loyalty: number
+  job: CompanionJob
   busyWithEventId?: string
-  /** 多线"默契"状态 */
   harmony: boolean
+  equipment: Partial<Record<EquipSlot, string>>   // instanceId
+  powerRarity?: Rarity
 }
 
 export interface HeroState {
   name: LocalizedText
   attrs: Attrs
   health: number       // 0~10
-  morale: number       // 0~10
-  reputation: number   // 0~100
-  butterfly: number    // 0~100 蝴蝶效应
+  exposure: number     // 0~100
+  butterfly: number    // 0~100
   employed: boolean
   skippedWorkStreak: number
-  /** 生病/受伤：还有几周不能行动 */
   incapacitatedWeeks: number
+  equipment: Partial<Record<EquipSlot, string>>
+  spaceRarity: Rarity
+  /** 序章贷款余额（末日后作废） */
+  debt: number
+}
+
+export interface BaseState {
+  type: BaseType
+  modules: Array<{ moduleId: string; damaged: boolean }>
+  building?: { moduleId: string; weeksLeft: number }
+}
+
+export interface PetState {
+  id: string
+  defId: string
+  alive: boolean
 }
 
 export interface ActiveCrisis {
   cardDefId: string
   crisisKind: CrisisKind
-  /** 实际档位（可能因蝴蝶效应偏离记忆） */
-  tier: Tier
-  /** 玩家是否已通过情报看穿真实档位 */
+  rarity: Rarity
   revealed: boolean
-  /** 是否已被借力/剧情解顶住 */
   resolved: boolean
-  /** 本月结算周 */
-  dueWeek: AbsWeek
+  dueTurn: Turn
 }
 
-/** 一次放卡：把哪些卡放进某事件的哪些槽 */
 export interface Placement {
   eventId: string
-  /** slotId -> instanceId（主角用 'hero'，NPC 用 npcId） */
+  /** slotId -> instanceId | 'hero' | personId | petId */
   assignments: Record<string, string>
-  startedWeek: AbsWeek
-  resolvesAtWeek: AbsWeek
+  startedTurn: Turn
+  resolvesAtTurn: Turn
 }
 
 export interface EventResult {
@@ -358,55 +559,56 @@ export interface WeekReport {
   time: GameTime
   news: LocalizedText[]
   eventResults: EventResult[]
-  /** 本周吃喝/房租/麻烦卡扣的钱和状态 */
-  upkeep: { money: number; health: number; morale: number }
+  upkeep: { money: number; food: number; water: number; health: number; loyalty: number }
   spoiled: CardInstance[]
-  /** 月末才有 */
-  crisisResult?: { crisisKind: CrisisKind; tier: Tier; survived: boolean; text: LocalizedText }
+  produced: CardInstance[]
+  crisisResult?: { crisisKind: CrisisKind; rarity: Rarity; survived: boolean; text: LocalizedText }
+  deaths: string[]
   ending?: string
 }
 
 export interface GameState {
   seed: string
   rngState: number
+  turn: Turn
   time: GameTime
   hero: HeroState
   money: number
-  /** 通胀倍率 */
   priceMultiplier: number
-  warehouse: { capacity: number; cards: CardInstance[] }
-  /** 非物资的手牌：情报/技能/心情/麻烦 */
+  base: BaseState
+  /** 基地仓库 + 空间（inSpace 标记） */
+  warehouse: CardInstance[]
   hand: CardInstance[]
-  npcs: Record<string, NpcState>
+  people: Record<string, PersonState>
+  pets: PetState[]
+  factions: Record<string, { relation: number }>
   crisis: ActiveCrisis | null
-  /** 未来月份的危机预告（记忆 + 情报修正） */
-  forecast: Array<{ month: number; crisisKind: CrisisKind; tier?: Tier; memory: LocalizedText }>
+  forecast: Array<{ month: number; crisisKind: CrisisKind; rarity?: Rarity; memory: LocalizedText }>
+  /** 本周各地点抽出的事件 */
+  drawnEvents: Record<string, string[]>
   placements: Placement[]
   flags: Record<string, boolean>
   unlockedEvents: string[]
   usedOnceEvents: string[]
-  /** 日记：每周一条，UI 的"末日日记"页 */
-  diary: Array<{ week: AbsWeek; text: LocalizedText }>
+  diary: Array<{ turn: Turn; text: LocalizedText }>
   lastReport: WeekReport | null
+  rebirthPointsEarned: number
   ending: string | null
 }
 
 // ---------- 存档 / 多周目 ----------
 
 export interface MetaProgress {
-  /** 记忆碎片数 */
-  fragments: number
-  unlockedEndings: string[]
-  /** 已重生次数 */
+  rebirthPoints: number
   rebirths: number
+  unlockedEndings: string[]
+  purchased: Record<string, number>   // shopItemId -> 次数
 }
-
-export type RebirthBonus = 'warehouse4' | 'affection20' | 'attrPoint' | 'intelCard'
 
 export interface NewGameOptions {
   seed?: string
-  /** 3 种开局属性分配之一 */
-  build: 'balanced' | 'brain' | 'social'
-  bonus?: RebirthBonus
+  build: 'balanced' | 'strength' | 'mind' | 'charm'
+  meta: MetaProgress
+  /** 本世应用的商店效果 */
   bonusNpcId?: string
 }
