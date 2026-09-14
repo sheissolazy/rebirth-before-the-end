@@ -99,8 +99,8 @@ export function createEngine(content: ContentPack): GameEngine {
       if (s.money < price) throw new EngineError('NO_MONEY', `需要 ${price}`)
       const size = cardSize(ci, { instanceId: '', defId: cardDefId }) * count
       const free = baseStorage(ci, s) + spaceStorage(s) - usedStorage(ci, s, false) - usedStorage(ci, s, true) - reservedStorage(ci, s)
-      if (size > free) throw new EngineError('NO_ROOM', `仓库放不下：还剩 ${free} 格（含在路上的），这单要 ${size} 格。丢掉没用的、建储物间，或换更大的房子`)
       s.money -= price
+      if (size > free) notice(s, `已下单。按现在的仓库，到货时可能放不下（还能放 ${Math.max(0, free)} 格，这单 ${size} 格）：放不下的会进快递站待取，买房或腾地方后再取。`)
       s.orderedThisWeek[cardDefId] = already + count
       s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) + (ci.bases.get(s.base.type)?.deliveryDelay ?? 0), paid: price })
     } else {

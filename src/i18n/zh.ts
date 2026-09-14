@@ -55,7 +55,7 @@ export const zh = {
   'action.restartConfirm': '确定？这一世的进度会丢，重生点照常结算',
   'legend.defense': '防御：基地基础 + 模块 + 基地里每个人的体力/2（守卫再 +2）+ 你的体力/2 和武器 + 狗，顶尸潮和人祸',
   'map.energy': '本周精力 ⚡ {have}/{max}',
-  'shop.storage': '仓库 {used}/{cap} 格 · 在路上 {reserved} 格 · 还能放 {free} 格',
+  'shop.storage': '仓库 {used}/{cap} 格 · 在路上 {reserved} 格 · 还能放 {free} 格（超出的到货后进快递站待取，不会拦你下单）',
   'wh.summary': '{n} 张',
   'skill.use': '借力顶住本月危机',
   'skill.hint': '技能卡：对上类型时，一键代替硬顶本月危机。用掉后要等他的剧情再给。',

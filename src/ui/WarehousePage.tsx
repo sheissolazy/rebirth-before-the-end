@@ -119,7 +119,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
                     <div>{c.icon} {lt(c.name)} <span className="text-zinc-400">{state.time.phase === 'prologue' ? `￥${price}` : `💎${price}`}</span></div>
                     <div className="text-zinc-500">{lt(c.desc)}{meta && ` · ${meta}`}</div>
                   </span>
-                  <button className="shrink-0 rounded bg-amber-700 px-2 py-0.5 disabled:opacity-40" disabled={state.time.phase === 'prologue' && ordered >= limit} onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
+                  <button className="shrink-0 rounded bg-amber-700 px-2 py-0.5 disabled:opacity-40" disabled={state.time.phase === 'prologue' && ordered >= limit} title={st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < (c.kind === 'supply' ? c.size : 1) ? '现在放不下，到货会进快递站' : undefined} onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
                 </li>
               )
             })}
