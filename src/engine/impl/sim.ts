@@ -22,7 +22,7 @@ export interface SimResult {
 
 export function emptyMeta(): MetaProgress { return { rebirthPoints: 0, traitPoints: 0, rebirths: 0, unlockedEndings: [], purchased: {} } }
 
-export function simulateOne(engine: GameEngine, content: ContentPack, seed: string, meta = emptyMeta(), maxTurns = 60): SimResult {
+export function simulateOne(engine: GameEngine, content: ContentPack, seed: string, meta = emptyMeta(), maxTurns = 60, onWeek?: (s: GameState, report: import('../types').WeekReport) => void): SimResult {
   let s = engine.newGame(content, { seed, build: 'balanced', meta })
   let crisesSurvived = 0, crisesFailed = 0
   const cardsById = new Map(content.cards.map((c) => [c.id, c]))
@@ -58,12 +58,14 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
     if (s.time.phase === 'prologue') {
       const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_water_tablets', 'supply_compressed_biscuit', 'supply_canned', 'supply_antibiotics', 'supply_battery', 'supply_wood', 'equip_machete', 'supply_winter_clothes', 'supply_bolts', 'supply_soap']
       for (const id of shopping) for (let k = 0; k < 3; k++) { try { s = engine.buy(s, id, 1) } catch { break } }
+      // 水是出租屋的短板：每周再囤 4 板净水片
+      for (let k = 0; k < 4; k++) { try { s = engine.buy(s, 'supply_water_tablets', 1) } catch { break } }
       if (s.time.weeksBeforeEnd <= 2) { try { s = engine.build(s, 'apt_rain') } catch { /* ignore */ } }
     }
     // 候选幸存者：粮够、有位置才收
     for (const r of [...s.pendingRecruits]) {
       const st = engine.stats(s)
-      if (st.foodUnits >= st.weeklyFood * 6 && st.population < st.populationCap) { try { s = engine.recruit(s, r.id) } catch { /* full */ } }
+      if (st.foodUnits >= st.weeklyFood * 6 && st.waterUnits >= st.weeklyWater * 6 && st.population < st.populationCap) { try { s = engine.recruit(s, r.id) } catch { /* full */ } }
       else { try { s = engine.dismissRecruit(s, r.id) } catch { /* ignore */ } }
     }
     // 派工
@@ -86,7 +88,7 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
       if (e.storylineNpcId) sc += 8
       if (e.id === 'ev_office_work') sc += s.time.phase === 'prologue' ? 3 : 0
       if (e.id.includes('scavenge') || e.id.includes('ruin') || e.id.includes('search') || e.id.includes('farm_trade')) sc += 4
-      if (s.time.phase === 'apocalypse') { const st = engine.stats(s); if (st.foodUnits < st.weeklyFood * 4 && (e.id.includes('ruin') || e.id.includes('search') || e.id.includes('farm'))) sc += 10 }
+      if (s.time.phase === 'apocalypse') { const st = engine.stats(s); if (st.foodUnits < st.weeklyFood * 4 && (e.id.includes('ruin') || e.id.includes('search') || e.id.includes('farm'))) sc += 10; if (st.waterUnits < st.weeklyWater * 4 && e.id.includes('water')) sc += 12 }
       // 粮食紧张时别收人
       if (s.time.phase === 'apocalypse') { const st = engine.stats(s); if (st.foodUnits < st.weeklyFood * 6 && Object.values(e.outcomes).some((b) => b?.effects.some((ef) => ef.type === 'recruitRandom'))) sc -= 6 }
       return sc
@@ -101,6 +103,7 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
     const { state, report } = engine.endWeek(s)
     s = state
     if (report.crisisResult) { if (report.crisisResult.survived) crisesSurvived++; else crisesFailed++ }
+    onWeek?.(s, report)
   }
   const maxAffection = Math.max(0, ...Object.values(s.people).filter((p) => p.defId && content.npcs.find((n) => n.id === p.defId)?.romanceable).map((p) => p.affection))
   return {

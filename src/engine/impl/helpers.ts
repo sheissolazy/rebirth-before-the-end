@@ -76,6 +76,7 @@ export function baseDefense(ci: ContentIndex, state: GameState): number {
   for (const p of Object.values(state.people)) if (p.alive && p.inBase) d += Math.floor(p.attrs.strength / 2) + (p.job === 'guard' ? 2 : 0)
   d += Math.floor(state.hero.attrs.strength / 2) + equipmentDice(ci, state, state.hero.equipment, ['strength'])
   for (const pet of state.pets) if (pet.alive && ci.pets.get(pet.defId)?.species === 'dog') d += 1
+  for (const st of state.statuses) if (st.untilTurn > state.turn) d += ci.statuses.get(st.id)?.defenseBonus ?? 0
   return d
 }
 
@@ -115,6 +116,7 @@ export function crisisBreakdown(ci: ContentIndex, state: GameState, kind: Crisis
     items.push({ label: { zh: `你（体力 ${state.hero.attrs.strength}${Object.keys(state.hero.equipment).length ? '，含武器' : ''}）` }, points: Math.floor(state.hero.attrs.strength / 2) + equipmentDice(ci, state, state.hero.equipment, ['strength']) })
     for (const p of Object.values(state.people)) if (p.alive && p.inBase) items.push({ label: { zh: `${p.job === 'guard' ? '守卫' : '在家'}：${personName(ci, p).zh}（体力 ${p.attrs.strength}）` }, points: Math.floor(p.attrs.strength / 2) + (p.job === 'guard' ? 2 : 0) })
     for (const pet of state.pets) if (pet.alive && ci.pets.get(pet.defId)?.species === 'dog') items.push({ label: { zh: '狗' }, points: 1 })
+    for (const st of state.statuses) { const d = ci.statuses.get(st.id); if (st.untilTurn > state.turn && d?.defenseBonus) items.push({ label: { zh: `状态：${d.name.zh}` }, points: d.defenseBonus }) }
   }
   return items
 }
@@ -175,6 +177,13 @@ export function removeCard(state: GameState, instanceId: string): CardInstance |
 }
 
 export function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)) }
+
+export function hasStatus(state: GameState, id: string): boolean {
+  return state.statuses.some((s) => s.id === id && s.untilTurn > state.turn)
+}
+export function statusFlag(ci: ContentIndex, state: GameState, flag: 'noTrade' | 'noOuting'): boolean {
+  return state.statuses.some((s) => s.untilTurn > state.turn && ci.statuses.get(s.id)?.[flag])
+}
 
 export function populationCap(ci: ContentIndex, state: GameState): number {
   let cap = ci.bases.get(state.base.type)?.population ?? 3

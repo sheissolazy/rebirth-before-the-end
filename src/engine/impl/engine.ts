@@ -10,7 +10,7 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap, reservedStorage,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap, reservedStorage, statusFlag,
 } from './helpers'
 import { applyEffects, nextAffectionBoundary } from './effects'
 import { CRISIS_POINTS } from '../types'
@@ -64,7 +64,7 @@ export function createEngine(content: ContentPack): GameEngine {
       factions: Object.fromEntries(content.factions.map((f) => [f.id, { relation: f.initialRelation }])),
       crisis: null,
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
-      drawnEvents: {}, pendingChoice: null, pendingRecruits: [], orders: [], parcels: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
+      drawnEvents: {}, pendingChoice: null, pendingRecruits: [], orders: [], parcels: [], statuses: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
       lastReport: null, lastNotice: null, noticeSeq: 0, rebirthPointsEarned: 0, ending: null,
     }
@@ -86,6 +86,7 @@ export function createEngine(content: ContentPack): GameEngine {
   }
 
   function buyImpl(s: GameState, rng: Rng, cardDefId: string, count: number, factionId?: string): void {
+    if (statusFlag(ci, s, 'noTrade')) throw new EngineError('NO_TRADE', '你在低调期，不能交易')
     const def = ci.card(cardDefId)
     if (def.kind !== 'supply' && def.kind !== 'equipment') throw new EngineError('NOT_FOR_SALE', cardDefId)
     const ctx: EffectCtx = { ci, state: s, rng }
@@ -239,6 +240,7 @@ export function createEngine(content: ContentPack): GameEngine {
       notice(s, `退了 ${ci.card(o.cardDefId).name.zh}×${o.count}，退款 ￥${o.paid ?? 0}`)
     }),
     sell: (state, instanceId, factionId) => mutate(state, (s, rng) => {
+      if (statusFlag(ci, s, 'noTrade')) throw new EngineError('NO_TRADE', '你在低调期，不能交易')
       const inst = findCard(s, instanceId)
       if (!inst) throw new EngineError('NO_CARD', instanceId)
       const def = ci.card(inst.defId)
@@ -371,6 +373,8 @@ export function createEngine(content: ContentPack): GameEngine {
     },
     stats: (state) => ({
       energyMax: energyMax(state),
+      noTrade: statusFlag(ci, state, 'noTrade'),
+      noOuting: statusFlag(ci, state, 'noOuting'),
       population: population(state),
       populationCap: populationCap(ci, state),
       ...(() => {

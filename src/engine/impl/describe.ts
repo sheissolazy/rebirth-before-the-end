@@ -38,6 +38,8 @@ export function describeEffectsZh(ci: ContentIndex, effects: Effect[], actorName
       case 'losePet': parts.push('失去宠物'); break
       case 'rebirthPoints': parts.push(`重生点 +${e.delta}`); break
       case 'energy': parts.push(e.permanent ? `精力上限 ${sign(e.delta)}` : `精力 ${sign(e.delta)}`); break
+      case 'status': { const d = ci.statuses.get(e.id); parts.push(`状态「${d?.name.zh ?? e.id}」${e.weeks ?? d?.defaultWeeks ?? ''} 周`); break }
+      case 'killRandomCompanion': parts.push('一名伙伴死亡'); break
       case 'ending': parts.push('触发结局'); break
       default: break
     }

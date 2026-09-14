@@ -7,7 +7,12 @@ export function GiftModal({ state, person, store, onClose }: { state: GameState;
   const needs = person.generated?.needs ?? npcDefs.get(person.defId ?? '')?.needs
   const equipped = new Set([...Object.values(state.hero.equipment), ...Object.values(state.people).flatMap((p) => Object.values(p.equipment))])
   const all = state.warehouse.filter((c) => !equipped.has(c.instanceId)).map((c) => ({ c, ...engine.giftPreview(state, person.id, c.instanceId) }))
-  const items = all.filter((x) => x.raw > 0).sort((a, b) => b.raw - a.raw)
+  const itemsAll = all.filter((x) => x.raw > 0).sort((a, b) => b.raw - a.raw)
+  // 同品叠加
+  const seen = new Map<string, number>()
+  for (const x of itemsAll) { const k = `${x.c.defId}|${x.c.spoiled ?? 0}|${(x.c.affixIds ?? []).join(',')}`; seen.set(k, (seen.get(k) ?? 0) + 1) }
+  const shown = new Set<string>()
+  const items = itemsAll.filter((x) => { const k = `${x.c.defId}|${x.c.spoiled ?? 0}|${(x.c.affixIds ?? []).join(',')}`; if (shown.has(k)) return false; shown.add(k); return true }).map((x) => ({ ...x, n: seen.get(`${x.c.defId}|${x.c.spoiled ?? 0}|${(x.c.affixIds ?? []).join(',')}`) ?? 1 }))
   const capInfo = isRomanceable(person) ? engine.giftPreview(state, person.id, all[0]?.c.instanceId ?? '') : null
   const nearCap = !!capInfo && capInfo.cap - person.affection < 10
   const giftable = all.some((x) => { const d = cardDefs.get(x.c.defId); return d && (d.kind === 'supply' || d.kind === 'equipment' || d.kind === 'core') })
@@ -21,11 +26,11 @@ export function GiftModal({ state, person, store, onClose }: { state: GameState;
         {needs && <p className="text-xs text-zinc-400">{t('gift.needs', { kind: t(`supply.${needs}`) })}</p>}
         {nearCap && capInfo && <p className="mt-1 rounded bg-amber-950/40 p-2 text-xs text-amber-200">{t('gift.capNote', { a: person.affection, cap: capInfo.cap })}</p>}
         <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-          {items.map(({ c, raw, effective }) => {
+          {items.map(({ c, raw, effective, n }) => {
             const d = cardDefs.get(c.defId)!
             return (
               <li key={c.instanceId} className={`flex items-center justify-between rounded border p-2 text-xs ${RARITY_CLASS[d.rarity]}`}>
-                <span>{cardName(c)}</span>
+                <span>{cardName(c)}{n > 1 ? ` ×${n}` : ''}</span>
                 <button className="rounded bg-pink-900 px-2 py-0.5 disabled:opacity-40" disabled={effective <= 0} onClick={() => { store.act((s) => engine.gift(s, person.id, c.instanceId)); onClose() }}>{effective < raw ? t('gift.valueCapped', { n: raw, left: effective }) : t('gift.value', { n: raw })}</button>
               </li>
             )

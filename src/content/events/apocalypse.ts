@@ -176,6 +176,17 @@ export const apocalypseEvents: EventDef[] = [
     },
   },
   {
+    id: 'ev_river_water', kind: 'routine', locationId: 'river', icon: '🪣', repeatable: true, weight: 0,
+    title: { zh: '江边打水' }, text: { zh: '推着两个大桶去江边。来回半天，水边总有东西在等。生水得煮开或用净水片。' },
+    conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, DOG], check: { attrs: ['strength'] },
+    outcomes: {
+      fail: { text: { zh: '水边趴着的东西站起来了。桶扔了，人跑了。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+      common: { text: { zh: '只灌满一桶就撤了。' }, effects: [{ type: 'gainCard', cardId: 'supply_well_water', count: 1 }] },
+      fine: { text: { zh: '两桶都灌满，路上没遇到东西。' }, effects: [{ type: 'gainCard', cardId: 'supply_well_water', count: 2 }] },
+      rare: { text: { zh: '你找到一处上游的清水湾，还顺手捞了几瓶漂来的矿泉水。' }, effects: [{ type: 'gainCard', cardId: 'supply_well_water', count: 3 }, { type: 'gainCard', cardId: 'supply_water_box' }] },
+    },
+  },
+  {
     id: 'ev_ruin_survivor', locationId: 'ruin_market', icon: '🙋', weight: 5,
     title: { zh: '货架后面有人' }, text: { zh: '"别开枪！我有吃的可以分你。"' },
     conditions: [A], durationWeeks: 1, slots: [HERO, WEAPON], check: { attrs: ['charm', 'mind'] },
@@ -250,7 +261,7 @@ export const apocalypseEvents: EventDef[] = [
   {
     id: 'ev_farm_trade', energy: 1, locationId: 'farm', icon: '🌾', repeatable: true, weight: 8,
     title: { zh: '跟农场换粮' }, text: { zh: '老农还活着。他要药和电池。' },
-    conditions: [A], durationWeeks: 1, slots: [LEADER, GIFT('medicine', '带药去换'), { id: 'gift2', label: { zh: '带电池去换' }, required: false, accepts: { kind: 'supply', supplyKind: 'energy' }, consumes: true, bonusDice: 2 }], check: { attrs: ['charm'] },
+    conditions: [A, { type: 'status', id: 'lowkey', value: false }], durationWeeks: 1, slots: [LEADER, GIFT('medicine', '带药去换'), { id: 'gift2', label: { zh: '带电池去换' }, required: false, accepts: { kind: 'supply', supplyKind: 'energy' }, consumes: true, bonusDice: 2 }], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '他不信你。' }, effects: [] },
       common: { text: { zh: '换了两袋米。' }, effects: [{ type: 'gainCard', cardId: 'supply_rice_5kg', count: 2 }] },
@@ -282,7 +293,7 @@ export const apocalypseEvents: EventDef[] = [
   {
     id: 'ev_army_trade', kind: 'routine', energy: 1, locationId: 'armygate', icon: '🪖', repeatable: true, weight: 0,
     title: { zh: '跟军区交易' }, text: { zh: '晶核换东西。他们的价公道，但规矩多。' },
-    conditions: [A, { type: 'relationAtLeast', factionId: 'army', value: 0 }], durationWeeks: 1, slots: [HERO, { id: 'core', label: { zh: '晶核' }, required: true, accepts: { kind: 'core' }, consumes: true }], check: { attrs: ['charm', 'mind'] },
+    conditions: [A, { type: 'status', id: 'lowkey', value: false }, { type: 'relationAtLeast', factionId: 'army', value: 0 }], durationWeeks: 1, slots: [HERO, { id: 'core', label: { zh: '晶核' }, required: true, accepts: { kind: 'core' }, consumes: true }], check: { attrs: ['charm', 'mind'] },
     outcomes: {
       fail: { text: { zh: '他们扣了你的晶核，说是"登记"。' }, effects: [{ type: 'relation', factionId: 'army', delta: 2 }] },
       common: { text: { zh: '换了一箱压缩饼干。' }, effects: [{ type: 'gainCard', cardId: 'supply_compressed_biscuit' }, { type: 'relation', factionId: 'army', delta: 3 }] },
@@ -362,7 +373,7 @@ export const apocalypseEvents: EventDef[] = [
   {
     id: 'ev_crow_pay', energy: 1, locationId: 'crow_turf', icon: '💰', repeatable: true, weight: 6,
     title: { zh: '交保护费' }, text: { zh: '丢脸，但便宜。' },
-    conditions: [A, { type: 'relationAtLeast', factionId: 'crow', value: -80 }], durationWeeks: 1, slots: [HERO, { id: 'pay', label: { zh: '交出去的东西' }, required: true, accepts: { kind: 'supply' }, consumes: true }],
+    conditions: [A, { type: 'status', id: 'lowkey', value: false }, { type: 'relationAtLeast', factionId: 'crow', value: -80 }], durationWeeks: 1, slots: [HERO, { id: 'pay', label: { zh: '交出去的东西' }, required: true, accepts: { kind: 'supply' }, consumes: true }],
     outcomes: { fine: { text: { zh: '他们收了。这个月不会来。' }, effects: [{ type: 'relation', factionId: 'crow', delta: 15 }, { type: 'stat', stat: 'exposure', delta: 3 }] } },
   },
   {

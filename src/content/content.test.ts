@@ -24,6 +24,7 @@ function checkEffect(where: string, ef: Effect, problems: string[]) {
     case 'buildModule': case 'damageModule': if (ef.moduleId && !moduleIds.has(ef.moduleId)) problems.push(`${where}: module ${ef.moduleId}`); break
     case 'adoptPet': case 'losePet': if (!petIds.has(ef.petId)) problems.push(`${where}: pet ${ef.petId}`); break
     case 'powerUp': if (!powerIds.has(ef.powerId)) problems.push(`${where}: power ${ef.powerId}`); break
+    case 'status': if (!content.statuses.some((x) => x.id === ef.id)) problems.push(`${where}: status ${ef.id}`); break
     default: break
   }
 }
@@ -32,6 +33,7 @@ function checkCondition(where: string, c: Condition, problems: string[]) {
   if ('factionId' in c && !factionIds.has(c.factionId)) problems.push(`${where}: faction ${c.factionId}`)
   if ('moduleId' in c && !moduleIds.has(c.moduleId)) problems.push(`${where}: module ${c.moduleId}`)
   if ('cardId' in c && !cardIds.has(c.cardId)) problems.push(`${where}: card ${c.cardId}`)
+  if (c.type === 'status' && !content.statuses.some((x) => x.id === c.id)) problems.push(`${where}: status ${c.id}`)
   if (c.type === 'not') checkCondition(where, c.cond, problems)
 }
 

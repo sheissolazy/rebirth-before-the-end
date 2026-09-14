@@ -8,6 +8,7 @@ import {
   attrSum, equipmentDice, effectiveRarity, rarityIndex, affectionRank, rankIndex, isRomanceable, isCompanion, findCard, removeCard,
 } from './helpers'
 import { EngineError } from '../api'
+import { statusFlag } from './helpers'
 import { describeEffectsZh } from './describe'
 import { personName } from './helpers'
 
@@ -17,8 +18,10 @@ const DRAWS_PER_LOCATION = 3
 export function drawEvents(ci: ContentIndex, state: GameState, rng: Rng): void {
   const drawn: Record<string, string[]> = {}
   const inProgress = new Set(state.placements.map((p) => p.eventId))
+  const grounded = statusFlag(ci, state, 'noOuting')
   for (const loc of ci.pack.locations) {
     if (loc.phase !== 'both' && loc.phase !== state.time.phase) continue
+    if (grounded && loc.id !== 'home') continue
     const pool = ci.pack.events.filter((e) => !e.instant && e.locationId === loc.id && isEventEligible(ci, state, e, rng))
     const fixed = pool.filter((e) => e.weight <= 0 || inProgress.has(e.id))
     let random = pool.filter((e) => e.weight > 0 && !inProgress.has(e.id))

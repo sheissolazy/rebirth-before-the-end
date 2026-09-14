@@ -83,7 +83,7 @@ export const moreEvents: EventDef[] = [
   {
     id: 'ev_gas_convenience', energy: 1, locationId: 'gasstation', icon: '🏪', weight: 6,
     title: { zh: '加油站的便利店' }, text: { zh: '小鱼守着这家店。她什么都有，什么都要换。' },
-    conditions: [A, { type: 'npcAlive', npcId: 'xiaoyu' }], durationWeeks: 1, slots: [LEADER, { id: 'trade', label: { zh: '拿去换的东西' }, required: false, accepts: { kind: 'supply' }, consumes: true, bonusDice: 2 }], check: { attrs: ['charm'] },
+    conditions: [A, { type: 'npcAlive', npcId: 'xiaoyu' }, { type: 'status', id: 'lowkey', value: false }], durationWeeks: 1, slots: [LEADER, { id: 'trade', label: { zh: '拿去换的东西' }, required: false, accepts: { kind: 'supply' }, consumes: true, bonusDice: 2 }], check: { attrs: ['charm'] },
     outcomes: {
       fail: { text: { zh: '她嫌你的东西不值钱。' }, effects: [{ type: 'affection', npcId: 'xiaoyu', delta: -2 }] },
       common: { text: { zh: '换了两箱功能饮料。' }, effects: [{ type: 'gainCard', cardId: 'supply_energy_drink', count: 2 }, { type: 'affection', npcId: 'xiaoyu', delta: 3 }] },

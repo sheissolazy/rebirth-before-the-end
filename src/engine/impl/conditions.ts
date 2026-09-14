@@ -1,7 +1,7 @@
 import type { Condition, GameState } from '../types'
 import type { ContentIndex } from './content'
 import { Rng } from './rng'
-import { affectionRank, rankIndex, supplyPoints, rarityIndex, baseDefense } from './helpers'
+import { affectionRank, rankIndex, supplyPoints, rarityIndex, baseDefense, hasStatus } from './helpers'
 
 export function checkCondition(ci: ContentIndex, state: GameState, c: Condition, rng?: Rng): boolean {
   const t = state.time
@@ -36,6 +36,7 @@ export function checkCondition(ci: ContentIndex, state: GameState, c: Condition,
     case 'defenseAtMost': return baseDefense(ci, state) <= c.value
     case 'defenseAtLeast': return baseDefense(ci, state) >= c.value
     case 'crushesInBase': return Object.values(state.people).filter((p) => p.alive && p.inBase && p.defId && ci.npcs.get(p.defId)?.romanceable && p.affection >= 60).length >= c.min
+    case 'status': return hasStatus(state, c.id) === (c.value ?? true)
     case 'hasCard': return state.warehouse.some((x) => x.defId === c.cardId) || state.hand.some((x) => x.defId === c.cardId)
     case 'not': return !checkCondition(ci, state, c.cond, rng)
     case 'random': return rng ? rng.chance(c.chance) : c.chance >= 1

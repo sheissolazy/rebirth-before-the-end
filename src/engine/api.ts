@@ -79,6 +79,9 @@ export interface CrisisBreakdown {
 
 export interface DerivedStats {
   energyMax: number
+  /** 状态限制 */
+  noTrade: boolean
+  noOuting: boolean
   /** 基地人口（含你）与上限 */
   population: number
   populationCap: number

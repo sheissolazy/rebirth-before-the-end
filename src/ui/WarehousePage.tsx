@@ -26,17 +26,30 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
     return byKind
   }
 
-  const Card = ({ c }: { c: CardInstance }) => {
+  const isEquipped = (c: CardInstance) => Object.values(state.hero.equipment).includes(c.instanceId) || Object.values(state.people).some((p) => Object.values(p.equipment).includes(c.instanceId))
+  /** 同品叠加：同 defId、同过期档、同词缀、都没装备的算一叠 */
+  const stackKey = (c: CardInstance) => `${c.defId}|${c.spoiled ?? 0}|${(c.affixIds ?? []).join(',')}|${isEquipped(c) ? c.instanceId : ''}`
+  const stacks = (cards: CardInstance[]) => {
+    const m = new Map<string, CardInstance[]>()
+    for (const c of cards) { const k = stackKey(c); m.set(k, [...(m.get(k) ?? []), c]) }
+    return [...m.values()]
+  }
+
+  const Card = ({ stack }: { stack: CardInstance[] }) => {
+    const c = stack[0]
     const d = cardDefs.get(c.defId)!
-    const equipped = Object.values(state.hero.equipment).includes(c.instanceId) || Object.values(state.people).some((p) => Object.values(p.equipment).includes(c.instanceId))
+    const equipped = isEquipped(c)
+    const units = stack.reduce((t, x) => t + (x.unitsLeft ?? 0), 0)
+    const minExp = Math.min(...stack.map((x) => x.expiresAtTurn ?? 1e9))
+    const label = stack.length > 1 ? (c.unitsLeft !== undefined ? t('wh.stackUnits', { n: stack.length, units }) : t('wh.stack', { n: stack.length })) : ''
     return (
       <li className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded border px-2 py-1 text-xs ${RARITY_CLASS[d.rarity]} ${equipped ? 'bg-amber-950/30' : 'bg-zinc-900'}`}>
-        <span className="font-medium">{cardName(c)} {equipped && '（已装备）'}<span className="ml-1 font-normal text-zinc-500">{c.expiresAtTurn !== undefined && `${Math.max(0, c.expiresAtTurn - state.turn)} 周后过期`}{d.kind === 'supply' && d.supplyKind === 'material' ? `${d.rarity === 'common' ? 1 : d.rarity === 'fine' ? 2 : d.rarity === 'rare' ? 4 : 8} 分` : ''}</span></span>
+        <span className="font-medium">{stack.length > 1 ? `${d.icon ?? ''}${lt(d.name)} ${label}` : cardName(c)} {equipped && '（已装备）'}<span className="ml-1 font-normal text-zinc-500">{minExp < 1e9 && `最早 ${Math.max(0, minExp - state.turn)} 周后过期`}{d.kind === 'supply' && d.supplyKind === 'material' ? ` ${d.rarity === 'common' ? 1 : d.rarity === 'fine' ? 2 : d.rarity === 'rare' ? 4 : 8} 分/件` : ''}</span></span>
         <div className="flex flex-wrap gap-1">
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.moveToSpace(s, c.instanceId, !c.inSpace))}>{c.inSpace ? t('action.fromSpace') : t('action.toSpace')}</button>
           {d.kind === 'equipment' && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.equip(s, 'hero', c.instanceId))}>{t('action.equip')}</button>}
           {d.kind === 'supply' && d.onUse && <button className="rounded bg-emerald-900 px-2 py-0.5" onClick={() => store.act((s) => engine.useItem(s, c.instanceId))}>{t('action.use')}</button>}
-          {(d.kind === 'supply' || d.kind === 'equipment') && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.sell(s, c.instanceId, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.sell')}</button>}
+          {(d.kind === 'supply' || d.kind === 'equipment') && <button className="rounded bg-zinc-800 px-2 py-0.5 disabled:opacity-40" disabled={st.noTrade} onClick={() => store.act((s) => engine.sell(s, c.instanceId, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.sell')}</button>}
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.discard(s, c.instanceId))}>{t('action.discard')}</button>
         </div>
       </li>
@@ -57,7 +70,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
         {[...KINDS, 'equipment', 'core', 'other'].map((k) => g[k]?.length ? (
           <details key={k} className="mt-2" open={k === 'food' || k === 'water' || k === 'equipment'}>
             <summary className="cursor-pointer text-xs text-zinc-300">{groupLabel(k)} <span className="text-zinc-500">· {groupSummary(k, g[k])}</span></summary>
-            <ul className="mt-1 space-y-1">{g[k].map((c) => <Card key={c.instanceId} c={c} />)}</ul>
+            <ul className="mt-1 space-y-1">{stacks(g[k]).map((st) => <Card key={st[0].instanceId} stack={st} />)}</ul>
           </details>
         ) : null)}
         {!Object.keys(g).length && <p className="text-xs text-zinc-500">空的。</p>}
@@ -81,6 +94,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
       {shopOpen && (
         <section className="rounded-lg border border-amber-900 p-3">
           <h3 className="font-semibold">{state.time.phase === 'prologue' ? `${t('shop.online')}（物价 ×${state.priceMultiplier}）` : '以物易物（用晶核分换）'}</h3>
+          {st.noTrade && <p className="mt-1 rounded bg-red-900/40 p-2 text-xs text-red-200">{t('shop.noTrade')}</p>}
           <p className={`mt-1 text-xs ${st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < 5 ? 'text-red-400' : 'text-amber-200'}`}>{t('shop.storage', { used: st.storageUsed + st.spaceUsed, cap: st.storageCap + st.spaceCap, reserved: st.storageReserved, free: st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved })}</p>
           {state.time.phase === 'prologue' && <p className="mt-1 text-xs text-zinc-500">{t('shop.onlineHint')}</p>}
           {state.orders.length > 0 && (
@@ -119,7 +133,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
                     <div>{c.icon} {lt(c.name)} <span className="text-zinc-400">{state.time.phase === 'prologue' ? `￥${price}` : `💎${price}`}</span></div>
                     <div className="text-zinc-500">{lt(c.desc)}{meta && ` · ${meta}`}</div>
                   </span>
-                  <button className="shrink-0 rounded bg-amber-700 px-2 py-0.5 disabled:opacity-40" disabled={state.time.phase === 'prologue' && ordered >= limit} title={st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < (c.kind === 'supply' ? c.size : 1) ? '现在放不下，到货会进快递站' : undefined} onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
+                  <button className="shrink-0 rounded bg-amber-700 px-2 py-0.5 disabled:opacity-40" disabled={st.noTrade || (state.time.phase === 'prologue' && ordered >= limit)} title={st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < (c.kind === 'supply' ? c.size : 1) ? '现在放不下，到货会进快递站' : undefined} onClick={() => store.act((s) => engine.buy(s, c.id, 1, state.time.phase === 'apocalypse' ? faction : undefined))}>{t('action.buy')}</button>
                 </li>
               )
             })}

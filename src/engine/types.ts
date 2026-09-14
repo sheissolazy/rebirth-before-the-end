@@ -340,6 +340,8 @@ export type Condition =
   | { type: 'hasCard'; cardId: string }
   /** 住在基地且好感 ≥ 暧昧的男主人数 */
   | { type: 'crushesInBase'; min: number }
+  /** 是否挂着某个状态 */
+  | { type: 'status'; id: string; value?: boolean }
   | { type: 'defenseAtMost'; value: number }
   | { type: 'defenseAtLeast'; value: number }
   | { type: 'not'; cond: Condition }
@@ -408,6 +410,10 @@ export type Effect =
   | { type: 'losePet'; petId: string }
   | { type: 'rebirthPoints'; delta: number }
   | { type: 'energy'; delta: number; permanent?: boolean }
+  /** 挂一个持续状态（见 StatusDef），weeks 覆盖默认时长 */
+  | { type: 'status'; id: string; weeks?: number }
+  /** 随机杀死一名在基地的伙伴（不含男主） */
+  | { type: 'killRandomCompanion' }
   | { type: 'ending'; endingId: string }
 
 export interface OutcomeBranch {
@@ -477,6 +483,23 @@ export interface EndingDef {
   rebirthPoints: number
 }
 
+/** 持续状态：由突发选择/事件挂上，按周倒计时，期间限制行为或每周生效 */
+export interface StatusDef {
+  id: string
+  name: LocalizedText
+  desc: LocalizedText
+  icon?: string
+  defaultWeeks: number
+  /** 不能网购/以物易物/交易类事件 */
+  noTrade?: boolean
+  /** 不能出门（城里地点的事件不可用） */
+  noOuting?: boolean
+  /** 每周暴露变化 */
+  weeklyExposure?: number
+  /** 防御加成 */
+  defenseBonus?: number
+}
+
 /** 开局特质：cost > 0 花预算，cost < 0 给预算 */
 export interface StartTraitDef {
   id: string
@@ -523,6 +546,7 @@ export interface ContentPack {
   endings: EndingDef[]
   rebirthShop: RebirthShopItemDef[]
   startTraits: StartTraitDef[]
+  statuses: StatusDef[]
 }
 
 // ---------- 运行时状态 ----------
@@ -677,6 +701,8 @@ export interface GameState {
   orders: Order[]
   /** 快递站待取：到了但仓库放不下的东西。随时取回或丢弃；末日一到全部丢失 */
   parcels: CardInstance[]
+  /** 挂着的状态：id + 到期回合 */
+  statuses: Array<{ id: string; untilTurn: Turn }>
   /** 本周各商品已下单件数（限购） */
   orderedThisWeek: Record<string, number>
   placements: Placement[]

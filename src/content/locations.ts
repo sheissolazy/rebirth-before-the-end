@@ -18,5 +18,6 @@ export const locations: LocationDef[] = [
   { id: 'factory', phase: 'apocalypse', name: { zh: '工厂' }, desc: { zh: '钢材、零件、柴油。' }, icon: '🏭', pos: { x: 15, y: 45 }, encounter: { zombie: 35, survivor: 15, faction: 20 } },
   { id: 'gasstation', phase: 'apocalypse', name: { zh: '加油站' }, desc: { zh: '油。谁都想要。' }, icon: '⛽', pos: { x: 60, y: 82 }, encounter: { zombie: 30, survivor: 20, faction: 40 } },
   { id: 'farm', phase: 'apocalypse', name: { zh: '郊区农场' }, desc: { zh: '种子、牲畜、可能的退路。' }, icon: '🌾', pos: { x: 10, y: 15 }, encounter: { zombie: 20, survivor: 30, faction: 15 } },
+  { id: 'river', phase: 'apocalypse', name: { zh: '临江江边' }, desc: { zh: '断水后全城的水源。丧尸也会往水边聚。' }, icon: '🏞️', pos: { x: 88, y: 78 }, encounter: { zombie: 35, survivor: 25, faction: 15 } },
   { id: 'crow_turf', phase: 'apocalypse', name: { zh: '黑鸦地盘' }, desc: { zh: '周明宇的匪帮。别一个人来。' }, icon: '🐦‍⬛', pos: { x: 45, y: 90 }, encounter: { zombie: 10, survivor: 10, faction: 80 } },
 ]

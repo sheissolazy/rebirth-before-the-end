@@ -107,12 +107,12 @@ export const choiceEvents: EventDef[] = [
     choices: [
       { id: 'pay', label: { zh: '交赎金（丢一批物资）' }, outcomes: { fine: { text: { zh: '人回来了，瘦了一圈。黑鸦知道你会交钱，下次还会来。' }, effects: [{ type: 'loseCard', cardId: 'supply_rice_5kg', count: 2 }, { type: 'loseCard', cardId: 'supply_water_box', count: 2 }, { type: 'loseCard', cardId: 'supply_canned' }, { type: 'stat', stat: 'exposure', delta: 5 }, { type: 'relation', factionId: 'crow', delta: 5 }] } } },
       { id: 'raid', label: { zh: '带人去抢回来' }, check: { attrs: ['strength', 'mind'] }, outcomes: {
-        fail: { text: { zh: '你们中了埋伏。人没救回来。' }, effects: [{ type: 'injure', target: 'hero', severity: 2 }, { type: 'loyalty', target: 'all', delta: -15 }, { type: 'relation', factionId: 'crow', delta: -20 }] },
+        fail: { text: { zh: '你们中了埋伏。人没救回来。' }, effects: [{ type: 'killRandomCompanion' }, { type: 'injure', target: 'hero', severity: 2 }, { type: 'loyalty', target: 'all', delta: -15 }, { type: 'relation', factionId: 'crow', delta: -20 }] },
         fine: { text: { zh: '你们把人抢了回来，还顺走了他们一箱东西。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 2 }, { type: 'loyalty', target: 'all', delta: 10 }, { type: 'relation', factionId: 'crow', delta: -20 }, { type: 'stat', stat: 'exposure', delta: -10 }] },
         rare: { text: { zh: '周明宇亲自出面。你当着他的人的面把他按在了地上。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 3 }, { type: 'loyalty', target: 'all', delta: 15 }, { type: 'relation', factionId: 'crow', delta: -30 }, { type: 'stat', stat: 'exposure', delta: -20 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
       } },
-      { id: 'army', label: { zh: '找顾沉帮忙（需好感朋友）' }, conditions: [{ type: 'affectionAtLeast', npcId: 'guchen', rank: 'friend' }], outcomes: { fine: { text: { zh: '一个班的兵开车去了旧网吧。人回来了，黑鸦记住了这笔账。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'relation', factionId: 'army', delta: -5 }, { type: 'relation', factionId: 'crow', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -10 }] } } },
-      { id: 'abandon', label: { zh: '不管' }, outcomes: { fine: { text: { zh: '第四天，他们把人送回来了。不是活的。' }, effects: [{ type: 'loyalty', target: 'all', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -15 }] } } },
+      { id: 'army', label: { zh: '找顾沉帮忙（需好感朋友）' }, conditions: [{ type: 'affectionAtLeast', npcId: 'guchen', rank: 'friend' }], outcomes: { fine: { text: { zh: '一个班的兵开车去了旧网吧。人回来了，黑鸦记住了这笔账。这个月兵就驻在你楼下。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'relation', factionId: 'army', delta: -5 }, { type: 'relation', factionId: 'crow', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -10 }, { type: 'status', id: 'army_guard', weeks: 4 }] } } },
+      { id: 'abandon', label: { zh: '不管' }, outcomes: { fine: { text: { zh: '第四天，他们把人送回来了。不是活的。' }, effects: [{ type: 'killRandomCompanion' }, { type: 'loyalty', target: 'all', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -15 }] } } },
     ],
   },
   {
@@ -120,9 +120,9 @@ export const choiceEvents: EventDef[] = [
     title: { zh: '有人在打听你' }, text: { zh: '联盟的人提醒你：有人在到处问"那个囤了很多东西的女的"住哪。' },
     conditions: [A, { type: 'statAtLeast', stat: 'exposure', value: 50 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
-      { id: 'lowkey', label: { zh: '低调一个月：不交易、不出风头' }, outcomes: { fine: { text: { zh: '风头过去了。' }, effects: [{ type: 'stat', stat: 'exposure', delta: -20 }] } } },
+      { id: 'lowkey', label: { zh: '低调一个月：不交易、不出风头（挂 4 周"低调"状态，期间不能交易，每周暴露 −3）' }, outcomes: { fine: { text: { zh: '你把摊子收了。接下来一个月，谁问都说没有。' }, effects: [{ type: 'status', id: 'lowkey', weeks: 4 }, { type: 'stat', stat: 'exposure', delta: -8 }] } } },
       { id: 'move', label: { zh: '把值钱的东西转进空间' }, outcomes: { fine: { text: { zh: '就算被搜，也搜不出什么。' }, effects: [{ type: 'stat', stat: 'exposure', delta: -10 }] } } },
-      { id: 'ignore', label: { zh: '随他们问' }, outcomes: { fine: { text: { zh: '你没当回事。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] } } },
+      { id: 'ignore', label: { zh: '随他们问' }, outcomes: { fine: { text: { zh: '你没当回事。之后一个月，总有人在你楼下转。' }, effects: [{ type: 'status', id: 'watched', weeks: 4 }] } } },
     ],
   },
   {
@@ -131,11 +131,11 @@ export const choiceEvents: EventDef[] = [
     conditions: [A, { type: 'month', from: 2, to: 12 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
       { id: 'check', label: { zh: '让他卷起袖子' }, check: { attrs: ['charm', 'mind'] }, outcomes: {
-        fail: { text: { zh: '真是咬的。他哭着求你。你没有隔离舱。第二天你不得不做那件事。' }, effects: [{ type: 'loyalty', target: 'all', delta: -10 }, { type: 'stat', stat: 'health', delta: -1 }] },
+        fail: { text: { zh: '真是咬的。他哭着求你。你没有隔离舱。第二天你不得不做那件事。' }, effects: [{ type: 'killRandomCompanion' }, { type: 'loyalty', target: 'all', delta: -10 }, { type: 'stat', stat: 'health', delta: -1 }] },
         fine: { text: { zh: '真是刮的。他很委屈，但理解。' }, effects: [{ type: 'loyalty', target: 'all', delta: 2 }] },
       } },
       { id: 'trust', label: { zh: '信他' }, check: { attrs: ['mind'] }, outcomes: {
-        fail: { text: { zh: '三天后，他在夜里变了。' }, effects: [{ type: 'injure', target: 'hero', severity: 2 }, { type: 'loyalty', target: 'all', delta: -15 }] },
+        fail: { text: { zh: '三天后，他在夜里变了。' }, effects: [{ type: 'killRandomCompanion' }, { type: 'injure', target: 'hero', severity: 2 }, { type: 'loyalty', target: 'all', delta: -15 }] },
         fine: { text: { zh: '真是刮的。他记住了你信他。' }, effects: [{ type: 'loyalty', target: 'all', delta: 6 }] },
       } },
     ],
@@ -177,7 +177,7 @@ export const choiceEvents: EventDef[] = [
     title: { zh: '走街串巷的贩子' }, text: { zh: '他背着一个大包，说有药。要晶核或者枪。' },
     conditions: [A, { type: 'month', from: 2, to: 12 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
     choices: [
-      { id: 'trade', label: { zh: '用晶核换' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'food', minPoints: 0 }], check: { attrs: ['charm', 'mind'] }, outcomes: {
+      { id: 'trade', label: { zh: '用一颗普通晶核换' }, conditions: [{ type: 'hasCard', cardId: 'core_common' }], check: { attrs: ['charm', 'mind'] }, outcomes: {
         fail: { text: { zh: '是过期的。' }, effects: [{ type: 'loseCard', cardId: 'core_common' }, { type: 'gainCard', cardId: 'supply_bandage' }] },
         fine: { text: { zh: '真货。' }, effects: [{ type: 'loseCard', cardId: 'core_common' }, { type: 'gainCard', cardId: 'supply_antibiotics' }] },
         rare: { text: { zh: '他多给了你一瓶，说"下次还找我"。' }, effects: [{ type: 'loseCard', cardId: 'core_common' }, { type: 'gainCard', cardId: 'supply_antibiotics', count: 2 }, { type: 'gainCard', cardId: 'supply_medkit' }] },

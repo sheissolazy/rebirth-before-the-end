@@ -38,6 +38,8 @@ export function describeEffects(effects: Effect[]): string {
       case 'losePet': parts.push('失去宠物'); break
       case 'rebirthPoints': parts.push(`重生点 +${e.delta}`); break
       case 'energy': parts.push(e.permanent ? `精力上限 ${e.delta > 0 ? '+' : ''}${e.delta}` : `精力 ${e.delta > 0 ? '+' : ''}${e.delta}`); break
+      case 'status': { const d = content.statuses.find((x) => x.id === e.id); parts.push(`状态「${d ? lt(d.name) : e.id}」${e.weeks ?? d?.defaultWeeks ?? ''} 周`); break }
+      case 'killRandomCompanion': parts.push('一名伙伴死亡'); break
       case 'ending': parts.push('触发结局'); break
     }
   }

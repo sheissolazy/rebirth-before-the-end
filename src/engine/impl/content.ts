@@ -1,5 +1,5 @@
 import type {
-  ContentPack, CardDef, EventDef, NpcDef, ModuleDef, BaseDef, FactionDef, PetDef, PowerDef, LootTableDef, AffixDef, LocationDef,
+  ContentPack, CardDef, EventDef, NpcDef, ModuleDef, BaseDef, FactionDef, PetDef, PowerDef, LootTableDef, AffixDef, LocationDef, StatusDef,
 } from '../types'
 
 /** 内容包索引：按 id 快速查。 */
@@ -15,6 +15,7 @@ export class ContentIndex {
   loot = new Map<string, LootTableDef>()
   affixes = new Map<string, AffixDef>()
   locations = new Map<string, LocationDef>()
+  statuses = new Map<string, StatusDef>()
   /** 需要被 unlockEvent 解锁才可见的事件 */
   lockedEvents = new Set<string>()
 
@@ -33,6 +34,7 @@ export class ContentIndex {
     for (const l of pack.lootTables) this.loot.set(l.id, l)
     for (const a of pack.affixes) this.affixes.set(a.id, a)
     for (const l of pack.locations) this.locations.set(l.id, l)
+    for (const st of pack.statuses ?? []) this.statuses.set(st.id, st)
     for (const e of pack.events) if (e.locked) this.lockedEvents.add(e.id)
   }
 

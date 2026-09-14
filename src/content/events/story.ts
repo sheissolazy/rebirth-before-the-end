@@ -48,7 +48,7 @@ export const storyEvents: EventDef[] = [
     title: { zh: '"住到我这里来"' }, text: { zh: '他站在你门口，说的是军区。你说的是这里。' },
     conditions: [A, { type: 'affectionAtLeast', npcId: 'guchen', rank: 'crush' }], durationWeeks: 1, slots: [HERO], check: { attrs: ['charm'] },
     outcomes: {
-      fail: { text: { zh: '他走了。第二天送来一个班的兵守你的楼。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'relation', factionId: 'army', delta: 10 }] },
+      fail: { text: { zh: '他走了。第二天送来一个班的兵守你的楼。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'relation', factionId: 'army', delta: 10 }, { type: 'status', id: 'army_guard', weeks: 4 }] },
       common: { text: { zh: '他每周来两次。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 10 }] },
       fine: { text: { zh: '他搬了进来。军装挂在你衣柜里，很不搭。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 15 }, { type: 'npcJoin', npcId: 'guchen' }] },
     },

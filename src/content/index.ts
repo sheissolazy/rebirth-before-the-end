@@ -12,6 +12,7 @@ import { endings } from './endings'
 import { survivorTraits, survivorNames } from './survivors'
 import { lootTables, affixes } from './loot'
 import { startTraits } from './traits'
+import { statuses } from './statuses'
 
 /** 当前内容包。空数组的部分按 docs/tasks 逐步填。 */
 export const content: ContentPack = {
@@ -31,6 +32,7 @@ export const content: ContentPack = {
   memories: memoriesYear1,
   endings,
   startTraits,
+  statuses,
   rebirthShop: [
     { id: 'shop_weeks', name: { zh: '更早醒来' }, desc: { zh: '序章 +4 周，最多到 48 周。' }, cost: [10, 20, 40, 80, 120, 160, 200, 250, 300, 350, 400], effect: { type: 'prologueWeeks', delta: 4 } },
     { id: 'shop_money', name: { zh: '一笔意外之财' }, desc: { zh: '开局 +5 万（基础 3 万）。' }, cost: [10, 20, 40, 80], effect: { type: 'money', delta: 50000 } },

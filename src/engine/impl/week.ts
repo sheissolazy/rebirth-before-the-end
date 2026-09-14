@@ -92,8 +92,16 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
     if (state.hero.debt > 0) { const before = state.hero.debt; state.hero.debt = Math.round(state.hero.debt * 1.02); report.changes.push({ label: { zh: '负债' }, delta: state.hero.debt - before, reason: { zh: '贷款利息 2%/周' } }) }
   }
 
-  // 10b. 不出风头就慢慢被遗忘：暴露每周 -1
+  // 10b. 不出风头就慢慢被遗忘：暴露每周 -1；状态的每周效果与到期
   if (state.hero.exposure > 0) state.hero.exposure -= 1
+  for (const st of state.statuses) {
+    const d = ci.statuses.get(st.id)
+    if (!d || st.untilTurn <= state.turn) continue
+    if (d.weeklyExposure) { const e0 = state.hero.exposure; state.hero.exposure = clamp(state.hero.exposure + d.weeklyExposure, 0, 100); if (state.hero.exposure !== e0) report.changes.push({ label: { zh: '暴露' }, delta: state.hero.exposure - e0, reason: { zh: `状态「${d.name.zh}」` } }) }
+  }
+  const expired = state.statuses.filter((st) => st.untilTurn <= state.turn)
+  for (const st of expired) report.news.push({ zh: `状态「${ci.statuses.get(st.id)?.name.zh ?? st.id}」结束了。` })
+  state.statuses = state.statuses.filter((st) => st.untilTurn > state.turn)
 
   // 11. 伙伴叛逃
   desertions(ci, state, rng, report)

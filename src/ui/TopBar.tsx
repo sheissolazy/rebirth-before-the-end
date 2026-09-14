@@ -3,6 +3,8 @@ import type { GameState } from '../engine/types'
 import { engine } from './store'
 import { t } from '../i18n'
 import { timeLabel } from './lookup'
+import { content } from '../content'
+import { lt } from '../i18n'
 
 export function TopBar({ state }: { state: GameState }) {
   const st = engine.stats(state)
@@ -24,6 +26,11 @@ export function TopBar({ state }: { state: GameState }) {
         <ul className="mt-1 space-y-0.5 rounded bg-zinc-900 p-2 text-xs text-zinc-400" onClick={() => setLegend(false)}>
           <li>🕐 {t('legend.time')}</li><li>💰/💎 {t('legend.money')}</li><li>⚡ {t('legend.energy')}</li><li>❤️ {t('legend.health')}</li><li>👁 {t('legend.exposure')}</li><li>🛡 {t('legend.defense')}</li><li>📉 {t('legend.crisis')}</li>
         </ul>
+      )}
+      {state.statuses.filter((st) => st.untilTurn > state.turn).length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-2 text-xs text-amber-200">
+          {state.statuses.filter((st) => st.untilTurn > state.turn).map((st) => { const d = content.statuses.find((x) => x.id === st.id); return <span key={st.id} title={d ? lt(d.desc) : ''}>{d?.icon} {t('status.left', { name: d ? lt(d.name) : st.id, n: st.untilTurn - state.turn })}</span> })}
+        </div>
       )}
       {c && (
         <div className="mt-1">

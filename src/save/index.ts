@@ -15,6 +15,7 @@ function migrate(s: GameState): GameState {
   const x = s as Partial<GameState>
   x.pendingRecruits ??= []
   x.parcels ??= []
+  x.statuses ??= []
   x.orders ??= []
   x.orderedThisWeek ??= {}
   x.lastNotice ??= null

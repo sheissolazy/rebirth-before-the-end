@@ -185,6 +185,19 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     case 'adoptPet': if (ci.pets.has(ef.petId)) state.pets.push({ id: rng.id('pet'), defId: ef.petId, alive: true }); break
     case 'losePet': { const p = state.pets.find((x) => x.defId === ef.petId && x.alive); if (p) p.alive = false; break }
     case 'rebirthPoints': state.rebirthPointsEarned += ef.delta; break
+    case 'status': {
+      const def = ci.statuses.get(ef.id)
+      const weeks = ef.weeks ?? def?.defaultWeeks ?? 4
+      const existing = state.statuses.find((x) => x.id === ef.id)
+      if (existing) existing.untilTurn = Math.max(existing.untilTurn, state.turn + weeks)
+      else state.statuses.push({ id: ef.id, untilTurn: state.turn + weeks })
+      break
+    }
+    case 'killRandomCompanion': {
+      const comps = Object.values(state.people).filter((p) => p.alive && p.inBase && isCompanion(ci, p))
+      if (comps.length) killPerson(ctx, rng.pick(comps))
+      break
+    }
     case 'energy':
       if (ef.permanent) h.energyBonus += ef.delta
       h.energy = Math.max(0, h.energy + ef.delta)
