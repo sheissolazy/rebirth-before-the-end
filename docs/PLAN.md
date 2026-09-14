@@ -43,6 +43,12 @@
 | T-005 | 男主线每人扩到 10（现有顾沉 4 / 沈砚 4 / 谢临 4 / 江野 2 / 阿寂 1） | Codex | 待领 |
 | T-008 | 平衡调数值（当前机器人通关率约 16%） | Claude | 待 T-004 后 |
 | T-010 | GitHub Pages 上线检查 + Tauri 桌面包 | Codex | 待 M3 后 |
+| T-012 | 精力 / 突发选择 / 开局特质 / 父母队友 / 消耗品（v0.4） | Claude | ✅（next 分支） |
+
+## 分支与发布
+- `main` → https://sheissolazy.github.io/rebirth-before-the-end/ （稳定测试版，存档前缀 `rbte`）
+- `next` → https://sheissolazy.github.io/rebirth-before-the-end/next/ （开发版，存档前缀 `rbte-next`，与测试版互不影响）
+- 开发都在 `next` 上做；一批反馈验证完再合到 `main`。Codex 的分支从 `next` 切。
 
 ## 目录约定
 
