@@ -659,6 +659,8 @@ export interface GameState {
   drawnEvents: Record<string, string[]>
   /** 周初弹出的即时选择事件（必须先处理才能过周） */
   pendingChoice: string | null
+  /** 想加入但还没被接受的幸存者（最多 3 个，接受受人口上限限制） */
+  pendingRecruits: PersonState[]
   /** 在路上的网购（序章）。末日一到全部丢失 */
   orders: Order[]
   /** 本周各商品已下单件数（限购） */

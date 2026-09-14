@@ -20,6 +20,9 @@ export interface GameEngine {
   eligibleCards(state: GameState, eventId: string, slotId: string): string[]
   place(state: GameState, placement: Omit<Placement, 'startedTurn' | 'resolvesAtTurn'>): GameState
   unplace(state: GameState, eventId: string): GameState
+  /** 接受 / 拒绝候选幸存者 */
+  recruit(state: GameState, personId: string): GameState
+  dismissRecruit(state: GameState, personId: string): GameState
   /** 给伙伴派工 */
   assignJob(state: GameState, personId: string, job: CompanionJob): GameState
   /** 开始建造模块 */
@@ -65,6 +68,9 @@ export interface CrisisBreakdown {
 
 export interface DerivedStats {
   energyMax: number
+  /** 基地人口（含你）与上限 */
+  population: number
+  populationCap: number
   /** 每周消耗与库存（份） */
   mouths: number
   petMouths: number

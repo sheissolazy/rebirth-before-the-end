@@ -92,6 +92,9 @@ export function endWeek(ci: ContentIndex, state: GameState, rng: Rng): WeekRepor
     if (state.hero.debt > 0) state.hero.debt = Math.round(state.hero.debt * 1.02)
   }
 
+  // 10b. 不出风头就慢慢被遗忘：暴露每周 -1
+  if (state.hero.exposure > 0) state.hero.exposure -= 1
+
   // 11. 伙伴叛逃
   desertions(ci, state, rng, report)
 

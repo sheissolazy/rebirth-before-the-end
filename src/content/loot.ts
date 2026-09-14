@@ -2,11 +2,11 @@ import type { LootTableDef, AffixDef } from '../engine/types'
 
 export const lootTables: LootTableDef[] = [
   { id: 'loot_market', affixChance: 0, entries: [
-    { cardId: 'supply_rice_5kg', weight: 30 }, { cardId: 'supply_water_box', weight: 30 }, { cardId: 'supply_compressed_biscuit', weight: 10 },
-    { cardId: 'supply_battery', weight: 20 }, { cardId: 'supply_winter_clothes', weight: 10 },
+    { cardId: 'supply_rice_5kg', weight: 25 }, { cardId: 'supply_water_box', weight: 35 }, { cardId: 'supply_canned', weight: 15 }, { cardId: 'supply_compressed_biscuit', weight: 8 },
+    { cardId: 'supply_water_tablets', weight: 7 }, { cardId: 'supply_battery', weight: 10 }, { cardId: 'supply_winter_clothes', weight: 5 },
   ] },
   { id: 'loot_scavenge', affixChance: 0.3, entries: [
-    { cardId: 'supply_rice_5kg', weight: 20 }, { cardId: 'supply_water_box', weight: 20 }, { cardId: 'supply_antibiotics', weight: 8 },
+    { cardId: 'supply_rice_5kg', weight: 18 }, { cardId: 'supply_water_box', weight: 25 }, { cardId: 'supply_canned', weight: 10 }, { cardId: 'supply_antibiotics', weight: 6 },
     { cardId: 'supply_battery', weight: 15 }, { cardId: 'supply_steel', weight: 15 }, { cardId: 'supply_bolts', weight: 10 },
     { cardId: 'equip_machete', weight: 5 }, { cardId: 'core_common', weight: 7 },
   ] },

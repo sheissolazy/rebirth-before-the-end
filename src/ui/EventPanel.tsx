@@ -25,7 +25,9 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
     const pk = (k: number) => { let c = 1; for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1); return c * Math.pow(p, k) * Math.pow(1 - p, n - k) }
     const sum = (a: number, b: number) => { let t = 0; for (let k = a; k <= Math.min(b, n); k++) t += pk(k); return t }
     const pc = (x: number) => Math.round(x * 100)
-    return { fail: pc(sum(0, 0)), common: pc(sum(1, 2)), fine: pc(sum(3, 4)), rare: pc(sum(5, n)) }
+    const legAt = event.check?.legendaryAt ?? 8
+    const leg = pc(sum(legAt, n))
+    return { fail: pc(sum(0, 0)), common: pc(sum(1, 2)), fine: pc(sum(3, 5)), rare: pc(sum(6, legAt - 1)), legendary: leg > 0 && event.outcomes.legendary ? ` · 传说 ${leg}%` : '' }
   })()
   const leaderSlot = event.slots.find((s) => s.accepts.kind === 'person')
   const heroSlot = event.slots.find((s) => s.accepts.kind === 'hero' || s.accepts.kind === 'person')
@@ -37,6 +39,7 @@ export function EventPanel({ state, event, store, onClose }: { state: GameState;
         <h3 className="text-lg font-bold">{event.icon} {lt(event.title)}</h3>
         <p className="mt-1 text-sm text-zinc-300">{lt(event.text)}</p>
         {event.check && <p className="mt-1 text-xs text-amber-200">{t('event.odds', odds)}</p>}
+        {event.check && <p className="text-xs text-zinc-600">{t('event.diceNote')}</p>}
         {leaderSlot && <p className="mt-1 text-xs text-zinc-500">{t('event.leaderHint')}</p>}
         <p className="mt-1 text-xs text-zinc-500">
           耗时 {event.durationWeeks} 周 · {t('event.energy', { n: event.energy ?? 2 })}（剩 {state.hero.energy}）

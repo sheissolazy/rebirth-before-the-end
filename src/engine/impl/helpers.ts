@@ -168,6 +168,15 @@ export function removeCard(state: GameState, instanceId: string): CardInstance |
 
 export function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)) }
 
+export function populationCap(ci: ContentIndex, state: GameState): number {
+  let cap = ci.bases.get(state.base.type)?.population ?? 3
+  for (const m of state.base.modules) if (!m.damaged) for (const e of ci.modules.get(m.moduleId)?.provides ?? []) if (e.type === 'population') cap += e.value
+  return cap
+}
+export function population(state: GameState): number {
+  return 1 + Object.values(state.people).filter((p) => p.alive && p.inBase).length
+}
+
 /** 冷藏：序章电网正常；末日后要有冷库、或任何产能源的模块（有电就有冰箱） */
 export function hasCold(ci: ContentIndex, state: GameState): boolean {
   if (state.time.phase === 'prologue') return true

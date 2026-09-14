@@ -99,8 +99,27 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
         </ul>
       </section>
 
+      {state.pendingRecruits.length > 0 && (
+        <section className="rounded-lg border border-emerald-800 p-3">
+          <h3 className="font-semibold">{t('recruit.title')} <span className="text-xs font-normal text-zinc-400">{t('recruit.cap', { n: engine.stats(state).population, cap: engine.stats(state).populationCap })}</span></h3>
+          <p className="text-xs text-zinc-500">{t('recruit.hint')}</p>
+          <ul className="mt-2 space-y-2">
+            {state.pendingRecruits.map((p) => (
+              <li key={p.id} className={`rounded border p-2 text-sm ${RARITY_CLASS[personRarity(p)]}`}>
+                <div className="flex justify-between"><span>{personName(p)} <span className="text-xs text-zinc-400">{lt(content.survivorTraits.find((x) => x.id === p.generated?.traitId)?.name ?? { zh: '' })}{p.generated?.powerId ? ` · 异能 ${lt(content.powers.find((x) => x.id === p.generated!.powerId)?.name ?? { zh: '' })}` : ''}</span></span><Attr p={p} /></div>
+                <div className="text-xs text-zinc-500">{lt(content.survivorTraits.find((x) => x.id === p.generated?.traitId)?.desc ?? { zh: '' })} · 缺 {t(`supply.${p.generated?.needs ?? 'daily'}`)}</div>
+                <div className="mt-1 flex gap-2">
+                  <button className="rounded bg-emerald-800 px-3 py-0.5 text-xs" onClick={() => store.act((s) => engine.recruit(s, p.id))}>{t('recruit.accept')}</button>
+                  <button className="rounded bg-zinc-700 px-3 py-0.5 text-xs" onClick={() => store.act((s) => engine.dismissRecruit(s, p.id))}>{t('recruit.dismiss')}</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="rounded-lg border border-zinc-800 p-3">
-        <h3 className="font-semibold">伙伴</h3>
+        <h3 className="font-semibold">伙伴 <span className="text-xs font-normal text-zinc-400">{t('recruit.cap', { n: engine.stats(state).population, cap: engine.stats(state).populationCap })}</span></h3>
         <ul className="mt-2 space-y-2">
           {companions.map((p) => (
             <li key={p.id} className={`rounded border p-2 text-sm ${RARITY_CLASS[personRarity(p)]} ${!p.alive ? 'opacity-40' : ''}`}>

@@ -24,7 +24,7 @@ export function Game({ state, store }: { state: GameState; store: Store }) {
         {tab === 'base' && <BasePage state={state} store={store} />}
         {tab === 'warehouse' && <WarehousePage state={state} store={store} />}
         {tab === 'people' && <PeoplePage state={state} store={store} />}
-        {tab === 'diary' && <DiaryPage state={state} />}
+        {tab === 'diary' && <DiaryPage state={state} store={store} />}
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center">

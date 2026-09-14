@@ -56,6 +56,22 @@ export const choiceEvents: EventDef[] = [
       { id: 'pass', label: { zh: '走过去' }, outcomes: { fine: { text: { zh: '你没回头。这一世你只能顾自己。' }, effects: [] } } },
     ],
   },
+  {
+    id: 'ch_burglary', locationId: 'home', instant: true, weight: 12, icon: '🔓',
+    title: { zh: '有人撬门' }, text: { zh: '你囤的东西太显眼了（暴露 ≥60）。半夜，门锁在响。' },
+    conditions: [P, { type: 'statAtLeast', stat: 'exposure', value: 60 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    choices: [
+      { id: 'shout', label: { zh: '大喊报警' }, check: { attrs: ['charm'] }, outcomes: {
+        fail: { text: { zh: '他们不怕。搬走了两箱。' }, effects: [{ type: 'loseCard', cardId: 'supply_water_box' }, { type: 'loseCard', cardId: 'supply_rice_5kg' }] },
+        fine: { text: { zh: '他们跑了。邻居都知道你家有东西了。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] },
+      } },
+      { id: 'fight', label: { zh: '拿家伙堵门' }, check: { attrs: ['strength'] }, outcomes: {
+        fail: { text: { zh: '你挨了一下。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
+        fine: { text: { zh: '他们看到你手里的东西，走了。' }, effects: [{ type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
+      } },
+      { id: 'hide', label: { zh: '躲着别出声' }, outcomes: { fine: { text: { zh: '他们进来了，拿走了一箱，没发现你。' }, effects: [{ type: 'loseCard', cardId: 'supply_rice_5kg' }, { type: 'stat', stat: 'exposure', delta: -10 }] } } },
+    ],
+  },
   // ---- 末日后 ----
   {
     id: 'ch_child_cry', locationId: 'home', instant: true, weight: 8, icon: '👶',
@@ -82,6 +98,31 @@ export const choiceEvents: EventDef[] = [
       } },
       { id: 'meds', label: { zh: '只给药，不收人' }, conditions: [{ type: 'hasSupplyKind', supplyKind: 'medicine', minPoints: 1 }], outcomes: { fine: { text: { zh: '你给了药，关上了门。他在门外说了声谢谢。' }, effects: [{ type: 'loseCard', cardId: 'supply_bandage' }, { type: 'relation', factionId: 'alliance', delta: 5 }] } } },
       { id: 'refuse', label: { zh: '拒绝' }, outcomes: { fine: { text: { zh: '第二天那扇门再也没开过。' }, effects: [{ type: 'stat', stat: 'butterfly', delta: 2 }] } } },
+    ],
+  },
+  {
+    id: 'ch_kidnap', locationId: 'home', instant: true, weight: 15, icon: '⛓️',
+    title: { zh: '黑鸦的绑票' }, text: { zh: '你太出名了（暴露 ≥80）。黑鸦绑走了你的一个伙伴，留了话：三天内送十份物资到旧网吧，不然人就没了。' },
+    conditions: [A, { type: 'statAtLeast', stat: 'exposure', value: 80 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    choices: [
+      { id: 'pay', label: { zh: '交赎金（丢一批物资）' }, outcomes: { fine: { text: { zh: '人回来了，瘦了一圈。黑鸦知道你会交钱，下次还会来。' }, effects: [{ type: 'loseCard', cardId: 'supply_rice_5kg', count: 2 }, { type: 'loseCard', cardId: 'supply_water_box', count: 2 }, { type: 'loseCard', cardId: 'supply_canned' }, { type: 'stat', stat: 'exposure', delta: 5 }, { type: 'relation', factionId: 'crow', delta: 5 }] } } },
+      { id: 'raid', label: { zh: '带人去抢回来' }, check: { attrs: ['strength', 'mind'] }, outcomes: {
+        fail: { text: { zh: '你们中了埋伏。人没救回来。' }, effects: [{ type: 'injure', target: 'hero', severity: 2 }, { type: 'loyalty', target: 'all', delta: -15 }, { type: 'relation', factionId: 'crow', delta: -20 }] },
+        fine: { text: { zh: '你们把人抢了回来，还顺走了他们一箱东西。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 2 }, { type: 'loyalty', target: 'all', delta: 10 }, { type: 'relation', factionId: 'crow', delta: -20 }, { type: 'stat', stat: 'exposure', delta: -10 }] },
+        rare: { text: { zh: '周明宇亲自出面。你当着他的人的面把他按在了地上。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 3 }, { type: 'loyalty', target: 'all', delta: 15 }, { type: 'relation', factionId: 'crow', delta: -30 }, { type: 'stat', stat: 'exposure', delta: -20 }, { type: 'attr', target: 'hero', attr: 'strength', delta: 1 }] },
+      } },
+      { id: 'army', label: { zh: '找顾沉帮忙（需好感朋友）' }, conditions: [{ type: 'affectionAtLeast', npcId: 'guchen', rank: 'friend' }], outcomes: { fine: { text: { zh: '一个班的兵开车去了旧网吧。人回来了，黑鸦记住了这笔账。' }, effects: [{ type: 'affection', npcId: 'guchen', delta: 5 }, { type: 'relation', factionId: 'army', delta: -5 }, { type: 'relation', factionId: 'crow', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -10 }] } } },
+      { id: 'abandon', label: { zh: '不管' }, outcomes: { fine: { text: { zh: '第四天，他们把人送回来了。不是活的。' }, effects: [{ type: 'loyalty', target: 'all', delta: -25 }, { type: 'stat', stat: 'exposure', delta: -15 }] } } },
+    ],
+  },
+  {
+    id: 'ch_stalker', locationId: 'home', instant: true, weight: 8, icon: '👁️',
+    title: { zh: '有人在打听你' }, text: { zh: '联盟的人提醒你：有人在到处问"那个囤了很多东西的女的"住哪。' },
+    conditions: [A, { type: 'statAtLeast', stat: 'exposure', value: 50 }], durationWeeks: 0, slots: [], outcomes: { fine: { text: { zh: '' }, effects: [] } },
+    choices: [
+      { id: 'lowkey', label: { zh: '低调一个月：不交易、不出风头' }, outcomes: { fine: { text: { zh: '风头过去了。' }, effects: [{ type: 'stat', stat: 'exposure', delta: -20 }] } } },
+      { id: 'move', label: { zh: '把值钱的东西转进空间' }, outcomes: { fine: { text: { zh: '就算被搜，也搜不出什么。' }, effects: [{ type: 'stat', stat: 'exposure', delta: -10 }] } } },
+      { id: 'ignore', label: { zh: '随他们问' }, outcomes: { fine: { text: { zh: '你没当回事。' }, effects: [{ type: 'stat', stat: 'exposure', delta: 5 }] } } },
     ],
   },
   {

@@ -45,6 +45,7 @@ export const cards: CardDef[] = [
 export const cardsBatch2: CardDef[] = [
   { id: 'supply_canned', kind: 'supply', rarity: 'fine', supplyKind: 'food', size: 1, units: 4, shelfLifeWeeks: 200, basePrice: 60, buyable: true, icon: '🥫', name: { zh: '一箱罐头' }, desc: { zh: '午餐肉和豆子。末日的硬通货。' } },
   { id: 'supply_water_filter', kind: 'supply', rarity: 'rare', supplyKind: 'water', size: 1, units: 12, basePrice: 800, buyable: true, deliveryWeeks: 2, weeklyLimit: 2, icon: '🧪', name: { zh: '户外净水器' }, desc: { zh: '河水也能喝。' } },
+  { id: 'supply_water_tablets', kind: 'supply', rarity: 'fine', supplyKind: 'water', size: 1, units: 6, basePrice: 45, buyable: true, weeklyLimit: 10, icon: '💊', name: { zh: '净水片' }, desc: { zh: '一板能处理 6 人周的脏水。' } },
   { id: 'supply_gasoline', kind: 'supply', rarity: 'fine', supplyKind: 'energy', size: 2, basePrice: 150, buyable: true, icon: '🛢️', name: { zh: '一桶汽油' }, desc: { zh: '发电机的命。' } },
   { id: 'supply_bandage', kind: 'supply', rarity: 'common', supplyKind: 'medicine', size: 1, basePrice: 20, buyable: true, icon: '🩹', name: { zh: '绷带和碘伏' }, desc: { zh: '小伤够用。' } },
   { id: 'supply_medkit', kind: 'supply', rarity: 'fine', supplyKind: 'medicine', size: 1, shelfLifeWeeks: 100, basePrice: 200, buyable: true, icon: '🧰', name: { zh: '急救箱' }, desc: { zh: '缝合、止血、退烧。' } },

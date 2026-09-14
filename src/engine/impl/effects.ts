@@ -115,7 +115,14 @@ export function applyEffect(ctx: EffectCtx, ef: Effect): void {
     }
     case 'npcJoin': { const p = findPerson(state, ef.npcId); if (p && p.alive) p.inBase = true; break }
     case 'npcLeave': { const p = findPerson(state, ef.npcId); if (p) { p.inBase = false; p.job = 'idle' }; break }
-    case 'recruitRandom': { const p = generateSurvivor(ctx, ef.rarityWeights); state.people[p.id] = p; break }
+    case 'recruitRandom': {
+      if (state.pendingRecruits.length >= 3) break
+      const p = generateSurvivor(ctx, ef.rarityWeights)
+      p.inBase = false
+      state.pendingRecruits.push(p)
+      report?.news.push({ zh: `${personName(ci, p).zh}想加入你的基地。去人物页决定收不收。` })
+      break
+    }
     case 'injure': {
       if (ef.target === 'hero') {
         h.health = clamp(h.health - [0, 1, 3, 5][ef.severity], 0, 10)

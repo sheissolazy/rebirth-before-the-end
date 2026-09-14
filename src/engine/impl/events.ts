@@ -50,7 +50,7 @@ export function resolveChoice(ci: ContentIndex, state: GameState, rng: Rng, choi
   let dice = 0, successes = 0
   let outcome: Outcome = 'fine'
   if (choice.check) {
-    dice = Math.max(0, attrSum(state.hero.attrs, choice.check.attrs) + equipmentDice(ci, state, state.hero.equipment, choice.check.attrs) - (state.hero.health <= 3 ? 1 : 0))
+    dice = Math.max(0, BASE_DICE + attrSum(state.hero.attrs, choice.check.attrs) + equipmentDice(ci, state, state.hero.equipment, choice.check.attrs) - (state.hero.health <= 3 ? 1 : 0))
     successes = rng.roll(dice, choice.check.successChance ?? 0.5)
     outcome = outcomeFromSuccesses(successes, choice.check.legendaryAt)
   }
@@ -201,9 +201,15 @@ export function unplace(ci: ContentIndex, state: GameState, eventId: string): vo
   if (Object.values(p.assignments).includes('hero')) state.hero.energy += eventEnergy(ci.event(eventId))
 }
 
+/** 每次检定固定加的基础骰（常识和运气），让低属性也有成长机会 */
+export const BASE_DICE = 2
+/** 成功数分档：0 失败 / 1~2 普通 / 3~5 优良 / 6~7 稀有 / 8+ 传说（事件可自定传说线） */
+export const RARE_AT = 6
+export const LEGENDARY_AT = 8
+
 export function outcomeFromSuccesses(s: number, legendaryAt?: number): Outcome {
-  if (legendaryAt && s >= legendaryAt) return 'legendary'
-  if (s >= 5) return 'rare'
+  if (s >= (legendaryAt ?? LEGENDARY_AT)) return 'legendary'
+  if (s >= RARE_AT) return 'rare'
   if (s >= 3) return 'fine'
   if (s >= 1) return 'common'
   return 'fail'
@@ -243,12 +249,18 @@ export function cardDice(ci: ContentIndex, state: GameState, card: { defId: stri
 export function diceFor(ci: ContentIndex, state: GameState, e: EventDef, p: Placement): number {
   if (!e.check) return 0
   const attrs: Attr[] = e.check.attrs
-  let dice = 0
+  let dice = BASE_DICE
   for (const slot of e.slots) {
     const v = p.assignments[slot.id]
     if (!v) continue
     if (v === 'hero') dice += attrSum(state.hero.attrs, attrs) + equipmentDice(ci, state, state.hero.equipment, attrs)
-    else if (state.people[v]) { const person = state.people[v]; dice += attrSum(person.attrs, attrs) + equipmentDice(ci, state, person.equipment, attrs) - person.injury }
+    else if (state.people[v]) {
+      // 带队的人算全属性；同行的人只算一半（不然检定太容易）
+      const person = state.people[v]
+      const isLeader = slot.accepts.kind === 'person'
+      const base = attrSum(person.attrs, attrs)
+      dice += (isLeader ? base : Math.max(1, Math.floor(base / 2))) + equipmentDice(ci, state, person.equipment, attrs) - person.injury
+    }
     else if (state.pets.some((x) => x.id === v)) dice += slot.bonusDice ?? 0
     else {
       const card = findCard(state, v)

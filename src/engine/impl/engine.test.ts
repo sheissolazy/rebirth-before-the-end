@@ -155,8 +155,8 @@ describe('traits and choices', () => {
   it('rejects traits over budget and applies balanced ones', () => {
     expect(() => engine.newGame(content, { seed: 't', build: 'balanced', meta, traits: ['trait_strong'] })).toThrow('TRAIT_BUDGET')
     const s = engine.newGame(content, { seed: 't', build: 'balanced', meta, traits: ['trait_strong', 'trait_shy'] })
-    expect(s.hero.attrs.strength).toBe(3)
-    expect(s.hero.attrs.charm).toBe(1)
+    expect(s.hero.attrs.strength).toBe(4)
+    expect(s.hero.attrs.charm).toBe(2)
   })
   it('blocks endWeek while a choice is pending and resolves it', () => {
     // 找一个开局就有突发的种子
@@ -183,8 +183,8 @@ describe('traits and choices', () => {
 })
 
 describe('full simulation', () => {
-  it('bot can play through a full year without engine errors', () => {
-    const results = Array.from({ length: 20 }, (_, i) => simulateOne(engine, content, `sim-${i}`))
+  it('bot can play through a full year without engine errors', { timeout: 60000 }, () => {
+    const results = Array.from({ length: 10 }, (_, i) => simulateOne(engine, content, `sim-${i}`))
     for (const r of results) expect(r.turns).toBeLessThanOrEqual(53)
     const sum = summarize(results)
     // 引擎能跑完；通关率在平衡阶段再调

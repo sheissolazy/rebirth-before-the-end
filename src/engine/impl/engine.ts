@@ -10,16 +10,16 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap,
 } from './helpers'
 import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
 
 const BUILDS: Record<NewGameOptions['build'], { strength: number; mind: number; charm: number }> = {
-  balanced: { strength: 2, mind: 2, charm: 2 },
-  strength: { strength: 4, mind: 1, charm: 1 },
-  mind: { strength: 1, mind: 4, charm: 1 },
-  charm: { strength: 1, mind: 1, charm: 4 },
+  balanced: { strength: 3, mind: 3, charm: 3 },
+  strength: { strength: 5, mind: 2, charm: 2 },
+  mind: { strength: 2, mind: 5, charm: 2 },
+  charm: { strength: 2, mind: 2, charm: 5 },
 }
 
 export function createEngine(content: ContentPack): GameEngine {
@@ -64,7 +64,7 @@ export function createEngine(content: ContentPack): GameEngine {
       factions: Object.fromEntries(content.factions.map((f) => [f.id, { relation: f.initialRelation }])),
       crisis: null,
       forecast: content.memories.map((m) => ({ month: m.month, crisisKind: m.crisisKind, memory: m.memory })),
-      drawnEvents: {}, pendingChoice: null, orders: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
+      drawnEvents: {}, pendingChoice: null, pendingRecruits: [], orders: [], orderedThisWeek: {}, placements: [], flags: {}, unlockedEvents: [], usedOnceEvents: [],
       diary: [{ turn: 0, text: { zh: '我睁开眼。日历上的日期，是末日前四周。' } }],
       lastReport: null, lastNotice: null, noticeSeq: 0, rebirthPointsEarned: 0, ending: null,
     }
@@ -144,6 +144,20 @@ export function createEngine(content: ContentPack): GameEngine {
     eligibleCards: (state, eventId, slotId) => eligibleCards(ci, state, eventId, slotId),
     place: (state, placement) => mutate(state, (s) => place(ci, s, placement)),
     unplace: (state, eventId) => mutate(state, (s) => unplace(ci, s, eventId)),
+    recruit: (state, personId) => mutate(state, (s) => {
+      const i = s.pendingRecruits.findIndex((p) => p.id === personId)
+      if (i < 0) throw new EngineError('NO_PERSON', personId)
+      if (population(s) >= populationCap(ci, s)) throw new EngineError('POP_CAP', `基地住满了（${population(s)}/${populationCap(ci, s)}），换更大的基地或建人口模块`)
+      const p = s.pendingRecruits.splice(i, 1)[0]
+      p.inBase = true; p.job = 'idle'; p.loyalty = 50
+      s.people[p.id] = p
+      notice(s, `${p.generated?.name.zh ?? ''}加入了。每周多吃 1 份食物、1 份水。`)
+    }),
+    dismissRecruit: (state, personId) => mutate(state, (s) => {
+      const i = s.pendingRecruits.findIndex((p) => p.id === personId)
+      if (i < 0) throw new EngineError('NO_PERSON', personId)
+      s.pendingRecruits.splice(i, 1)
+    }),
     assignJob: (state, personId, job: CompanionJob) => mutate(state, (s) => {
       const p = s.people[personId]
       if (!p || !p.alive || !p.inBase) throw new EngineError('NO_PERSON', personId)
@@ -294,6 +308,8 @@ export function createEngine(content: ContentPack): GameEngine {
     },
     stats: (state) => ({
       energyMax: energyMax(state),
+      population: population(state),
+      populationCap: populationCap(ci, state),
       ...(() => {
         const mouths = 1 + Object.values(state.people).filter((p) => p.alive && p.inBase).length
         const petMouths = state.pets.filter((p) => p.alive).reduce((t, p) => t + (ci.pets.get(p.defId)?.weeklyFood ?? 1), 0)

@@ -170,9 +170,9 @@ export const apocalypseEvents: EventDef[] = [
     conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, CAT], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '仓库里有东西在动。你跑了。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
-      common: { text: { zh: '捡了点零碎。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 1 }] },
-      fine: { text: { zh: '仓库没被翻过。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 3 }] },
-      rare: { text: { zh: '冷库后面有整托盘的罐头。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 5 }, { type: 'gainCard', cardId: 'core_common' }] },
+      common: { text: { zh: '捡了点零碎。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 2 }] },
+      fine: { text: { zh: '仓库没被翻过。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 4 }] },
+      rare: { text: { zh: '冷库后面有整托盘的罐头。' }, effects: [{ type: 'gainRandom', table: 'loot_market', count: 6 }, { type: 'gainCard', cardId: 'core_common' }] },
     },
   },
   {
@@ -217,8 +217,8 @@ export const apocalypseEvents: EventDef[] = [
     conditions: [A], durationWeeks: 1, slots: [LEADER, HELPER, WEAPON, CAT], check: { attrs: ['strength', 'mind'] },
     outcomes: {
       fail: { text: { zh: '门后面是一家三口。都变了。' }, effects: [{ type: 'injure', target: 'hero', severity: 1 }] },
-      common: { text: { zh: '厨房里还有米。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 2 }] },
-      fine: { text: { zh: '一户人家囤了不少。他们没用上。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 4 }] },
+      common: { text: { zh: '厨房里还有米。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 3 }] },
+      fine: { text: { zh: '一户人家囤了不少。他们没用上。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 5 }] },
       rare: { text: { zh: '阳台上有人挥手。他在等人来。' }, effects: [{ type: 'gainRandom', table: 'loot_scavenge', count: 3 }, { type: 'recruitRandom' }] },
     },
   },

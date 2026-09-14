@@ -44,17 +44,27 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
     // 突发选择：选第一个能选的
     if (s.pendingChoice) {
       const e = content.events.find((x) => x.id === s.pendingChoice)
-      const choices = [...(e?.choices ?? [])]
-      // 机器人：随机顺序尝试，避免总选第一个
+      let choices = [...(e?.choices ?? [])]
+      // 机器人：粮食不够就别收人；否则随机顺序尝试
+      const st = engine.stats(s)
+      const foodWeeks = st.foodUnits / Math.max(1, st.weeklyFood)
+      const recruits = (c: typeof choices[number]) => Object.values(c.outcomes).some((b) => b?.effects.some((ef) => ef.type === 'recruitRandom'))
+      if (foodWeeks < 6) { const noRecruit = choices.filter((c) => !recruits(c)); if (noRecruit.length) choices = noRecruit }
       for (let k = choices.length - 1; k > 0; k--) { const j = (i * 7 + k * 13) % (k + 1); [choices[k], choices[j]] = [choices[j], choices[k]] }
       for (const c of choices) { try { s = engine.choose(s, c.id).state; break } catch { /* next */ } }
       if (s.pendingChoice) s = { ...s, pendingChoice: null }
     }
     // 序章：买东西
     if (s.time.phase === 'prologue') {
-      const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_compressed_biscuit', 'supply_canned', 'supply_antibiotics', 'supply_battery', 'supply_wood', 'equip_machete', 'supply_winter_clothes', 'supply_bolts', 'supply_soap']
+      const shopping = ['supply_rice_5kg', 'supply_water_box', 'supply_water_tablets', 'supply_compressed_biscuit', 'supply_canned', 'supply_antibiotics', 'supply_battery', 'supply_wood', 'equip_machete', 'supply_winter_clothes', 'supply_bolts', 'supply_soap']
       for (const id of shopping) for (let k = 0; k < 3; k++) { try { s = engine.buy(s, id, 1) } catch { break } }
-      if (s.time.weeksBeforeEnd <= 1) { try { s = engine.build(s, 'apt_windows') } catch { /* ignore */ } }
+      if (s.time.weeksBeforeEnd <= 2) { try { s = engine.build(s, 'apt_rain') } catch { /* ignore */ } }
+    }
+    // 候选幸存者：粮够、有位置才收
+    for (const r of [...s.pendingRecruits]) {
+      const st = engine.stats(s)
+      if (st.foodUnits >= st.weeklyFood * 6 && st.population < st.populationCap) { try { s = engine.recruit(s, r.id) } catch { /* full */ } }
+      else { try { s = engine.dismissRecruit(s, r.id) } catch { /* ignore */ } }
     }
     // 派工
     for (const p of Object.values(s.people)) {
@@ -62,8 +72,9 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
       const job = s.crisis?.crisisKind === 'horde' ? 'guard' : (i % 3 === 0 ? 'scavenge' : i % 3 === 1 ? 'guard' : 'train')
       try { s = engine.assignJob(s, p.id, job) } catch { /* ignore */ }
     }
-    // 建造
-    for (const m of content.modules.filter((m) => m.baseType === s.base.type)) {
+    // 建造：先水源，再其它
+    const order = ['apt_rain', 'villa_well', 'farm_watertower', 'bunker_water']
+    for (const m of [...content.modules].filter((m) => m.baseType === s.base.type).sort((a, b) => (order.includes(b.id) ? 1 : 0) - (order.includes(a.id) ? 1 : 0))) {
       try { s = engine.build(s, m.id); break } catch { /* ignore */ }
     }
     // 选事件：优先剧情解危机，然后男主线，然后搜刮/上班
@@ -73,7 +84,10 @@ export function simulateOne(engine: GameEngine, content: ContentPack, seed: stri
       if (e.resolvesCrisis && s.crisis && e.resolvesCrisis === s.crisis.crisisKind) sc += 20
       if (e.storylineNpcId) sc += 8
       if (e.id === 'ev_office_work') sc += s.time.phase === 'prologue' ? 3 : 0
-      if (e.id.includes('scavenge') || e.id.includes('ruin')) sc += 4
+      if (e.id.includes('scavenge') || e.id.includes('ruin') || e.id.includes('search') || e.id.includes('farm_trade')) sc += 4
+      if (s.time.phase === 'apocalypse') { const st = engine.stats(s); if (st.foodUnits < st.weeklyFood * 4 && (e.id.includes('ruin') || e.id.includes('search') || e.id.includes('farm'))) sc += 10 }
+      // 粮食紧张时别收人
+      if (s.time.phase === 'apocalypse') { const st = engine.stats(s); if (st.foodUnits < st.weeklyFood * 6 && Object.values(e.outcomes).some((b) => b?.effects.some((ef) => ef.type === 'recruitRandom'))) sc -= 6 }
       return sc
     }
     // 精力够就继续放；受伤时只做基地内的事
