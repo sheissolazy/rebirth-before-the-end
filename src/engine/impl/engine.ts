@@ -10,7 +10,7 @@ import { endWeek } from './week'
 import { grantCard, type EffectCtx } from './effects'
 import {
   hasRoom, cardSize, findCard, removeCard, isRomanceable, isCompanion, rarityIndex, shiftRarity, clamp, cardPoints, effectiveRarity,
-  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap,
+  baseDefense, usedStorage, baseStorage, spaceStorage, crisisPoints, energyMax, supplyPoints, hasCold, crisisBreakdown, population, populationCap, affectionCap, reservedStorage,
 } from './helpers'
 import { applyEffects } from './effects'
 import { CRISIS_POINTS } from '../types'
@@ -97,6 +97,9 @@ export function createEngine(content: ContentPack): GameEngine {
       if (already + count > limit) throw new EngineError('LIMIT', `本周限购 ${limit} 件，已下单 ${already}`)
       const price = Math.round(def.basePrice * s.priceMultiplier * 1.1) * count
       if (s.money < price) throw new EngineError('NO_MONEY', `需要 ${price}`)
+      const size = cardSize(ci, { instanceId: '', defId: cardDefId }) * count
+      const free = baseStorage(ci, s) + spaceStorage(s) - usedStorage(ci, s, false) - usedStorage(ci, s, true) - reservedStorage(ci, s)
+      if (size > free) throw new EngineError('NO_ROOM', `仓库放不下：还剩 ${free} 格（含在路上的），这单要 ${size} 格。丢掉没用的、建储物间，或换更大的房子`)
       s.money -= price
       s.orderedThisWeek[cardDefId] = already + count
       s.orders.push({ cardDefId, count, arrivesAtTurn: s.turn + (def.deliveryWeeks ?? 1) })
@@ -324,7 +327,7 @@ export function createEngine(content: ContentPack): GameEngine {
       materialPoints: supplyPoints(ci, state, ['material']),
       cold: hasCold(ci, state),
       defense: baseDefense(ci, state),
-      storageUsed: usedStorage(ci, state, false), storageCap: baseStorage(ci, state),
+      storageUsed: usedStorage(ci, state, false), storageCap: baseStorage(ci, state), storageReserved: reservedStorage(ci, state),
       spaceUsed: usedStorage(ci, state, true), spaceCap: spaceStorage(state),
       crisisHave: state.crisis ? crisisPoints(ci, state, state.crisis.crisisKind) : 0,
       crisisNeed: state.crisis ? CRISIS_POINTS[state.crisis.rarity] : 0,

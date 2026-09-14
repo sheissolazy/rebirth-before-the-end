@@ -251,7 +251,7 @@ function deliverOrders(ci: ContentIndex, state: GameState, rng: Rng, report: Wee
       report.delivered.push(c)
       left--
     }
-    if (left > 0) { keep.push({ ...o, count: left, arrivesAtTurn: state.turn + 1 }); report.news.push({ zh: '仓库放不下，快递员把剩下的先带回站点了。' }) }
+    if (left > 0) { keep.push({ ...o, count: left, arrivesAtTurn: state.turn + 1 }); report.news.push({ zh: `仓库满了，${ci.card(o.cardDefId).name.zh}×${left} 被快递员带回站点，下周再送（末日后就送不到了）。丢掉没用的东西腾地方。` }) }
   }
   state.orders = keep
   // 末日当周：到货的到了，没到的永远到不了

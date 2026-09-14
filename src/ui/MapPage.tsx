@@ -30,7 +30,12 @@ export function MapPage({ state, store }: { state: GameState; store: Store }) {
   return (
     <div className="space-y-4 p-4">
       {state.hero.incapacitatedWeeks > 0 && <p className="rounded bg-red-900/40 p-2 text-sm">你受伤了，还有 {state.hero.incapacitatedWeeks} 周不能行动。</p>}
-      {state.hero.incapacitatedWeeks === 0 && <p className="text-xs text-zinc-500">本周剩余精力 ⚡{state.hero.energy}。精力够就能同时做几件事；👥 标记的事件可以让伙伴带队，不耗你的精力。</p>}
+      {state.hero.incapacitatedWeeks === 0 && (
+        <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-2">
+          <div className="text-base font-semibold text-amber-200">{t('map.energy', { have: state.hero.energy, max: engine.stats(state).energyMax })}</div>
+          <div className="text-xs text-zinc-400">精力够就能同时做几件事；👥 标记的事件可以让伙伴带队，不耗你的精力。</div>
+        </div>
+      )}
       {mains.length > 0 && (
         <section>
           <h3 className="font-semibold text-red-300">🔥 {t('event.mainSection')}</h3>

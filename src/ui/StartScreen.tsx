@@ -33,10 +33,10 @@ export function StartScreen({ store }: { store: Store }) {
         <h2 className="font-semibold">新的一世</h2>
         <label className="mt-2 block text-sm">开局倾向
           <select className="mt-1 w-full rounded border border-zinc-700 bg-zinc-800 p-2" value={build} onChange={(e) => setBuild(e.target.value as NewGameOptions['build'])}>
-            <option value="balanced">均衡（体2 脑2 魅2）</option>
-            <option value="strength">体力（体4 脑1 魅1）</option>
-            <option value="mind">头脑（体1 脑4 魅1）</option>
-            <option value="charm">魅力（体1 脑1 魅4）</option>
+            <option value="balanced">均衡（体3 脑3 魅3 · 精力 4）</option>
+            <option value="strength">体力（体5 脑2 魅2 · 精力 5）</option>
+            <option value="mind">头脑（体2 脑5 魅2 · 精力 4）</option>
+            <option value="charm">魅力（体2 脑2 魅5 · 精力 4）</option>
           </select>
         </label>
         {(m.purchased['shop_affection'] ?? 0) > 0 && (

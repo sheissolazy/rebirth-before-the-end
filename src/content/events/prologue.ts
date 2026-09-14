@@ -72,7 +72,7 @@ export const prologueEvents: EventDef[] = [
       fail: { text: { zh: '你搬不动。' }, effects: [{ type: 'money', delta: -200 }, { type: 'gainCard', cardId: 'supply_wood', count: 2 }] },
       common: { text: { zh: '雇了辆三轮车。' }, effects: [{ type: 'money', delta: -600 }, { type: 'gainCard', cardId: 'supply_steel', count: 2 }, { type: 'gainCard', cardId: 'supply_wood', count: 2 }] },
       fine: { text: { zh: '老板给你打了折。' }, effects: [{ type: 'money', delta: -800 }, { type: 'gainCard', cardId: 'supply_steel', count: 3 }, { type: 'gainCard', cardId: 'supply_wood', count: 2 }, { type: 'gainCard', cardId: 'equip_axe' }] },
-      rare: { text: { zh: '你在仓库角落发现一把没上架的复合弩。' }, effects: [{ type: 'money', delta: -1500 }, { type: 'gainCard', cardId: 'supply_steel', count: 3 }, { type: 'gainCard', cardId: 'supply_cement', count: 2 }, { type: 'gainCard', cardId: 'equip_crossbow' }] },
+      rare: { text: { zh: '你在仓库角落发现一把没上架的复合弩。' }, effects: [{ type: 'money', delta: -1500 }, { type: 'gainCard', cardId: 'supply_steel', count: 3 }, { type: 'gainCard', cardId: 'supply_cement', count: 1 }, { type: 'gainCard', cardId: 'equip_crossbow' }] },
     },
   },
   {
@@ -165,13 +165,13 @@ export const prologueEvents: EventDef[] = [
   },
   {
     id: 'ev_bank_buy_villa', energy: 1, locationId: 'bank', icon: '🏡', once: true, weight: 0,
-    title: { zh: '全款买别墅' }, text: { zh: '带院子，围墙两米。三百万。' },
+    title: { zh: '全款买别墅' }, text: { zh: '带院子，围墙两米。三百万。防御 5、仓库 120 格、住 6 人；能建 7 个模块（围墙、铁门、菜地、水井、发电机房、车库工坊、犬舍），全建完要材料 46 分。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 3000000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '你搬了家。中介说你是他见过最痛快的客户。' }, effects: [{ type: 'money', delta: -3000000 }, { type: 'moveBase', baseType: 'villa' }] } },
   },
   {
     id: 'ev_bank_buy_farm', energy: 1, locationId: 'bank', icon: '🌾', once: true, weight: 0,
-    title: { zh: '买郊区自建房' }, text: { zh: '有地，有井，离城四十公里。一百五十万。' },
+    title: { zh: '买郊区自建房' }, text: { zh: '有地，有井，离城四十公里。一百五十万。防御 6、仓库 200 格、住 12 人；能建 10 个模块（围栏、瞭望塔、大田、温室、畜栏、水塔、柴油发电、仓库、医务室、训练场），全建完要材料 82 分，大田和温室还要种子。' },
     conditions: [P, { type: 'moneyAtLeast', amount: 1500000 }, { type: 'baseType', baseType: 'apartment' }], durationWeeks: 1, slots: [HERO],
     outcomes: { fine: { text: { zh: '房主是个老太太。她说"你一个女孩子住这么远做什么"。' }, effects: [{ type: 'money', delta: -1500000 }, { type: 'moveBase', baseType: 'farmhouse' }] } },
   },

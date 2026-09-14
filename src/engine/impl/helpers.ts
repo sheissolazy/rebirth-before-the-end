@@ -60,6 +60,11 @@ export function hasRoom(ci: ContentIndex, state: GameState, size: number, inSpac
   return usedStorage(ci, state, inSpace) + size <= cap
 }
 
+/** 在路上的网购占的格数 */
+export function reservedStorage(ci: ContentIndex, state: GameState): number {
+  return state.orders.reduce((t, o) => t + cardSize(ci, { instanceId: '', defId: o.cardDefId }) * o.count, 0)
+}
+
 export function baseDefense(ci: ContentIndex, state: GameState): number {
   const base = ci.bases.get(state.base.type)
   let d = base?.baseDefense ?? 0
@@ -67,7 +72,9 @@ export function baseDefense(ci: ContentIndex, state: GameState): number {
     if (m.damaged) continue
     for (const e of ci.modules.get(m.moduleId)?.provides ?? []) if (e.type === 'defense') d += e.value
   }
-  for (const p of Object.values(state.people)) if (p.alive && p.inBase && p.job === 'guard') d += 2 + Math.floor(p.attrs.strength / 3)
+  // 基地里的每个人都算：体力/2；守卫再 +2；你自己体力/2 + 装备武器加成
+  for (const p of Object.values(state.people)) if (p.alive && p.inBase) d += Math.floor(p.attrs.strength / 2) + (p.job === 'guard' ? 2 : 0)
+  d += Math.floor(state.hero.attrs.strength / 2) + equipmentDice(ci, state, state.hero.equipment, ['strength'])
   for (const pet of state.pets) if (pet.alive && ci.pets.get(pet.defId)?.species === 'dog') d += 1
   return d
 }
@@ -105,7 +112,8 @@ export function crisisBreakdown(ci: ContentIndex, state: GameState, kind: Crisis
       const def = ci.modules.get(m.moduleId)
       for (const e of def?.provides ?? []) if (e.type === 'defense') items.push({ label: { zh: `模块：${def?.name.zh}` }, points: e.value })
     }
-    for (const p of Object.values(state.people)) if (p.alive && p.inBase && p.job === 'guard') items.push({ label: { zh: `守卫：${personName(ci, p).zh}` }, points: 2 + Math.floor(p.attrs.strength / 3) })
+    items.push({ label: { zh: `你（体力 ${state.hero.attrs.strength}${Object.keys(state.hero.equipment).length ? '，含武器' : ''}）` }, points: Math.floor(state.hero.attrs.strength / 2) + equipmentDice(ci, state, state.hero.equipment, ['strength']) })
+    for (const p of Object.values(state.people)) if (p.alive && p.inBase) items.push({ label: { zh: `${p.job === 'guard' ? '守卫' : '在家'}：${personName(ci, p).zh}（体力 ${p.attrs.strength}）` }, points: Math.floor(p.attrs.strength / 2) + (p.job === 'guard' ? 2 : 0) })
     for (const pet of state.pets) if (pet.alive && ci.pets.get(pet.defId)?.species === 'dog') items.push({ label: { zh: '狗' }, points: 1 })
   }
   return items

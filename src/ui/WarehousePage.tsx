@@ -30,10 +30,9 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
     const d = cardDefs.get(c.defId)!
     const equipped = Object.values(state.hero.equipment).includes(c.instanceId) || Object.values(state.people).some((p) => Object.values(p.equipment).includes(c.instanceId))
     return (
-      <li className={`rounded border p-2 text-xs ${RARITY_CLASS[d.rarity]} ${equipped ? 'bg-amber-950/30' : 'bg-zinc-900'}`}>
-        <div className="font-medium">{cardName(c)} {equipped && '（已装备）'}</div>
-        <div className="text-zinc-500">{lt(d.desc)}{c.expiresAtTurn !== undefined && ` · ${Math.max(0, c.expiresAtTurn - state.turn)} 周后过期${st.cold ? '（有冰箱）' : ''}`}</div>
-        <div className="mt-1 flex flex-wrap gap-1">
+      <li className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded border px-2 py-1 text-xs ${RARITY_CLASS[d.rarity]} ${equipped ? 'bg-amber-950/30' : 'bg-zinc-900'}`}>
+        <span className="font-medium">{cardName(c)} {equipped && '（已装备）'}<span className="ml-1 font-normal text-zinc-500">{c.expiresAtTurn !== undefined && `${Math.max(0, c.expiresAtTurn - state.turn)} 周后过期`}{d.kind === 'supply' && d.supplyKind === 'material' ? `${d.rarity === 'common' ? 1 : d.rarity === 'fine' ? 2 : d.rarity === 'rare' ? 4 : 8} 分` : ''}</span></span>
+        <div className="flex flex-wrap gap-1">
           <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.moveToSpace(s, c.instanceId, !c.inSpace))}>{c.inSpace ? t('action.fromSpace') : t('action.toSpace')}</button>
           {d.kind === 'equipment' && <button className="rounded bg-zinc-800 px-2 py-0.5" onClick={() => store.act((s) => engine.equip(s, 'hero', c.instanceId))}>{t('action.equip')}</button>}
           {d.kind === 'supply' && d.onUse && <button className="rounded bg-emerald-900 px-2 py-0.5" onClick={() => store.act((s) => engine.useItem(s, c.instanceId))}>{t('action.use')}</button>}
@@ -44,16 +43,22 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
     )
   }
 
+  const groupSummary = (k: string, cards: CardInstance[]) => {
+    if (k === 'food' || k === 'water') return `${cards.reduce((t, c) => t + (c.unitsLeft ?? 1), 0)} 份`
+    if (k === 'material') return `${cards.reduce((t, c) => t + ({ common: 1, fine: 2, rare: 4, legendary: 8 }[cardDefs.get(c.defId)!.rarity] ?? 0), 0)} 分`
+    return t('wh.summary', { n: cards.length })
+  }
+
   const Section = ({ title, inSpace }: { title: string; inSpace: boolean }) => {
     const g = group(inSpace)
     return (
       <section className="rounded-lg border border-zinc-800 p-3">
         <h3 className="font-semibold">{title}</h3>
         {[...KINDS, 'equipment', 'core', 'other'].map((k) => g[k]?.length ? (
-          <div key={k} className="mt-2">
-            <h4 className="text-xs text-zinc-400">{groupLabel(k)}</h4>
-            <ul className="mt-1 grid gap-1 sm:grid-cols-2">{g[k].map((c) => <Card key={c.instanceId} c={c} />)}</ul>
-          </div>
+          <details key={k} className="mt-2" open={k === 'food' || k === 'water' || k === 'equipment'}>
+            <summary className="cursor-pointer text-xs text-zinc-300">{groupLabel(k)} <span className="text-zinc-500">· {groupSummary(k, g[k])}</span></summary>
+            <ul className="mt-1 space-y-1">{g[k].map((c) => <Card key={c.instanceId} c={c} />)}</ul>
+          </details>
         ) : null)}
         {!Object.keys(g).length && <p className="text-xs text-zinc-500">空的。</p>}
       </section>
@@ -76,6 +81,7 @@ export function WarehousePage({ state, store }: { state: GameState; store: Store
       {shopOpen && (
         <section className="rounded-lg border border-amber-900 p-3">
           <h3 className="font-semibold">{state.time.phase === 'prologue' ? `${t('shop.online')}（物价 ×${state.priceMultiplier}）` : '以物易物（用晶核分换）'}</h3>
+          <p className={`mt-1 text-xs ${st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved < 5 ? 'text-red-400' : 'text-amber-200'}`}>{t('shop.storage', { used: st.storageUsed + st.spaceUsed, cap: st.storageCap + st.spaceCap, reserved: st.storageReserved, free: st.storageCap + st.spaceCap - st.storageUsed - st.spaceUsed - st.storageReserved })}</p>
           {state.time.phase === 'prologue' && <p className="mt-1 text-xs text-zinc-500">{t('shop.onlineHint')}</p>}
           {state.orders.length > 0 && (
             <p className="mt-1 text-xs text-amber-300">{t('shop.orders')}：{state.orders.map((o) => `${lt(cardDefs.get(o.cardDefId)?.name ?? { zh: o.cardDefId })}×${o.count}（${t('shop.arrives', { n: Math.max(0, o.arrivesAtTurn - state.turn) })}）`).join('、')}</p>

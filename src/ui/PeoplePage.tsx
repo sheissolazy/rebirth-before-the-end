@@ -26,7 +26,23 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
   const leads = people.filter((p) => isRomanceable(p))
   const companions = people.filter((p) => !isRomanceable(p) && (p.inBase || p.generated))
   const others = people.filter((p) => !isRomanceable(p) && !p.inBase && !p.generated)
-  const Attr = ({ p }: { p: typeof people[number] }) => <span className="text-xs text-zinc-400">💪{p.attrs.strength} 🧠{p.attrs.mind} 💬{p.attrs.charm}</span>
+  /** 装备带来的属性加成（对口属性加 bonusDice，不对口加一半） */
+  const eqBonus = (equipment: Partial<Record<string, string>>) => {
+    const b = { strength: 0, mind: 0, charm: 0 }
+    for (const id of Object.values(equipment)) {
+      const c = state.warehouse.find((x) => x.instanceId === id); const d = c ? cardDefs.get(c.defId) : undefined
+      if (!d || d.kind !== 'equipment') continue
+      const affix = (c?.affixIds ?? []).reduce((t, a) => t + (content.affixes.find((x) => x.id === a)?.bonusDice ?? 0), 0)
+      for (const k of ['strength', 'mind', 'charm'] as const) b[k] += (!d.forAttr || d.forAttr === k) ? d.bonusDice + affix : Math.floor(d.bonusDice / 2)
+    }
+    return b
+  }
+  const AttrLine = ({ attrs, equipment }: { attrs: { strength: number; mind: number; charm: number }; equipment: Partial<Record<string, string>> }) => {
+    const b = eqBonus(equipment)
+    const cell = (icon: string, v: number, bonus: number) => <span>{icon}{v}{bonus > 0 && <span className="text-emerald-400">+{bonus}</span>}</span>
+    return <span className="text-xs text-zinc-400">{cell('💪', attrs.strength, b.strength)} {cell('🧠', attrs.mind, b.mind)} {cell('💬', attrs.charm, b.charm)}</span>
+  }
+  const Attr = ({ p }: { p: typeof people[number] }) => <AttrLine attrs={p.attrs} equipment={p.equipment} />
   const cores = state.warehouse.filter((c) => cardDefs.get(c.defId)?.kind === 'core')
   const corePoints = cores.reduce((t, c) => t + RARITY_POINTS[cardDefs.get(c.defId)!.rarity], 0)
   const spacePower = content.powers.find((p) => p.id === 'power_space')!
@@ -58,7 +74,7 @@ export function PeoplePage({ state, store }: { state: GameState; store: Store })
     <div className="space-y-4 p-4">
       <section className="rounded-lg border border-zinc-800 p-3">
         <h3 className="font-semibold">{lt(state.hero.name)}（你）</h3>
-        <p className="text-sm">💪{state.hero.attrs.strength} 🧠{state.hero.attrs.mind} 💬{state.hero.attrs.charm} · {t('stat.health')} {state.hero.health} · {t('stat.exposure')} {state.hero.exposure} · {t('stat.butterfly')} {state.hero.butterfly} · 空间 {t(`rarity.${state.hero.spaceRarity}`)}</p>
+        <p className="text-sm"><AttrLine attrs={state.hero.attrs} equipment={state.hero.equipment} /> · {t('stat.health')} {state.hero.health} · {t('stat.exposure')} {state.hero.exposure} · {t('stat.butterfly')} {state.hero.butterfly} · 空间 {t(`rarity.${state.hero.spaceRarity}`)}</p>
         <p className="text-xs text-zinc-500">{t('attr.hint')}</p>
         <p className="flex items-center justify-between text-xs text-zinc-500"><span>装备：{equipLine(state.hero.equipment)}{state.time.phase === 'prologue' && ` · ${state.hero.employed ? '在职' : '失业'}`}</span><button className="rounded bg-zinc-700 px-2 py-0.5 text-zinc-200" onClick={() => setEquipping('hero')}>{t('action.equip')}</button></p>
       </section>

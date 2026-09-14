@@ -20,6 +20,8 @@ function migrate(s: GameState): GameState {
   x.noticeSeq ??= 0
   x.hero!.energy ??= 3
   x.hero!.energyBonus ??= 0
+  // 旧存档：爸妈改为开局就在家
+  for (const id of ['dad', 'mom']) { const p = x.people?.[id]; if (p && p.alive && !p.inBase && !x.flags?.parents_left) { p.inBase = true; p.loyalty = Math.max(p.loyalty, 70) } }
   return x as GameState
 }
 export function loadGame(): GameState | null {

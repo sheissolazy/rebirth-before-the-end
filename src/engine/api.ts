@@ -85,6 +85,8 @@ export interface DerivedStats {
   defense: number
   storageUsed: number
   storageCap: number
+  /** 在路上的网购占的格数 */
+  storageReserved: number
   spaceUsed: number
   spaceCap: number
   crisisHave: number
