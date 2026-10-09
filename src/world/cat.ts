@@ -21,6 +21,8 @@ export interface CatCtx {
   rain?: boolean
   /** 丧尸快来了（天黑前半小时）：猫先察觉，哈气、躲上楼 */
   danger?: boolean
+  /** 女主在开车：不跟（不然猫会追着车跑上街） */
+  heroDriving?: boolean
 }
 
 /** 打盹的地方：客厅沙发前的青色地毯、二楼床中间的地毯、院子长椅边晒太阳 */
@@ -115,7 +117,7 @@ export class Cat extends Walker {
         return
       }
     }
-    if (r < 0.6 && !c.hero.away && c.hero.floor === this.floor) {
+    if (r < 0.6 && !c.hero.away && !c.heroDriving && c.hero.floor === this.floor) {
       this.plan = 'follow'
       this.target = c.hero
       this.left = 10 + Math.random() * 10
@@ -172,7 +174,7 @@ export class Cat extends Walker {
     if (this.plan === 'follow' && this.target) {
       const d = Math.hypot(this.target.pos.x - this.pos.x, this.target.pos.z - this.pos.z)
       this.repath -= dt
-      if (this.target.away || this.target.floor !== this.floor && !this.path.length) this.left = 0
+      if (this.target.away || c.heroDriving || (this.target.floor !== this.floor && !this.path.length)) { this.left = 0; if (c.heroDriving) this.path = [] }
       else if (d > 1.4 && this.repath <= 0 && this.left > 0) {
         this.repath = 1.2
         const back = this.target.root.rotation.y + Math.PI + (Math.random() - 0.5)

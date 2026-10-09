@@ -1665,7 +1665,7 @@ export class World {
       const danger = !fighting && ck.day >= PROLOGUE_DAYS && ck.hour >= 20.4 && ck.hour < 21
         && (Household.nightCount(ck).count > 0 || this.life.raidTonight || !!Household.crisisKind(ck))
       const hissing = cat.hiss > 0
-      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: ck.hour, siege: fighting, rain: this.life.rain > 0.1, danger })
+      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: ck.hour, siege: fighting, rain: this.life.rain > 0.1, danger, heroDriving: !!this.driving })
       if (!hissing && cat.hiss > 0) {
         this.sound.hiss()
         // 日记只在第一次、或者今晚格外凶险（危机夜、黑鸦、白天开过车）时记，不然每晚一条刷屏
