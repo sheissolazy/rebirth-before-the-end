@@ -14,6 +14,79 @@ const TMP_B = new THREE.Quaternion()
 const TMP_C = new THREE.Quaternion()
 const TMP_D = new THREE.Quaternion()
 
+type Rect = [number, number, number, number]
+/** 衣服贴图的小修改（贴图坐标 0~1，左上角是原点）：
+ *  clone = 用旁边干净的布料盖住 MakeHuman 的标志；patch = 旁边没地方就用附近的颜色填平；
+ *  tint = 只给上衣换颜色（color 模式保留明暗，multiply 用来把白 T 恤染深） */
+interface Outfit {
+  clone?: [Rect, number, number][]
+  patch?: { rects: Rect[]; sample: [number, number] }
+  tint?: { color: string; mode: 'color' | 'multiply'; regions: Rect[] }
+  /** 头发颜色（乘在贴图上） */
+  hair?: string
+}
+const WARDROBE: Record<string, Outfit> = {
+  // 女主：蓝 T 恤去掉胸口的标志
+  'heroine.female_casualsuit01': { clone: [[[0.7, 0.16, 0.88, 0.37], -0.17, 0]] },
+  // 江野：白 T 恤上印着 MAKEHUMAN → 去掉，染成炭黑色
+  'jiangye.male_casualsuit06': {
+    clone: [[[0.42, 0.11, 0.7, 0.23], 0, 0.14], [[0.17, 0.09, 0.33, 0.17], 0, 0.12], [[0.7, 0.13, 0.78, 0.2], 0, 0.12]],
+    tint: { color: '#36363a', mode: 'multiply', regions: [[0, 0, 1, 0.47]] },
+  },
+  // 顾沉：军绿色
+  'guchen.male_casualsuit04': {
+    patch: { rects: [[0.48, 0.08, 0.64, 0.26]], sample: [0.57, 0.3] },
+    tint: { color: '#66753f', mode: 'color', regions: [[0, 0, 1, 0.39]] },
+  },
+  // 礼帽大叔：咖啡色
+  'survivor_m.male_casualsuit02': {
+    patch: { rects: [[0.49, 0.09, 0.66, 0.27]], sample: [0.57, 0.33] },
+    tint: { color: '#8a5a3a', mode: 'color', regions: [[0, 0, 1, 0.42], [0.74, 0.42, 1, 1]] },
+  },
+  // 辫子姑娘：砖红色运动服
+  'survivor_f.female_sportsuit01': { tint: { color: '#b0463c', mode: 'color', regions: [[0, 0, 1, 0.44], [0.72, 0.62, 1, 0.9]] } },
+  // 王阿姨：和女主同款 T 恤 → 去掉标志，换成豆沙紫
+  'neighbor.female_casualsuit02': {
+    clone: [[[0.7, 0.16, 0.88, 0.37], -0.17, 0]],
+    tint: { color: '#8e5a6e', mode: 'color', regions: [[0, 0, 1, 0.42], [0.68, 0.6, 1, 0.92]] },
+  },
+  // 妈妈：原来是一头白发，染回深棕色（五十岁出头）
+  'mom.bob02': { hair: '#5a4438' },
+}
+
+function restyle(mat: THREE.MeshStandardMaterial, o: Outfit): void {
+  if (o.hair) mat.color.set(o.hair)
+  const tex = mat.map
+  const img = tex?.image as (CanvasImageSource & { width: number; height: number }) | undefined
+  if (!tex || !img?.width || (!o.clone && !o.patch && !o.tint)) return
+  const c = document.createElement('canvas')
+  c.width = img.width
+  c.height = img.height
+  const g = c.getContext('2d')
+  if (!g) return
+  const W = c.width
+  const H = c.height
+  g.drawImage(img, 0, 0)
+  for (const [[x0, y0, x1, y1], dx, dy] of o.clone ?? []) {
+    g.drawImage(c, (x0 + dx) * W, (y0 + dy) * H, (x1 - x0) * W, (y1 - y0) * H, x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H)
+  }
+  if (o.patch) {
+    const [sx, sy] = o.patch.sample
+    const d = g.getImageData(Math.round(sx * W) - 6, Math.round(sy * H) - 6, 12, 12).data
+    const avg = [0, 1, 2].map((k) => { let v = 0; for (let i = k; i < d.length; i += 4) v += d[i]; return Math.round(v / (d.length / 4)) })
+    g.fillStyle = `rgb(${avg.join(',')})`
+    for (const [x0, y0, x1, y1] of o.patch.rects) g.fillRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H)
+  }
+  if (o.tint) {
+    g.globalCompositeOperation = o.tint.mode
+    g.fillStyle = o.tint.color
+    for (const [x0, y0, x1, y1] of o.tint.regions) g.fillRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H)
+    g.globalCompositeOperation = 'source-over'
+  }
+  tex.image = c
+  tex.needsUpdate = true
+}
+
 export async function loadPerson(name: string): Promise<THREE.Object3D> {
   const g = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/people/${name}.glb`)
   g.scene.traverse((o) => {
@@ -34,6 +107,8 @@ export async function loadPerson(name: string): Promise<THREE.Object3D> {
         std.transparent = false
         std.alphaTest = 0
       }
+      const outfit = WARDROBE[std.name]
+      if (outfit) restyle(std, outfit)
     }
   })
   return g.scene

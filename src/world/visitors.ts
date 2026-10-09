@@ -93,8 +93,8 @@ export const isFemaleModel = (m: string) => m === 'survivor_f' || m === 'neighbo
 /** 街上走来走去的 NPC：有 MakeHuman 模型就用骨骼摆姿势，没有就用代码画的小人 */
 class StreetWalker extends Walker {
   readonly home: Pt
-  private readonly driver: PoseDriver | null
-  private readonly inner: THREE.Object3D
+  private driver: PoseDriver | null
+  private inner: THREE.Object3D
 
   constructor(at: Pt, model: THREE.Object3D | undefined, female: boolean) {
     super()
@@ -103,6 +103,19 @@ class StreetWalker extends Walker {
     this.driver = model ? new PoseDriver(model) : null
     this.root.add(this.inner)
     this.root.position.set(at.x, 0, at.z)
+  }
+
+  /** 还是代码画的小人吗（来的时候真人模型还没加载好） */
+  get placeholder(): boolean {
+    return !this.driver
+  }
+
+  /** 真人模型加载好了：把代码画的小人换掉 */
+  setModel(model: THREE.Object3D): void {
+    this.inner.removeFromParent()
+    this.inner = model
+    this.driver = new PoseDriver(model)
+    this.root.add(model)
   }
 
   animate(dt: number, walking: boolean): void {

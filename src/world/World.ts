@@ -631,6 +631,17 @@ export class World {
   private afterExtraModels(): void {
     if (this.disposed) return
     for (const a of this.actors.slice(3)) this.dressResident(a)
+    // 模型还没好时就来了的访客 / 送东西的人：换上真人模型
+    const v = this.life.visitor
+    if (v?.placeholder) {
+      const m = this.siegeView.npc(this.life.visitModel) ?? this.siegeView.npc(v.def.model)
+      if (m) v.setModel(m)
+    }
+    const c = this.life.courier
+    if (c?.placeholder) {
+      const m = this.siegeView.npc(c.who)
+      if (m) { if (c.who === 'xielin') darkCoat(m); c.setModel(m) }
+    }
     const fighting = !!this.life.siege && !this.life.siege.done
     for (const w of this.weapons) w.visible = true
     this.siegeView.prewarm(() => this.renderer.render(this.scene, this.camera))
