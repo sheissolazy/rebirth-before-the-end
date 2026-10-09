@@ -1,7 +1,7 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -27,7 +27,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed'
 
 interface Task {
   kind: TaskKind
@@ -295,6 +295,15 @@ export class Household {
   readonly spikes: SpikeRow[] = SPIKE_ROWS.map((r) => ({ ...r, hits: 0 }))
   /** 正在削的那一排（削好之前别再派人） */
   private crafting = -1
+  /** 压水井：今天压了几回（一天最多 PUMP_MAX 回）；鸡今天喂了没有 */
+  pumpDay = -1
+  pumpCount = 0
+  fedDay = -1
+  /** 一共捡过几回蛋 */
+  eggs = 0
+  static readonly PUMP_MAX = 3
+  static readonly PUMP_WATER = 0.6
+  static readonly EGGS_FOOD = 0.3
   trip: Trip | null = null
   /** 这场雨木桶接了多少水 */
   private rainWater = 0
@@ -1655,6 +1664,37 @@ export class Household {
   static readonly GARDEN_CORES = 2
 
   /** 开菜地：末日前花钱买种子和工具，末日后用晶核（跟军区换种子） */
+  /** 今天还能压几回水 */
+  pumpsLeft(): number {
+    if (this.pumpDay !== this.clock.day) { this.pumpDay = this.clock.day; this.pumpCount = 0 }
+    return Math.max(0, Household.PUMP_MAX - this.pumpCount)
+  }
+
+  /** 去压水井压一桶水（自己找事时只在家里水不多时去；点了压水井就一定去） */
+  private pumpTask(manual: boolean): Task | null {
+    if (this.pumpsLeft() <= 0 || this.taken.has(WELL_SPOT)) return null
+    if (!manual && this.available.water >= 12) return null
+    return { kind: 'pump', spot: WELL_SPOT, phase: 'go', hours: 0.35, manual }
+  }
+
+  /** 早上 7 点以后去鸡圈喂鸡、捡蛋（一天一回） */
+  private feedTask(): Task | null {
+    if (this.fedDay === this.clock.day || this.clock.hour < 7 || this.taken.has(COOP_SPOT)) return null
+    return { kind: 'feed', spot: COOP_SPOT, phase: 'go', hours: 0.25, manual: false }
+  }
+
+  /** 点了压水井 / 鸡圈：让选中的人去 */
+  commandChore(a: Actor, what: 'pump' | 'feed'): 'ok' | 'done' | 'busy' {
+    if (this.isOut(a) || a.dead || a.floor !== 0) return 'busy'
+    if (this.siege && !this.siege.done) return 'busy'
+    const task = what === 'pump' ? this.pumpTask(true) : this.feedTask()
+    if (!task) return what === 'pump' && this.pumpsLeft() <= 0 ? 'done' : what === 'feed' && this.fedDay === this.clock.day ? 'done' : 'busy'
+    task.manual = true
+    this.cancel(a)
+    this.assign(a, task)
+    return (a.task as Task | null)?.kind === what ? 'ok' : 'busy'
+  }
+
   static readonly SPIKE_BAMBOO = 3
 
   /** 下一排要削的竹尖刺（先补烂掉的，按铁门里 → 堂屋门前的顺序）；都好好的就是 -1 */
@@ -1764,6 +1804,8 @@ export class Household {
     if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
     if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'craft') return 'cook'
+    if (t.kind === 'pump') return 'cook'
+    if (t.kind === 'feed') return 'stroll'
     if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
@@ -1797,6 +1839,8 @@ export class Household {
     if (handy) task = this.repairTask()
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
     if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
+    // 白天有空：喂鸡捡蛋、去压水井压水（家里水不多的时候）
+    if (!task && !night && a !== this.actors[0] && !a.guest && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.feedTask() ?? this.pumpTask(false)
     // 闲着的时候找点事：凑到家人身边说说话，或者收拾收拾屋子（不再一个人原地发呆）
     // （晚上 9 点以后、累了就不折腾了，该准备睡觉）
     const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
@@ -2124,6 +2168,16 @@ export class Household {
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
     if (t.kind === 'forage' && t.hours <= 0 && t.forage) this.pickForage(a, t.forage)
+    if (t.kind === 'pump' && t.hours <= 0) {
+      this.stock = { ...this.stock, water: this.stock.water + Household.PUMP_WATER }
+      this.pumpCount += 1
+    }
+    if (t.kind === 'feed' && t.hours <= 0 && this.fedDay !== this.clock.day) {
+      this.fedDay = this.clock.day
+      this.eggs += 1
+      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD }
+      if (!this.log.some((l) => l.key === 'world.log.eggs') || this.rand() < 0.25) this.note('world.log.eggs', { who: a.name })
+    }
     if (t.kind === 'craft') {
       const k = this.crafting
       this.crafting = -1

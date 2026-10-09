@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FORAGE, REGROW, harvest, ripe, standAt } from './forage'
-import { PROPS, STREET, YARD, inRect } from './layout'
+import { COOP_SPOT, PROPS, STREET, WELL_SPOT, YARD, inRect } from './layout'
 import { buildNav } from './nav'
 
 describe('野外采集', () => {
@@ -13,6 +13,12 @@ describe('野外采集', () => {
       for (const p of PROPS) if (p.kind === 'house') expect(inRect({ x0: p.x - p.w / 2, z0: p.z - p.d / 2, x1: p.x + p.w / 2, z1: p.z + p.d / 2 }, s.at.x, s.at.z, 1), s.id).toBe(false)
       expect(nav.isBlockedAt(at.x, at.z), s.id).toBe(false)
     }
+  })
+
+  it('压水井、鸡圈前面站人的地方走得到', () => {
+    const nav = buildNav()
+    expect(nav.isBlockedAt(WELL_SPOT.x, WELL_SPOT.z)).toBe(false)
+    expect(nav.isBlockedAt(COOP_SPOT.x, COOP_SPOT.z)).toBe(false)
   })
 
   it('采过以后按天数长回来', () => {

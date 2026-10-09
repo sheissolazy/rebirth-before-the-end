@@ -247,4 +247,9 @@ export const BEDS: Record<'toon' | 'paradise', Spot[]> = {
 
 /** 菜地：院子东边一块 2.6 × 2 米的地（镜头从东南看过来，正好看得见），蹲在南边照料 */
 export const GARDEN = { x0: 8.8, z0: 6.6, x1: 11.4, z1: 8.6 }
+/** 屋子东边：压水井、鸡圈（以后院子变大再挪） */
+export const WELL = { x: 10.9, z: 5.0 }
+export const WELL_SPOT: Spot = { kind: 'stroll', x: 10.9, z: 5.75, floor: 0, face: 180, pose: 'work' }
+export const COOP: Rect = { x0: 10.1, z0: 0.9, x1: 11.8, z1: 3.3 }
+export const COOP_SPOT: Spot = { kind: 'stroll', x: 10.9, z: 3.85, floor: 0, face: 180, pose: 'work' }
 export const GARDEN_SPOT: Spot = { kind: 'stroll', x: 10.1, z: 9.05, floor: 0, face: 180, pose: 'work' }

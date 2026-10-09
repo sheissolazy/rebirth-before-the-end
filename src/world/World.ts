@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
+  COOP, FLOOR_H, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
@@ -178,7 +178,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -428,6 +428,7 @@ export class World {
     this.buildGarden()
     this.forage = new ForageView(this.scene)
     this.buildScavengeHits()
+    this.buildWellCoop()
     this.life.onForage = (s, y, medkit) => {
       this.sound.pluck()
       if (y.sting) { this.sound.buzz(); this.sound.hurt() }
@@ -1830,6 +1831,7 @@ export class World {
     this.ring.position.set(sp.x, sp.y + 0.03, sp.z)
     this.ring.visible = this.mode === 'home' && this.selected.root.visible && this.selected.pose !== 'sleep'
     this.forage?.sync(this.life.forageDay, this.life.clock.day)
+    this.updateChickens(dt * (this.life.speed || 0))
     this.arriveScavenge()
     this.forage?.update(dt, !this.life.siege || this.life.siege.done)
     this.hudTimer -= dt
@@ -2088,6 +2090,9 @@ export class World {
     // 点野外的野菜、草药、蘑菇、蜂窝……：女主走过去采
     const fs = floor === 0 ? this.forage?.pick(this.raycaster) ?? null : null
     if (fs) { this.tapForage(fs); return }
+    // 点压水井 / 鸡圈：选中的人去压水、喂鸡
+    const chore = floor === 0 ? this.choreUnder() : null
+    if (chore) { this.tapChore(chore); return }
     // 点邻居家、街上盖着车罩的车、接雨水的桶：女主走过去搜（末日以后）
     const sc = floor === 0 ? this.scavengeUnder() : null
     if (sc) { this.tapScavenge(sc); return }
@@ -2143,7 +2148,7 @@ export class World {
     const over = this.raycaster.intersectObjects(people, true).length > 0
       || (!!this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length > 0)
       || (this.mode === 'home' && (this.raycaster.intersectObject(this.van.parts.root, true).length > 0 || !!this.furnitureUnder(floor)))
-      || (floor === 0 && (!!this.forage?.pick(this.raycaster) || !!this.scavengeUnder()))
+      || (floor === 0 && (!!this.forage?.pick(this.raycaster) || !!this.scavengeUnder() || !!this.choreUnder()))
     el.style.cursor = over ? 'pointer' : ''
   }
 
@@ -2175,6 +2180,136 @@ export class World {
       this.scene.add(box)
       this.scavHits.push(box)
     }
+  }
+
+  private wellHit: THREE.Mesh | null = null
+  private coopHit: THREE.Mesh | null = null
+  private chickens: { g: THREE.Group; head: THREE.Object3D; x: number; z: number; tx: number; tz: number; t: number; peck: number }[] = []
+
+  /** 屋子东边：压水井（石头井台 + 铸铁压水泵）和鸡圈（木桩篱笆、小鸡舍、几只鸡） */
+  private buildWellCoop(): void {
+    const stone = this.pmats?.textured('stone') ?? toon('#8d8a84')
+    const iron = new THREE.MeshStandardMaterial({ color: '#2f3336', metalness: 0.6, roughness: 0.5 })
+    const wood = this.pmats?.textured('wood') ?? toon('#7a5c3c')
+    const roofM = toon('#8a4a32')
+    const well = new THREE.Group()
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.45, 10), stone)
+    base.position.y = 0.225
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.9, 8), iron)
+    post.position.set(0, 0.9, 0)
+    const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.32, 6), iron)
+    spout.rotation.x = Math.PI / 2
+    spout.position.set(0, 1.0, 0.18)
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.75), iron)
+    lever.position.set(0, 1.42, -0.22)
+    lever.rotation.x = -0.35
+    const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.26, 10), wood)
+    bucket.position.set(0, 0.58, 0.3)
+    for (const m of [base, post, spout, lever, bucket]) { m.castShadow = true; well.add(m) }
+    well.position.set(WELL.x, 0, WELL.z)
+    this.scene.add(well)
+
+    const coop = new THREE.Group()
+    const w = COOP.x1 - COOP.x0
+    const d = COOP.z1 - COOP.z0
+    const postGeo = new THREE.BoxGeometry(0.08, 0.7, 0.08)
+    const railX = new THREE.BoxGeometry(w, 0.05, 0.04)
+    const railZ = new THREE.BoxGeometry(0.04, 0.05, d)
+    for (const [x, z] of [[COOP.x0, COOP.z0], [COOP.x1, COOP.z0], [COOP.x0, COOP.z1], [COOP.x1, COOP.z1], [COOP.x0, (COOP.z0 + COOP.z1) / 2], [COOP.x1, (COOP.z0 + COOP.z1) / 2]]) {
+      const p = new THREE.Mesh(postGeo, wood)
+      p.position.set(x, 0.35, z)
+      coop.add(p)
+    }
+    for (const y of [0.25, 0.55]) {
+      for (const z of [COOP.z0, COOP.z1]) { const r = new THREE.Mesh(railX, wood); r.position.set((COOP.x0 + COOP.x1) / 2, y, z); coop.add(r) }
+      for (const x of [COOP.x0, COOP.x1]) { const r = new THREE.Mesh(railZ, wood); r.position.set(x, y, (COOP.z0 + COOP.z1) / 2); coop.add(r) }
+    }
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.7), wood)
+    hut.position.set(COOP.x1 - 0.55, 0.3, COOP.z0 + 0.45)
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.06, 0.9), roofM)
+    roof.position.set(COOP.x1 - 0.55, 0.66, COOP.z0 + 0.45)
+    roof.rotation.x = 0.25
+    const hole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.02), toon('#2a1f17'))
+    hole.position.set(COOP.x1 - 0.55, 0.16, COOP.z0 + 0.81)
+    coop.add(hut, roof, hole)
+    coop.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
+    this.scene.add(coop)
+
+    // 几只鸡：白身子、红鸡冠、黄嘴；在鸡圈里溜达、低头啄食
+    const white = toon('#f3efe6')
+    const brown = toon('#b0743f')
+    const red = toon('#d2392b')
+    const beakM = toon('#e6b13a')
+    for (let i = 0; i < 4; i++) {
+      const g = new THREE.Group()
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), i === 3 ? brown : white)
+      body.scale.set(0.9, 0.85, 1.2)
+      body.position.y = 0.17
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 5), i === 3 ? brown : white)
+      tail.position.set(0, 0.25, -0.14)
+      tail.rotation.x = -0.7
+      const head = new THREE.Group()
+      head.position.set(0, 0.3, 0.12)
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), i === 3 ? brown : white)
+      const comb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.07), red)
+      comb.position.set(0, 0.07, 0)
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 4), beakM)
+      beak.rotation.x = Math.PI / 2
+      beak.position.set(0, 0, 0.08)
+      head.add(skull, comb, beak)
+      g.add(body, tail, head)
+      g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
+      const x = COOP.x0 + 0.3 + Math.random() * (w - 1.3)
+      const z = COOP.z0 + 1.0 + Math.random() * (d - 1.3)
+      g.position.set(x, 0, z)
+      this.scene.add(g)
+      this.chickens.push({ g, head, x, z, tx: x, tz: z, t: Math.random() * 2, peck: 0 })
+    }
+
+    const hitM = new THREE.MeshBasicMaterial()
+    this.wellHit = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.6, 1.0), hitM)
+    this.wellHit.position.set(WELL.x, 0.8, WELL.z)
+    this.coopHit = new THREE.Mesh(new THREE.BoxGeometry(w, 0.9, d), hitM)
+    this.coopHit.position.set((COOP.x0 + COOP.x1) / 2, 0.45, (COOP.z0 + COOP.z1) / 2)
+    for (const h of [this.wellHit, this.coopHit]) { h.visible = false; this.scene.add(h) }
+  }
+
+  /** 鸡：走两步、停下啄几下，再换个地方（游戏暂停时也停） */
+  private updateChickens(dt: number): void {
+    if (dt <= 0) return
+    for (const c of this.chickens) {
+      c.t -= dt
+      const dx = c.tx - c.x
+      const dz = c.tz - c.z
+      const d = Math.hypot(dx, dz)
+      if (d > 0.03) {
+        const step = Math.min(d, dt * 0.45)
+        c.x += (dx / d) * step
+        c.z += (dz / d) * step
+        c.g.rotation.y = Math.atan2(dx, dz)
+        c.peck = 0
+      } else if (c.t <= 0) {
+        c.tx = COOP.x0 + 0.3 + Math.random() * (COOP.x1 - COOP.x0 - 1.3)
+        c.tz = COOP.z0 + 1.0 + Math.random() * (COOP.z1 - COOP.z0 - 1.3)
+        c.t = 1.5 + Math.random() * 3
+      } else c.peck += dt
+      c.g.position.set(c.x, 0, c.z)
+      // 停下来的时候一下一下低头啄
+      c.head.rotation.x = d > 0.03 ? 0 : Math.max(0, Math.sin(c.peck * 9)) * 0.9
+      c.head.position.y = 0.3 - c.head.rotation.x * 0.08
+    }
+  }
+
+  private choreUnder(): 'pump' | 'feed' | null {
+    const hits = this.raycaster.intersectObjects([this.wellHit, this.coopHit].filter((h): h is THREE.Mesh => !!h), false)
+    if (!hits.length) return null
+    return hits[0].object === this.wellHit ? 'pump' : 'feed'
+  }
+
+  private tapChore(what: 'pump' | 'feed'): void {
+    const who = this.mode === 'home' ? this.selected : this.heroine
+    const r = this.life.commandChore(who, what)
+    this.toast(`world.chore.${what}.${r}`, 3, { who: who.name, n: String(this.life.pumpsLeft() - (r === 'ok' && what === 'pump' ? 1 : 0)) })
   }
 
   private scavengeUnder(): ScavengeSpot | null {

@@ -75,8 +75,10 @@ describe('一家人自己过日子', () => {
         expect(s.longestGo).toBeLessThan(DAY_SECONDS / 12)
       }
       // 两天、三个人：吃掉大约 4~8 份食物
-      expect(12 - life.stock.food).toBeGreaterThan(4.5)
-      expect(12 - life.stock.food).toBeLessThan(7.5)
+      // 鸡圈每天捡的蛋也算进吃的里，这里只看吃掉了多少
+      const eaten = 12 - life.stock.food + life.eggs * Household.EGGS_FOOD
+      expect(eaten).toBeGreaterThan(4.5)
+      expect(eaten).toBeLessThan(7.5)
     })
   }
 })
@@ -664,6 +666,34 @@ describe('来敲门的人', () => {
     expect(kinds).toContain('won')
     expect(life.log.some((l) => l.key === 'world.log.raid')).toBe(true)
     expect(life.ammo.n).toBeGreaterThan(ammo0 - 20)
+  })
+})
+
+describe('压水井和鸡圈', () => {
+  it('家里水不多：闲着的人自己去压水，一天最多压 3 回；早上有人去喂鸡捡蛋，一天一回', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 10, water: 2 }
+    life.clock = { day: 1, hour: 7.2 }
+    life.speed = 3
+    for (let i = 0; i < 9000 && (life.pumpCount < 3 || life.fedDay !== 1) && life.clock.day === 1; i++) {
+      life.tick(0.1, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(0.3, 2.2); a.updateSettle(0.3) }
+    }
+    expect(life.pumpCount).toBe(3)
+    expect(life.pumpsLeft()).toBe(0)
+    expect(life.fedDay).toBe(1)
+    expect(life.log.some((l) => l.key === 'world.log.eggs')).toBe(true)
+  })
+
+  it('点压水井：选中的人去压；今天压满了就说明天再来', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    const mom = life.actors[1]
+    expect(life.commandChore(mom, 'pump')).toBe('ok')
+    expect(mom.task?.kind).toBe('pump')
+    life.pumpCount = 3
+    life.cancel(mom)
+    expect(life.commandChore(mom, 'pump')).toBe('done')
   })
 })
 
