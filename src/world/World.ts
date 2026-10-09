@@ -24,7 +24,7 @@ import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
-import { clearWorld, currentLife, loadWorld, nextLife, saveWorld } from './save'
+import { applyPerks, awardRebirthPoints, clearWorld, currentLife, loadWorld, nextLife, saveWorld } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -71,7 +71,7 @@ export interface Hud {
   /** 第几世 */
   life: number
   /** 女主死了：这一世结束 */
-  over: { when: string; cause: string; days: number } | null
+  over: { when: string; cause: string; days: number; points: number; kills: number } | null
   /** 钉板耐久（0 = 没有） */
   trap: number
   /** 末日前要做的事（做完打勾） */
@@ -380,7 +380,12 @@ export class World {
     }
     // 接着上次的进度（要在 makeActor 设好以后，住进来的人才能重建）
     // 没有存档 = 全新开局：先放一段片头
-    if (!loadWorld(this.life)) this.introT = 0
+    if (!loadWorld(this.life)) {
+      this.introT = 0
+      // 上一世用重生点买的开局加成
+      const perks = applyPerks(this.life)
+      if (perks.length) this.life.logNote('world.log.perks', { list: perks.map((p) => t(`world.perk.${p}` as UiKey)).join('、') })
+    }
     this.life.onKnock = () => {
       this.sound.knock()
       if (this.mode === 'home') this.setViewFloor(0)
@@ -1798,11 +1803,7 @@ export class World {
     this.setHud({
       time: calendarLabel(c),
       life: currentLife(),
-      over: this.life.over ? {
-        when: calendarLabel({ day: this.life.over.day, hour: this.life.over.hour }),
-        cause: this.life.over.cause,
-        days: Math.max(0, this.life.over.day - PROLOGUE_DAYS + 1),
-      } : null,
+      over: this.life.over ? this.overHud(this.life.over) : null,
       night: isNight(c.hour),
       rain: this.life.rain,
       crisis: isCrisisNight(c),
@@ -1865,6 +1866,14 @@ export class World {
     this.disposed = true
     clearWorld()
     location.reload()
+  }
+
+  /** 这一世结束的那一屏；顺便发重生点（撑过的天数 + 每打倒 5 只 1 点，至少 1 点；同一世只发一次） */
+  private overHud(o: NonNullable<Household['over']>): Hud['over'] {
+    const days = Math.max(0, o.day - PROLOGUE_DAYS + 1)
+    const points = Math.max(1, days + Math.floor(this.life.kills / 5))
+    awardRebirthPoints(points)
+    return { when: calendarLabel({ day: o.day, hour: o.hour }), cause: o.cause, days, points, kills: this.life.kills }
   }
 
   /** 女主死了：带着记忆进入下一世（新开局，第几世 +1） */

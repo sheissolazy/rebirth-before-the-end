@@ -64,6 +64,7 @@ export interface WorldSave {
   fishCaught?: number
   over?: { day: number; hour: number; cause: string } | null
   trap?: number
+  kills?: number
   lent?: { name: string; back: number } | null
   fewerTonight?: boolean
   wall?: boolean
@@ -110,6 +111,7 @@ export function snapshot(life: Household): WorldSave {
     fishCaught: life.fishCaught,
     over: life.over,
     trap: life.trap.hp,
+    kills: life.kills,
     lent: life.lent,
     fewerTonight: life.fewerTonight,
     wall: life.wall,
@@ -147,6 +149,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.over = s.over ?? null
   if (life.over) { life.actors[0].pose = 'down'; life.speed = 0 }
   life.trap.hp = s.trap ?? 0
+  life.kills = s.kills ?? 0
   life.lent = s.lent ?? null
   life.fewerTonight = !!s.fewerTonight
   life.wall = !!s.wall
@@ -204,7 +207,11 @@ export function loadWorld(life: Household): boolean {
 }
 
 export function clearWorld(): void {
-  try { localStorage.removeItem(KEY) } catch { /* 没关系 */ }
+  try {
+    localStorage.removeItem(KEY)
+    // 清档重来 / 进入下一世：这一局死了还能再拿重生点
+    localStorage.removeItem(`${PREFIX}-awarded`)
+  } catch { /* 没关系 */ }
 }
 
 const LIVES = `${PREFIX}-lives`
@@ -212,6 +219,68 @@ const LIVES = `${PREFIX}-lives`
 /** 现在是第几世（女主每死一次 +1；清档重来不算） */
 export function currentLife(): number {
   try { return Math.max(1, Number(localStorage.getItem(LIVES)) || 1) } catch { return 1 }
+}
+
+// --- 重生点（设计文档 §14 的第一版）：女主死了按撑过的天数和打倒的丧尸得点，买下一世的开局加成 ---
+
+const POINTS = `${PREFIX}-points`
+const PERKS = `${PREFIX}-perks`
+const AWARDED = `${PREFIX}-awarded`
+
+export const PERK_DEFS = [
+  { id: 'money', cost: 2 },
+  { id: 'ammo', cost: 2 },
+  { id: 'medkit', cost: 1 },
+  { id: 'space', cost: 3 },
+  { id: 'jiangye', cost: 2 },
+] as const
+export type PerkId = (typeof PERK_DEFS)[number]['id']
+
+const read = (k: string): string | null => { try { return localStorage.getItem(k) } catch { return null } }
+const write = (k: string, v: string): void => { try { localStorage.setItem(k, v) } catch { /* 没关系 */ } }
+
+export function rebirthPoints(): number {
+  return Math.max(0, Number(read(POINTS)) || 0)
+}
+
+/** 这一世的重生点（同一世只发一次，刷新页面不会重复拿） */
+export function awardRebirthPoints(n: number): void {
+  const life = String(currentLife())
+  if (read(AWARDED) === life) return
+  write(AWARDED, life)
+  write(POINTS, String(rebirthPoints() + n))
+}
+
+export function boughtPerks(): PerkId[] {
+  try { return JSON.parse(read(PERKS) ?? '[]') as PerkId[] } catch { return [] }
+}
+
+/** 买 / 退一个加成（每样只能买一次） */
+export function togglePerk(id: PerkId): void {
+  const def = PERK_DEFS.find((p) => p.id === id)
+  if (!def) return
+  const have = boughtPerks()
+  if (have.includes(id)) {
+    write(PERKS, JSON.stringify(have.filter((p) => p !== id)))
+    write(POINTS, String(rebirthPoints() + def.cost))
+  } else if (rebirthPoints() >= def.cost) {
+    write(PERKS, JSON.stringify([...have, id]))
+    write(POINTS, String(rebirthPoints() - def.cost))
+  }
+}
+
+/** 新开局：用掉买好的加成 */
+export function applyPerks(life: Household): PerkId[] {
+  const have = boughtPerks()
+  for (const id of have) {
+    if (id === 'money') life.money += 5000
+    else if (id === 'ammo') life.ammo.n += 12
+    else if (id === 'medkit') life.medkits += 2
+    else if (id === 'space') life.spaceCap += 4
+    else if (id === 'jiangye') life.affection.jiangye = Math.min(100, (life.affection.jiangye ?? 0) + 20)
+  }
+  write(PERKS, '[]')
+  return have
 }
 
 /** 女主死了：进入下一世（删掉这一世的存档） */

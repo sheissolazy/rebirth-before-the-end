@@ -886,3 +886,36 @@ describe('顾沉上门借人', () => {
     expect(life.log.some((l) => l.key === 'world.guchen.back')).toBe(true)
   })
 })
+
+describe('重生点', () => {
+  it('死了发重生点（同一世只发一次），买的加成在下一世开局用掉', async () => {
+    const mem = new Map<string, string>()
+    const fake = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) }
+    const { vi } = await import('vitest')
+    vi.stubGlobal('localStorage', fake)
+    const save = await import('./save')
+    save.awardRebirthPoints(5)
+    save.awardRebirthPoints(5)
+    expect(save.rebirthPoints()).toBe(5)
+    save.togglePerk('space') // 3
+    save.togglePerk('money') // 2
+    save.togglePerk('ammo') // 不够了
+    expect(save.boughtPerks()).toEqual(['space', 'money'])
+    expect(save.rebirthPoints()).toBe(0)
+    save.togglePerk('money') // 退掉
+    expect(save.rebirthPoints()).toBe(2)
+    save.togglePerk('jiangye')
+    save.nextLife()
+    expect(save.currentLife()).toBe(2)
+    const { life } = simulate('paradise', 0)
+    const before = { cap: life.spaceCap, aff: life.affection.jiangye ?? 0 }
+    expect(save.applyPerks(life)).toEqual(['space', 'jiangye'])
+    expect(life.spaceCap).toBe(before.cap + 4)
+    expect(life.affection.jiangye).toBe(before.aff + 20)
+    expect(save.boughtPerks()).toEqual([])
+    // 下一世死了又能拿
+    save.awardRebirthPoints(3)
+    expect(save.rebirthPoints()).toBe(3)
+    vi.unstubAllGlobals()
+  })
+})

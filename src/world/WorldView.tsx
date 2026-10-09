@@ -9,6 +9,7 @@ import { DiaryPanel } from './DiaryPanel'
 import { MapPanel, type MapMember } from './MapPanel'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
+import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
 const WELCOME_KEY = 'rbte-proto-welcome-v4'
@@ -83,6 +84,8 @@ export default function WorldView() {
   // （原来就是手动暂停的，关掉以后还是暂停）
   const resume = useRef(1)
   const uiPaused = useRef(false)
+  /** 重生点商店点了一下：重新画一遍（数据在 localStorage 里） */
+  const [, setShopTick] = useState(0)
   /** 换画风前的速度，新世界接着用 */
   const keptSpeed = useRef<number | null>(null)
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
@@ -464,7 +467,23 @@ export default function WorldView() {
             <div className="mt-3 text-4xl font-bold tracking-[0.2em]">{t('world.over.title')}</div>
             <p className="mt-5 text-base leading-relaxed text-white/85">{t(`world.over.cause.${hud.over.cause}` as UiKey)}</p>
             <p className="mt-2 text-sm text-white/60">{t('world.over.when', { when: hud.over.when, days: hud.over.days })}</p>
-            <p className="mt-6 text-sm leading-relaxed text-white/70">{t('world.over.again')}</p>
+            <p className="mt-4 text-sm text-amber-200">{t('world.over.points', { days: hud.over.days, kills: hud.over.kills, points: hud.over.points })}</p>
+            <div className="mt-3 rounded-xl bg-white/10 p-3 text-left font-sans">
+              <div className="mb-2 text-xs text-white/70">{t('world.over.shop', { n: rebirthPoints() })}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {PERK_DEFS.map((p) => {
+                  const have = boughtPerks().includes(p.id)
+                  return (
+                    <button key={p.id} onClick={() => { togglePerk(p.id); setShopTick((n) => n + 1) }}
+                      disabled={!have && rebirthPoints() < p.cost}
+                      className={`rounded-lg px-2 py-1 text-xs ${have ? 'bg-amber-400 text-zinc-900' : 'bg-white/15 text-white hover:bg-white/25'} disabled:opacity-35`}>
+                      {have ? '✓ ' : ''}{t(`world.perk.${p.id}` as UiKey)} · {p.cost}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <p className="mt-5 text-sm leading-relaxed text-white/70">{t('world.over.again')}</p>
             <button onClick={() => world.current?.rebirth()}
               className="mt-6 rounded-xl bg-amber-500 px-6 py-2.5 text-base font-bold text-zinc-900 shadow-lg hover:bg-amber-400">
               {t('world.over.button', { n: hud.life + 1 })}

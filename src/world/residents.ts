@@ -431,6 +431,9 @@ export class Household {
     this.visitDay = this.clock.day
   }
 
+  /** 这一世一共打倒了多少（算重生点用） */
+  kills = 0
+
   /** 借给顾沉守防线的家人：什么时候回来 */
   lent: { name: string; back: number } | null = null
   static readonly LEND_HOURS = 48
@@ -1296,6 +1299,7 @@ export class Household {
       // 丧尸掉晶核；黑鸦的人身上能搜出子弹
       if (e.raider) this.ammo.n += 2
       else this.cores += 1
+      this.kills++
       if (this.before && e.by === 'trap') this.before.trapKills++
       if (this.before && e.by === 'fire') this.before.fireKills++
     }
