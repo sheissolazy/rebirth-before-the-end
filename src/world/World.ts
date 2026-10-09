@@ -304,7 +304,6 @@ export class World {
         new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
         this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
         this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map(loadPerson)) : Promise.resolve(null),
-        this.style === 'paradise' ? this.siegeView.loadModels() : Promise.resolve(),
       ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
@@ -323,7 +322,6 @@ export class World {
           if (this.actors[k].driver?.attach(w, 'RightHand')) this.weapons.push(w)
         })
       }
-      for (const a of this.actors.slice(3)) this.dressResident(a)
       this.addLamps()
       this.collectClickables()
       // 窗玻璃：夜里亮起暖光
@@ -335,15 +333,23 @@ export class World {
       const gates: THREE.Object3D[] = []
       this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
-      // 预热：武器先拿出来，跟丧尸一起渲染一帧
-      for (const w of this.weapons) w.visible = true
-      this.updateCamera(0.016)
-      this.siegeView.prewarm(() => this.renderer.render(this.scene, this.camera))
-      for (const w of this.weapons) w.visible = false
       this.setHud({ loading: false })
+      // 丧尸、访客、住进来的人的模型不挡开场：别墅出来以后在后台加载，好了再预热着色器
+      if (this.style === 'paradise') void this.siegeView.loadModels().then(() => this.afterExtraModels(), () => this.afterExtraModels())
+      else this.afterExtraModels()
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
     }
+  }
+
+  /** 额外模型加载好以后：给住进来的人换上真人模型，再预热一帧（武器、丧尸、特效） */
+  private afterExtraModels(): void {
+    if (this.disposed) return
+    for (const a of this.actors.slice(3)) this.dressResident(a)
+    const fighting = !!this.life.siege && !this.life.siege.done
+    for (const w of this.weapons) w.visible = true
+    this.siegeView.prewarm(() => this.renderer.render(this.scene, this.camera))
+    for (const w of this.weapons) w.visible = fighting
   }
 
   private assembleVilla(kit: Map<string, THREE.Object3D>): void {
