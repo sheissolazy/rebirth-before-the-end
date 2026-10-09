@@ -186,3 +186,24 @@ describe('出门', () => {
     expect(life.barriers.gate).toBe(240)
   })
 })
+
+describe('需求归零的后果', () => {
+  it('家里断粮断水：饿着渴着掉健康，熬久了有人抑郁离家出走（女主不会走）', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 0, water: 0 }
+    life.clock = { day: 0, hour: 8 }
+    life.speed = 3
+    for (const a of life.actors) a.needs = { hunger: 10, thirst: 10, energy: 60, mood: 30 }
+    const dt = 0.1
+    for (let i = 0; i < (3 * DAY_SECONDS) / (dt * 3); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * 3, 2.2); a.updateSettle(dt * 3) }
+    }
+    const keys = life.log.map((l) => l.key)
+    expect(keys).toContain('world.log.thirsty')
+    expect(keys).toContain('world.log.runaway')
+    expect(life.actors[0].runaway).toBeNull()
+    expect(life.actors[0].lost).toBe(false)
+    expect(life.actors.slice(1).some((a) => a.runaway || a.lost)).toBe(true)
+  })
+})

@@ -810,7 +810,7 @@ export class World {
     const h = this.heroine.root
     const back = new THREE.Vector2(-Math.sin(h.rotation.y), -Math.cos(h.rotation.y))
     // 睡着的人不跟出去
-    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep').forEach((a, k) => {
+    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !a.away && !a.runaway && !a.lost).forEach((a, k) => {
       const side = k === 0 ? 1 : -1
       const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8, floor: 0 as const }
       const d = Math.hypot(a.pos.x - h.position.x, a.pos.z - h.position.z)
@@ -952,7 +952,7 @@ export class World {
 
   /** 在家、能出门的人 */
   homeMembers(): { name: string; health: number }[] {
-    return this.actors.filter((a) => !a.away && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
+    return this.actors.filter((a) => !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
   }
 
   startTrip(id: string, names: string[]): boolean {

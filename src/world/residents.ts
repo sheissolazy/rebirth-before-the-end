@@ -6,7 +6,7 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAY_SECONDS, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
+  DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
@@ -52,6 +52,11 @@ export class Actor extends Walker {
   away = false
   /** 扛着箱子回来 */
   carrying = false
+  /** 心情低于抑郁线累计了多少游戏小时 */
+  lowMood = 0
+  /** 离家出走：什么时候有结果；lost = 再也没回来 */
+  runaway: { back: number } | null = null
+  lost = false
   /** 玩家下过命令后，这么多游戏小时内不自己找事 */
   hold = 0
   private settle: { from: THREE.Vector3; to: THREE.Vector3; r0: number; r1: number; t: number } | null = null
@@ -157,6 +162,8 @@ const HOME_IN: Where = { x: 4, z: 11, floor: 0 }
 
 export interface PersonHud {
   name: string
+  /** 离家出走 / 不在了 */
+  gone?: 'runaway' | 'lost'
   /** 出门在外：去哪了、还有几小时回来 */
   trip?: { id: string; left: number }
   health: number
@@ -219,6 +226,7 @@ export class Household {
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done
     this.tripTick()
+    this.runawayTick()
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -228,11 +236,76 @@ export class Household {
         a.health = Math.min(100, a.health + 40)
         this.note('world.log.medkit', { who: a.name })
       }
-      if (fighting || this.onTrip(a)) continue
+      if (fighting || this.onTrip(a) || a.runaway || a.lost) continue
+      this.consequences(a, hours)
       if (a.task) this.runTask(a, hours)
       else {
         a.hold = Math.max(0, a.hold - hours)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
+      }
+    }
+  }
+
+  // --- 需求归零的后果 ---------------------------------------------------------
+
+  private warned = new Map<string, number>()
+
+  /** 每种警告一天只记一次 */
+  private noteOnce(a: Actor, what: string, key: string): void {
+    const k = `${a.name}:${what}`
+    if (this.warned.get(k) === this.clock.day) return
+    this.warned.set(k, this.clock.day)
+    this.note(key, { who: a.name })
+  }
+
+  private consequences(a: Actor, hours: number): void {
+    const n = a.needs
+    // 饿到、渴到底：掉健康
+    if (n.hunger <= 0 || n.thirst <= 0) {
+      a.health = Math.max(1, a.health - hours * (n.hunger <= 0 && n.thirst <= 0 ? 8 : 4))
+      this.noteOnce(a, 'starve', n.thirst <= 0 ? 'world.log.thirsty' : 'world.log.starving')
+    }
+    // 累到底：就地倒下睡着
+    if (n.energy <= 0 && a.task?.kind !== 'sleep') {
+      this.cancel(a)
+      a.task = { kind: 'sleep', spot: null, phase: 'use', hours: 0, manual: false }
+      a.pose = 'down'
+      this.noteOnce(a, 'collapse', 'world.log.collapse')
+    }
+    // 抑郁：心情低于抑郁线累计一天，就会留张纸条离家出走（女主是玩家自己，不会走）
+    a.lowMood = n.mood < DEPRESSED ? a.lowMood + hours : Math.max(0, a.lowMood - hours * 2)
+    if (a.lowMood >= 24 && a !== this.actors[0]) this.runAway(a)
+  }
+
+  private runAway(a: Actor): void {
+    this.cancel(a)
+    a.runaway = { back: this.absHour + 24 + this.rand() * 24 }
+    a.setPath(route(this.navs, a.pos, EXIT) ?? [])
+    this.note('world.log.runaway', { who: a.name })
+  }
+
+  /** 离家出走的人：走到街头消失；到时候大概率再也不回来，小概率带着奇遇回来 */
+  private runawayTick(): void {
+    for (const a of this.actors) {
+      const r = a.runaway
+      if (!r) continue
+      if (!a.away && !a.path.length) a.away = true
+      if (a.away && this.absHour >= r.back) {
+        a.runaway = null
+        if (this.rand() < 0.2) {
+          a.away = false
+          a.lowMood = 0
+          a.needs = { ...a.needs, mood: 65 }
+          a.root.position.set(EXIT.x, 0, EXIT.z)
+          a.floor = 0
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+          this.cores += 2
+          this.stock = { ...this.stock, food: this.stock.food + 3 }
+          this.note('world.log.adventure', { who: a.name })
+        } else {
+          a.lost = true
+          this.note('world.log.lost1', { who: a.name })
+        }
       }
     }
   }
@@ -348,7 +421,7 @@ export class Household {
     }
     if (this.speed > 1) this.speed = 1
     this.siege = new Siege({
-      count, crisis, navs: this.navs, defenders: this.actors.filter((a) => !a.away), barriers: this.barriers, ammo: this.ammo,
+      count, crisis, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id),
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
@@ -534,6 +607,7 @@ export class Household {
 
   private isDone(a: Actor, t: Task): boolean {
     const n = a.needs
+    if (t.kind === 'sleep' && !t.spot) return n.energy >= 40
     if (t.kind === 'sleep') return (t.hours <= 0 && shouldWake(n, this.clock)) || n.hunger < 6 || n.thirst < 6
     if (t.hours <= 0) return true
     // 放松、溜达、发呆时，饿了渴了困了就不干了
@@ -609,6 +683,7 @@ export class Household {
     return this.actors.map((a) => ({
       name: a.name,
       health: a.health,
+      gone: a.lost ? 'lost' : a.runaway ? 'runaway' : undefined,
       trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
