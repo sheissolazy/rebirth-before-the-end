@@ -29,6 +29,10 @@ export interface Placement {
   /** 离本层地面的高度（挂在空中的灯等） */
   y?: number
   scale?: number
+  /** 模型里并排放着几个品种时只要第几个（比如两只皮箱只要一只） */
+  variant?: number
+  /** 只在卡通画风里有（世外桃源画风换成了别的家具，比如储藏室的铁架子、爸妈的双人床） */
+  toonOnly?: boolean
 }
 
 export const WALL_H = 2.6
@@ -80,7 +84,7 @@ function run(floor: Floor, axis: 'x' | 'z', fixed: number, from: number, to: num
 // 二楼  西：客房二（北）/ 林知夏的房间（南）；中：楼梯口（北，z -3..0.5）/ 小客厅（南，门通阳台）；东：客房一
 export const WALLS: WallSeg[] = [
   // 一楼外墙
-  ...run(0, 'x', -3, 0, 12, false, { 1: 'window', 3: 'window', 6: 'window', 10: 'window' }),
+  ...run(0, 'x', -3, 0, 12, false, { 1: 'window', 3: 'window', 6: 'window' }), // 储藏室北墙不开窗：靠墙摆一排铁架子
   ...run(0, 'z', 0, -3, 6, false, { [-2]: 'window', 3: 'window' }),
   ...run(0, 'x', 6, 0, 12, true, { 1: 'window', 2: 'window', 5: 'door', 6: 'door', 9: 'window', 10: 'window' }),
   ...run(0, 'z', 12, -3, 6, true, { [-2]: 'window', 2: 'window' }),
@@ -109,52 +113,90 @@ export const FURNITURE: Placement[] = [
   { piece: 'chair', x: 5.12, z: 2.6, rot: -90, floor: 0 },
   { piece: 'chair', x: 6.88, z: 2.6, rot: 90, floor: 0 },
   { piece: 'wall_map', x: 4.6, z: 4.4, rot: 90, floor: 0 },
-  // 储藏室：囤的东西一箱一箱码着
-  { piece: 'crate', x: 11.4, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35] },
-  { piece: 'crate', x: 10.7, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35] },
-  { piece: 'crate', x: 11.4, z: 4.7, rot: 0, floor: 0, block: [0.35, 0.35] },
-  { piece: 'crate', x: 11.4, z: 1.2, rot: 0, floor: 0, block: [0.35, 0.35] },
-  { piece: 'crate', x: 11.4, z: 0.5, rot: 0, floor: 0, block: [0.35, 0.35] },
-  { piece: 'shelf', x: 11.6, z: -1.6, rot: -90, floor: 0 },
+  // 储藏室：囤的东西一箱一箱码着（世外桃源画风换成分类的铁架子，见 PANTRY_SHELVES）
+  { piece: 'crate', x: 11.4, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
+  { piece: 'crate', x: 10.7, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
+  { piece: 'crate', x: 11.4, z: 4.7, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
+  { piece: 'crate', x: 11.4, z: 1.2, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
+  { piece: 'crate', x: 11.4, z: 0.5, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
+  { piece: 'shelf', x: 11.6, z: -1.6, rot: -90, floor: 0, toonOnly: true },
   // 厨房：灶台靠北墙、碗柜（冰箱）靠楼梯间那面墙
   { piece: 'counter', x: 2.0, z: -2.55, rot: 0, floor: 0, block: [1.5, 0.35] },
   { piece: 'fridge', x: 3.6, z: -1.3, rot: -90, floor: 0, block: [0.4, 0.4] },
   // 楼梯：楼梯间里西头上、东头到二楼
   { piece: 'stairs', x: 6.5, z: -1.75, rot: 0, floor: 0, block: [1.4, 0.6] },
   // 一楼爸妈卧室两张床
-  { piece: 'bed', x: 0.9, z: 3.0, rot: 180, floor: 0, block: [0.5, 1.0] },
-  { piece: 'bed', x: 2.3, z: 3.0, rot: 180, floor: 0, block: [0.5, 1.0] },
+  { piece: 'bed', x: 0.9, z: 3.0, rot: 180, floor: 0, block: [0.5, 1.0], toonOnly: true },
+  { piece: 'bed', x: 2.3, z: 3.0, rot: 180, floor: 0, block: [0.5, 1.0], toonOnly: true },
   // 二楼：林知夏的房间（床、书桌，重生日记在桌上）、客房二、客房一（两张床）
-  { piece: 'bed', x: 0.9, z: 3.0, rot: 180, floor: 1, block: [0.5, 1.0] },
+  { piece: 'bed', x: 0.9, z: 3.0, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
   { piece: 'desk', x: 2.8, z: 5.55, rot: 180, floor: 1 },
   { piece: 'chair', x: 2.8, z: 4.95, rot: 180, floor: 1 },
-  { piece: 'bed', x: 0.9, z: -1.5, rot: 180, floor: 1, block: [0.5, 1.0] },
-  { piece: 'bed', x: 11.1, z: -1.5, rot: 180, floor: 1, block: [0.5, 1.0] },
-  { piece: 'bed', x: 11.1, z: 2.5, rot: 180, floor: 1, block: [0.5, 1.0] },
+  { piece: 'bed', x: 0.9, z: -1.5, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
+  { piece: 'bed', x: 11.1, z: -1.5, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
+  { piece: 'bed', x: 11.1, z: 2.5, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
   // 二楼小客厅：沙发靠着楼梯口那面墙、书架
   { piece: 'sofa', x: 6.0, z: 1.15, rot: 180, floor: 1, block: [0.9, 0.45] },
   { piece: 'shelf', x: 7.6, z: 3.6, rot: -90, floor: 1 },
 ]
 
-/** 世外桃源画风里额外摆的 Poly Haven 模型（卡通画风里没有） */
+/** 储藏室的铁架子（Poly Haven steel_frame_shelves_01，按 0.1 缩放：1.1 米宽、0.5 米深、2.1 米高）。
+ * 北墙三个（两架吃的、一架水），西墙一个（药、弹药）；rot 是架子正面朝向（0 = 朝南） */
+export interface PantryShelf { x: number; z: number; rot: number; label: string }
+export const PANTRY_SHELVES: PantryShelf[] = [
+  { x: 8.8, z: -2.59, rot: 0, label: '粮食' },
+  { x: 9.95, z: -2.59, rot: 0, label: '粮食' },
+  { x: 11.1, z: -2.59, rot: 0, label: '饮用水' },
+  { x: 8.41, z: -0.9, rot: 90, label: '药品·弹药' },
+]
+/** 铁架子四层板的高度 */
+export const SHELF_LEVELS = [0.134, 0.64, 1.146, 1.652]
+
+function pantryShelves(): Placement[] {
+  return PANTRY_SHELVES.map((s) => ({ piece: 'steel_frame_shelves_01', x: s.x, z: s.z, rot: s.rot, floor: 0 as Floor, block: [0.55, 0.25] as [number, number], scale: 0.1 }))
+}
+
+/** 世外桃源画风里额外摆的 Poly Haven 模型（卡通画风里没有）。piece 是 PROC_PIECES 里的名字时用代码搭 */
+export const PROC_PIECES = ['platform_bed', 'camp_bed', 'iron_bedding', 'blocker'] as const
 export const PARADISE_EXTRAS: Placement[] = [
   // 堂屋：神龛（中式柜子）靠北墙、角落一盆绿植、八仙桌上的吊灯、东北角的摇椅
   { piece: 'chinese_cabinet', x: 6.4, z: -0.05, rot: 0, floor: 0, block: [0.65, 0.32], scale: 0.85 },
   { piece: 'potted_plant_01', x: 7.55, z: 0.1, rot: 0, floor: 0, block: [0.3, 0.3] },
   { piece: 'chinese_chandelier', x: 6, z: 2.6, rot: 0, floor: 0, y: 1.7, scale: 0.8 },
   { piece: 'Rockingchair_01', x: 7.35, z: 1.1, rot: -120, floor: 0, block: [0.4, 0.45] },
-  // 爸妈卧室：床边的小桌
-  { piece: 'WoodenTable_01', x: 3.55, z: 5.3, rot: 90, floor: 0, block: [0.63, 0.23], scale: 0.7 },
-  // 一楼爸妈的两张床
-  { piece: 'vintage_day_bed', x: 0.9, z: 3.0, rot: 90, floor: 0, block: [1.0, 0.45] },
-  { piece: 'vintage_day_bed', x: 2.3, z: 3.0, rot: 90, floor: 0, block: [1.0, 0.45] },
-  // 二楼：林知夏的床和床头柜、客房二、客房一
+  // 爸妈卧室：一张老式雕花双人床（床头靠北墙），两边床头柜；床头柜上一张全家福；南窗下一个矮五斗柜，上面一座座钟；西墙上挂钟
+  { piece: 'GothicBed_01', x: 1.75, z: 2.67, rot: 0, floor: 0, block: [0.75, 1.02] },
+  { piece: 'ClassicNightstand_01', x: 0.5, z: 1.9, rot: 0, floor: 0, block: [0.29, 0.21] },
+  { piece: 'ClassicNightstand_01', x: 2.95, z: 1.9, rot: 0, floor: 0, block: [0.29, 0.21] },
+  { piece: 'standing_picture_frame_01', x: 0.5, z: 1.85, rot: 20, floor: 0, y: 0.7 },
+  { piece: 'vintage_wooden_drawer_01', x: 1.6, z: 5.6, rot: 180, floor: 0, block: [0.43, 0.23] },
+  { piece: 'mantel_clock_01', x: 1.45, z: 5.62, rot: 180, floor: 0, y: 0.55 },
+  { piece: 'wall_clock', x: 0.17, z: 2.75, rot: 90, floor: 0, y: 1.85 },
+  // 二楼林知夏的房间：白色的复古坐卧床堆着靠垫，床头柜上闹钟和小黄鸭，书桌上一盏台灯、一个相框
   { piece: 'vintage_day_bed', x: 0.9, z: 3.0, rot: 90, floor: 1, block: [1.0, 0.45] },
+  { piece: 'throw_pillows_01', x: 0.92, z: 2.35, rot: 0, floor: 1, y: 0.42, scale: 0.72 },
   { piece: 'ClassicNightstand_01', x: 1.95, z: 2.25, rot: 0, floor: 1, block: [0.3, 0.22] },
-  { piece: 'wooden_lantern_01', x: 1.95, z: 2.25, rot: 0, floor: 1, y: 0.7 },
-  { piece: 'vintage_day_bed', x: 0.9, z: -1.5, rot: 90, floor: 1, block: [1.0, 0.45] },
-  { piece: 'vintage_day_bed', x: 11.1, z: -1.5, rot: 90, floor: 1, block: [1.0, 0.45] },
-  { piece: 'vintage_day_bed', x: 11.1, z: 2.5, rot: 90, floor: 1, block: [1.0, 0.45] },
+  { piece: 'alarm_clock_01', x: 1.82, z: 2.22, rot: 15, floor: 1, y: 0.7 },
+  { piece: 'rubber_duck_toy', x: 2.1, z: 2.28, rot: -30, floor: 1, y: 0.7, scale: 0.45 },
+  { piece: 'desk_lamp_arm_01', x: 2.35, z: 5.62, rot: 200, floor: 1, y: 0.8, scale: 0.7 },
+  { piece: 'standing_picture_frame_01', x: 3.25, z: 5.6, rot: 160, floor: 1, y: 0.8 },
+  // 客房二：一张旧铁架床（被褥用代码铺），木箱当床头柜放马灯，墙角一只旧皮箱、皮箱上一摞书
+  { piece: 'old_bed_frame', x: 0.9, z: -1.5, rot: 0, floor: 1, block: [0.45, 1.0] },
+  { piece: 'iron_bedding', x: 0.9, z: -1.5, rot: 0, floor: 1 },
+  { piece: 'wooden_crate_01', x: 1.95, z: -2.6, rot: 0, floor: 1, block: [0.42, 0.21], scale: 0.75 },
+  { piece: 'wooden_lantern_01', x: 2.05, z: -2.6, rot: 0, floor: 1, y: 0.27 },
+  { piece: 'vintage_suitcase', x: 3.3, z: -2.5, rot: 0, floor: 1, block: [0.32, 0.25], scale: 0.85, variant: 0 },
+  { piece: 'book_encyclopedia_set_01', x: 3.35, z: -2.5, rot: 10, floor: 1, y: 0.22, scale: 0.8 },
+  // 客房一：木框矮床（深蓝被子）和一张备用的行军床（都用代码搭），中间一个五斗柜，柜上一摞书，北墙挂钟
+  { piece: 'platform_bed', x: 11.1, z: 2.5, rot: 0, floor: 1, block: [0.55, 1.05] },
+  { piece: 'camp_bed', x: 11.1, z: -1.5, rot: 0, floor: 1, block: [0.38, 0.97] },
+  { piece: 'vintage_wooden_drawer_01', x: 9.3, z: -2.6, rot: 0, floor: 1, block: [0.43, 0.23] },
+  { piece: 'book_encyclopedia_set_01', x: 9.3, z: -2.6, rot: -6, floor: 1, y: 0.55, scale: 0.8 },
+  { piece: 'wall_clock', x: 10.4, z: -2.82, rot: 0, floor: 1, y: 1.85 },
+  // 储藏室：分类的铁架子（东西摆多少跟着存货变，见 pantry.ts）；东墙根的油桶、门南边码的纸箱那两块地方不让人穿过去
+  ...pantryShelves(),
+  { piece: 'blocker', x: 11.56, z: 4.5, rot: 0, floor: 0, block: [0.29, 1.2] },
+  { piece: 'blocker', x: 8.63, z: 4.42, rot: 0, floor: 0, block: [0.43, 1.38] },
   // 院子里：檐廊上的酒桶、井边的木桶、院坝东边的长椅和石头
   { piece: 'wine_barrel_01', x: 11.45, z: 7.35, rot: 0, floor: 0, block: [0.4, 0.4] },
   { piece: 'wooden_bucket_01', x: 14.9, z: 3.35, rot: 0, floor: 0, block: [0.2, 0.2] },
@@ -270,7 +312,8 @@ const bed = (x: number, z: number, floor: Floor, y = 0): Spot => ({ kind: 'sleep
 export const BEDS: Record<'toon' | 'paradise', Spot[]> = {
   // 女主二楼自己的房间；爸妈一楼；住进来的两个人：二楼客房一、客房二
   toon: [bed(0.9, 3.0, 1), bed(0.9, 3.0, 0), bed(2.3, 3.0, 0), bed(11.1, 2.5, 1), bed(0.9, -1.5, 1)],
-  paradise: [bed(0.9, 3.0, 1, -0.08), bed(0.9, 3.0, 0, -0.08), bed(2.3, 3.0, 0, -0.08), bed(11.1, 2.5, 1, -0.08), bed(0.9, -1.5, 1, -0.08)],
+  // 爸妈睡一张双人床（床头靠北墙，比单人床往北挪了 0.35 米）
+  paradise: [bed(0.9, 3.0, 1, -0.08), bed(1.4, 2.65, 0, -0.14), bed(2.1, 2.65, 0, -0.14), bed(11.1, 2.5, 1, -0.12), bed(0.9, -1.5, 1, -0.06)],
 }
 
 /** 菜地：院子东边一块 2.6 × 2 米的地（镜头从东南看过来，正好看得见），蹲在南边照料 */

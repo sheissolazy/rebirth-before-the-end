@@ -2048,8 +2048,8 @@ export class Household {
   /** 凑到一个正在歇着 / 吃饭 / 干活的家人身边，面对面说说话 */
   private companyTask(a: Actor): Task | null {
     const busy = (b: Actor) => !!b.task && b.task.phase === 'use' && ['relax', 'sit', 'eat', 'cook', 'garden', 'repair', 'tidy', 'wash'].includes(b.task.kind)
-    const pool = this.actors.filter((b) => b !== a && !this.isOut(b)
-      && (busy(b) || (b === this.actors[0] && !b.path.length && this.isHomeBody(b))))
+    const pool = this.actors.filter((b) => b !== a && !this.isOut(b) && this.isHomeBody(b)
+      && (busy(b) || (b === this.actors[0] && !b.path.length)))
     const b = pool[Math.floor(this.rand() * pool.length)]
     if (!b) return null
     let dx = a.pos.x - b.pos.x
@@ -2147,6 +2147,8 @@ export class Household {
   petCat(a: Actor, cat: { x: number; z: number; floor: Floor }): boolean {
     const free = ['idle', 'stroll', 'relax', 'tidy']
     if (this.isOut(a) || a.dead || a.settling || (this.siege && !this.siege.done)) return false
+    // 猫溜达到院子外面了：不跟出去
+    if (cat.floor === 0 && !inRect(YARD, cat.x, cat.z)) return false
     if (a.task ? a.task.manual || !free.includes(a.task.kind) || (a.task.kind === 'relax' && a.task.phase === 'use') : a.path.length > 0) return false
     // 站在猫旁边 0.5 米（找一个走得到的方向），面朝猫
     for (const ang of [0, 1.6, -1.6, 3.1]) {
@@ -2222,6 +2224,11 @@ export class Household {
   }
 
   private assign(a: Actor, task: Task): void {
+    // 没人下命令就不出院子（自己找的事只在家里和院子里；守夜打丧尸不算）
+    const at = task.spot
+    if (at && !task.manual && task.kind !== 'guard' && at.floor === 0 && !inRect(YARD, at.ax ?? at.x, at.az ?? at.z)) {
+      task = { kind: 'idle', spot: null, phase: 'use', hours: 0.3, manual: false }
+    }
     a.task = task
     if (!task.spot) a.pose = task.kind === 'eat' ? 'drink' : 'idle'
     if (task.spot) {

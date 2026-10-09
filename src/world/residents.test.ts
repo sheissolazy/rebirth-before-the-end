@@ -8,7 +8,7 @@ import { Courier, VISITORS, Visitor } from './visitors'
 import { SCAVENGE } from './scavenge'
 import { settleTrip } from './expedition'
 import { rainAt } from './weather'
-import { FLOOR_H, SPOTS } from './layout'
+import { FLOOR_H, SPOTS, YARD, inRect } from './layout'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -1874,5 +1874,30 @@ describe('闲着的时候找点事', () => {
     const { stats } = simulate('paradise', 1.5)
     const kinds = new Set(stats.flatMap((s) => [...s.kinds]))
     expect(kinds.has('company') || kinds.has('tidy')).toBe(true)
+  })
+})
+
+describe('没人下命令就不出门', () => {
+  it('一家人自己过三天：谁也不会走出院子（采野菜、出门都得点了才去）', () => {
+    const { life } = simulate('paradise', 0)
+    const dt = 0.1
+    life.speed = 3
+    const out: string[] = []
+    for (let i = 0; i < Math.round((3 * DAY_SECONDS) / (dt * life.speed)); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) {
+        a.follow(dt * life.speed, 2.2)
+        a.updateSettle(dt * life.speed)
+        if (a.floor === 0 && !inRect(YARD, a.pos.x, a.pos.z) && out.length < 5) out.push(`${a.name} ${a.task?.kind} @${a.pos.x.toFixed(1)},${a.pos.z.toFixed(1)} d${life.clock.day} ${life.clock.hour.toFixed(1)}h`)
+      }
+    }
+    expect(out).toEqual([])
+  })
+
+  it('猫溜达到院子外面：没人跟出去撸猫', () => {
+    const { life } = simulate('paradise', 0)
+    const mom = life.actors[1]
+    expect(life.petCat(mom, { x: 20, z: 2, floor: 0 })).toBe(false)
+    expect(life.petCat(mom, { x: 6, z: 4, floor: 0 })).toBe(true)
   })
 })

@@ -3,6 +3,7 @@
 // 切换时用 0.9 秒平滑过渡，同时屋顶淡出、靠近镜头的墙压低。
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   COOP, COURT, FLOOR_H, FRONT_DOOR, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
@@ -13,8 +14,10 @@ import { clothesline, decorateHouse, parchmentMap, couplets, StockView, woodStov
 import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
 import {
-  ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
+  ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, variants, type ArtStyle, type ParadiseKit,
 } from './paradise'
+import { PantryView } from './pantry'
+import { campBed, ironBedBedding, platformBed } from './bedroom'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
@@ -207,6 +210,8 @@ export class World {
   private heroine!: Actor
   private selected!: Actor
   private readonly nearWalls: THREE.Object3D[] = []
+  /** 檐廊的四根柱子 */
+  private readonly porchCols: THREE.Object3D[] = []
   private readonly floor2 = new THREE.Group()
   private roof: THREE.Group | null = null
   private roofMats: THREE.Material[] = []
@@ -225,7 +230,6 @@ export class World {
   private readonly pointers = new Map<number, { x: number; y: number }>()
   private press: { x: number; y: number; t: number; moved: boolean } | null = null
   private pinchDist = 0
-  private followTimer = 0
   private raf = 0
   private disposed = false
   private hud: Hud = { ...EMPTY_HUD }
@@ -362,6 +366,7 @@ export class World {
   private outsideOnly: THREE.Object3D[] = []
   /** 储藏室里按存货堆的米袋、水、罐头 */
   private stockView: StockView | null = null
+  private pantry: PantryView | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
   private hemiBase = 1.5
@@ -635,7 +640,8 @@ export class World {
         const cp = couplets(FRONT_DOOR.x, FRONT_DOOR.z + 0.13)
         this.scene.add(cp)
         this.outsideOnly.push(cp)
-        this.stockView = new StockView(this.scene, STORE_ROOM)
+        // 世外桃源画风用分类的铁架子（applyParadise 里摆好了），卡通画风还是码在地上
+        if (!this.pantry) this.stockView = new StockView(this.scene, STORE_ROOM)
       } catch (e) {
         // 装饰出问题也不能挡住后面加载人物
         console.warn('decor', e)
@@ -1092,8 +1098,9 @@ export class World {
     // 檐廊：地砖、四根柱子；二楼阳台：楼板、地砖、栏杆（柱子和栏杆在家里视角下跟着矮墙压低）
     slab(PORCH.x0, PORCH.z0, PORCH.x1, PORCH.z1)
     for (const x of [PORCH.x0 + 0.15, (PORCH.x0 + PORCH.x1) / 2 - 2, (PORCH.x0 + PORCH.x1) / 2 + 2, PORCH.x1 - 0.15]) {
+      // 家里视角看一楼时整根藏起来（压低成矮桩会变成檐廊边上一排白方块）；看二楼、在外面时照常立着撑阳台
       const col = box(0.24, FLOOR_H - 0.3, 0.24, COLORS.wall, [x, 0, PORCH.z1 - 0.15])
-      this.nearWalls.push(col)
+      this.porchCols.push(col)
       this.scene.add(col)
     }
     const rail = new THREE.Group()
@@ -1118,23 +1125,27 @@ export class World {
   }
 
   /** 一层的地砖：把 floor_1x1 组件里的每个网格做成一个实例化网格，摆到每一格上 */
-  private tileFloor(kit: Map<string, THREE.Object3D>, cells: [number, number][], y: number): THREE.InstancedMesh[] {
+  /** 一层楼的地砖：每块地砖并成一个网格（一次绘制）。不用实例化：换成 Poly Haven 木地板时
+   * 贴图按世界坐标铺（米为单位），并成一块才是连着的木纹；实例化的每块都会贴同一小片，看着像瓷砖 */
+  private tileFloor(kit: Map<string, THREE.Object3D>, cells: [number, number][], y: number): THREE.Mesh[] {
     const src = kit.get('floor_1x1')
-    if (!src) return []
+    if (!src || !cells.length) return []
     src.updateMatrixWorld(true)
     const inv = new THREE.Matrix4().copy(src.matrixWorld).invert()
-    const out: THREE.InstancedMesh[] = []
+    const out: THREE.Mesh[] = []
     src.traverse((o) => {
       const m = o as THREE.Mesh
       if (!m.isMesh) return
       const local = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)
-      const inst = new THREE.InstancedMesh(m.geometry, m.material, cells.length)
       const at = new THREE.Matrix4()
-      cells.forEach(([x, z], k) => inst.setMatrixAt(k, at.makeTranslation(x, y, z).multiply(local)))
-      inst.computeBoundingSphere()
-      inst.receiveShadow = true
-      inst.name = m.name
-      out.push(inst)
+      const geos = cells.map(([x, z]) => m.geometry.clone().applyMatrix4(at.makeTranslation(x, y, z).multiply(local)))
+      const merged = mergeGeometries(geos, false)
+      for (const g of geos) g.dispose()
+      if (!merged) return
+      const mesh = new THREE.Mesh(merged, m.material)
+      mesh.receiveShadow = true
+      mesh.name = m.name
+      out.push(mesh)
     })
     return out
   }
@@ -1145,6 +1156,7 @@ export class World {
     if (kit.has(p.piece)) {
       const o = place(p.piece, p.x, y, p.z, p.rot)
       o.userData.piece = p.piece
+      if (p.toonOnly) o.userData.toonOnly = true
       return o
     }
     const made: Record<string, () => THREE.Object3D> = {
@@ -1152,6 +1164,7 @@ export class World {
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
     obj.userData.piece = p.piece
+    if (p.toonOnly) obj.userData.toonOnly = true
     obj.position.set(p.x, y, p.z)
     obj.rotation.y = p.piece === 'wall_map' ? 0 : THREE.MathUtils.degToRad(p.rot)
     return obj
@@ -1248,6 +1261,8 @@ export class World {
         return
       }
       if (!piece) return
+      // 卡通画风才有的（储藏室的木箱和书架、几张卡通床）：这边换成了别的家具
+      if (o.userData.toonOnly) { doomed.push(o); return }
       const y = o.position.y
       const rot = THREE.MathUtils.radToDeg(o.rotation.y)
       if (subst[piece]) {
@@ -1282,9 +1297,37 @@ export class World {
     visit(this.scene)
     for (const o of doomed) o.removeFromParent()
     // 画风特有的家具（含二楼三张复古坐卧床）和院子里的小物件
+    const proc: Record<string, () => THREE.Object3D> = { platform_bed: platformBed, camp_bed: campBed, iron_bedding: ironBedBedding, blocker: () => new THREE.Group() }
     for (const p of PARADISE_EXTRAS) {
-      const m = placeModel(kit, p.piece, p.x, p.floor * FLOOR_H + (p.y ?? 0), p.z, p.rot, p.scale ?? 1)
+      const y = p.floor * FLOOR_H + (p.y ?? 0)
+      let m: THREE.Object3D
+      if (proc[p.piece]) {
+        m = proc[p.piece]()
+        m.position.set(p.x, y, p.z)
+        m.rotation.y = THREE.MathUtils.degToRad(p.rot)
+        if (p.piece !== 'blocker') m.userData.slug = p.piece
+      } else if (p.variant !== undefined) {
+        // 模型里并排的几个品种只要一个
+        const v = variants(kit.models.get(p.piece)!)[p.variant]
+        m = new THREE.Group()
+        for (const part of v.parts) {
+          const mesh = new THREE.Mesh(part.geo, part.mat)
+          mesh.castShadow = true
+          mesh.receiveShadow = true
+          m.add(mesh)
+        }
+        m.position.set(p.x, y, p.z)
+        m.rotation.y = THREE.MathUtils.degToRad(p.rot)
+        m.scale.setScalar(p.scale ?? 1)
+        m.userData.slug = p.piece
+      } else m = placeModel(kit, p.piece, p.x, y, p.z, p.rot, p.scale ?? 1)
       ;(p.floor === 1 ? this.floor2 : this.scene).add(m)
+    }
+    // 储藏室：东西按种类摆在铁架子上（代替满地的小方块）
+    try {
+      this.pantry = new PantryView(this.scene, kit)
+    } catch (e) {
+      console.warn('pantry', e)
     }
     // 两米宽的铁门
     this.scene.add(placeModel(kit, 'large_iron_gate', GATE.x, 0, GATE.z, 0, 0.68))
@@ -1514,7 +1557,9 @@ export class World {
       }
     }
     const stub = THREE.MathUtils.lerp(1, STUB, h)
-    for (const w of this.nearWalls) w.scale.y = stub
+    // 看二楼时一楼的墙不压低（不然从二楼楼板边上能斜着看进一楼，看见一楼的架子、人）
+    for (const w of this.nearWalls) w.scale.y = this.viewFloor === 1 && this.floorOf(w) === 0 ? 1 : stub
+    for (const c of this.porchCols) c.visible = h < 0.5 || this.viewFloor === 1
     this.floor2.visible = this.viewFloor === 1 || h < 0.5
   }
 
@@ -1533,12 +1578,6 @@ export class World {
       const greeter = this.actors.filter((a) => a !== this.heroine && !this.life.isOut(a) && a.pose !== 'sleep')
         .sort((a, b) => Math.hypot(a.pos.x - this.heroine.pos.x, a.pos.z - this.heroine.pos.z) - Math.hypot(b.pos.x - this.heroine.pos.x, b.pos.z - this.heroine.pos.z))[0]
       if (greeter && !this.life.onTrip(this.heroine) && !(this.life.siege && !this.life.siege.done)) this.life.say(greeter, 'home')
-      // 回到家里时，跟在后面的人也一起进门
-      const h = this.heroine.pos
-      this.actors.filter((a) => a !== this.heroine && !this.life.isOut(a)
-        && !isHome(a.pos.x, a.pos.z, false)).forEach((a, k) => {
-        this.life.commandWalk(a, { x: h.x + (k ? -1 : 1), z: h.z - 1.2, floor: 0 })
-      })
     }
     this.setHud({ mode, selected: this.selected.name, floor: this.viewFloor })
   }
@@ -1581,14 +1620,12 @@ export class World {
       this.toast('world.toast.nightExit', 3)
     }
     this.life.heroDriving = !!this.driving
-    this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && (this.keysMoving || !!this.driving)))
+    this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(a === this.heroine && (this.keysMoving || !!this.driving)))
     const fighting = !!this.life.siege && !this.life.siege.done
-    const busy = fighting || this.life.onTrip(this.heroine)
     // 打起来了还在车上：先下车
     if (this.driving && (fighting || this.life.onTrip(this.heroine))) this.exitVan(true)
     if (this.driving) this.updateDriving(Math.min(sim, dt * 1.5))
     else { this.keysMoving = false; this.updateCameraKeys(dt) }
-    if (!busy && !this.driving) this.updateFollowers(dt)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
@@ -1927,6 +1964,7 @@ export class World {
       this.hudTimer = 0.25
       this.pushLifeHud()
       this.stockView?.sync(this.life.stock.food, this.life.stock.water)
+      this.pantry?.sync({ food: this.life.stock.food, water: this.life.stock.water, medkits: this.life.medkits, ammo: this.life.ammo.n, fuel: this.life.fuel })
     }
     if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) this.setHud({ toast: '' })
     if ((this.saveTimer -= dt) <= 0) {
@@ -1962,21 +2000,6 @@ export class World {
     const speed = 7 * (this.mode === 'home' ? this.zoom.home : this.zoom.outside)
     this.pan.addScaledVector(fwd, -fz * speed * dt).addScaledVector(right, fx * speed * dt)
     this.pan.clampLength(0, this.mode === 'home' ? 10 : 14)
-  }
-
-  private updateFollowers(dt: number): void {
-    this.followTimer -= dt
-    if (this.mode !== 'outside' || this.followTimer > 0) return
-    this.followTimer = 0.4
-    const h = this.heroine.root
-    const back = new THREE.Vector2(-Math.sin(h.rotation.y), -Math.cos(h.rotation.y))
-    // 睡着的人不跟出去
-    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !this.life.isOut(a)).forEach((a, k) => {
-      const side = k === 0 ? 1 : -1
-      const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8, floor: 0 as const }
-      const d = Math.hypot(a.pos.x - h.position.x, a.pos.z - h.position.z)
-      if (d > 2.2 || a.floor !== 0) this.life.commandWalk(a, spot)
-    })
   }
 
   // --- 输入 -------------------------------------------------------------------

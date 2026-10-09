@@ -109,3 +109,23 @@ describe('街上能搜的地方', () => {
     }
   })
 })
+
+describe('卧室和储藏室（世外桃源画风）', () => {
+  it('每张床的上床位置、储藏室卸货的位置都走得到；储藏室的门没被架子、纸箱堵住', async () => {
+    const { BEDS } = await import('./layout')
+    const navs = navFloors('paradise')
+    const from = { x: 6.5, z: 4.4, floor: 0 as const }
+    for (const b of BEDS.paradise) {
+      const at = { x: b.ax ?? b.x, z: b.az ?? b.z, floor: b.floor }
+      expect(navs[b.floor].isBlockedAt(at.x, at.z), `${at.x},${at.z} f${at.floor}`).toBe(false)
+      expect(route(navs, from, at), `${at.x},${at.z} f${at.floor}`).not.toBeNull()
+    }
+    // 卸货的四个位置（residents.ts 的 STORE）
+    for (const p of [{ x: 10.6, z: 4.6 }, { x: 10.0, z: 5.0 }, { x: 10.6, z: 1.0 }, { x: 10.0, z: 3.4 }]) {
+      expect(route(navs, from, { ...p, floor: 0 }), `${p.x},${p.z}`).not.toBeNull()
+    }
+    // 油桶那一排、纸箱那一摞不能穿过去
+    expect(navs[0].isBlockedAt(11.6, 4.5)).toBe(true)
+    expect(navs[0].isBlockedAt(8.6, 4.4)).toBe(true)
+  })
+})

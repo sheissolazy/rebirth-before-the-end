@@ -21,6 +21,19 @@ import bpy
 import mathutils
 
 
+def dangling_textures(glb_path):
+    import json
+    import struct
+    with open(glb_path, 'rb') as f:
+        data = f.read()
+    n = struct.unpack_from('<I', data, 12)[0]
+    j = json.loads(data[20:20 + n])
+    imgs = len(j.get('images', []))
+    def src(t):
+        return t.get('source', t.get('extensions', {}).get('EXT_texture_webp', {}).get('source'))
+    return [t for t in j.get('textures', []) if src(t) is None or src(t) >= imgs]
+
+
 def tri_count(objs):
     return sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in objs)
 
@@ -89,6 +102,13 @@ def slim(src_dir, out_dir, slug, target, tex):
     out = os.path.join(out_dir, f'{slug}.glb')
     bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', export_image_format='WEBP',
                               export_image_quality=78, export_apply=True)
+    # The exporter packs roughness-only maps into a 1-channel image, which WebP can't hold: it then
+    # drops the image and leaves a texture with no source, and three.js GLTFLoader throws
+    # "reading 'uri'". Detect that and export again with PNG/JPEG textures.
+    if dangling_textures(out):
+        bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', export_image_format='AUTO',
+                                  export_image_quality=78, export_apply=True)
+        print(f'  {slug}: WebP dropped a texture, exported with PNG/JPEG instead')
     after = tri_count([o for o in bpy.data.objects if o.type == 'MESH'])
     dims = mx - mn
     print(f'SLIM {slug}: {before} -> {after} tris, {os.path.getsize(out) // 1024} KB, alpha maps {alpha}, size {dims.x:.2f}x{dims.y:.2f}x{dims.z:.2f} m')

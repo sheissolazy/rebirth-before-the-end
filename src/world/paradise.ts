@@ -59,6 +59,12 @@ export const PH_MODELS = [
   'painted_wooden_bench', 'street_lamp_01',
   // 野外能采的：荠菜（野草）、荨麻、野菊（gazania）、野果丛
   'weed_plant_02', 'nettle_plant', 'flower_gazania', 'shrub_04',
+  // 卧室：爸妈的雕花双人床、客房的铁架床、五斗柜、钟、相框、台灯、靠垫、小黄鸭、旧皮箱、书
+  'GothicBed_01', 'old_bed_frame', 'vintage_wooden_drawer_01', 'mantel_clock_01', 'wall_clock', 'alarm_clock_01',
+  'standing_picture_frame_01', 'desk_lamp_arm_01', 'throw_pillows_01', 'rubber_duck_toy', 'vintage_suitcase', 'book_encyclopedia_set_01',
+  // 储藏室：铁架子和上面放的吃的、水、药箱、弹药箱、油桶
+  'steel_frame_shelves_01', 'long_life_food', 'russian_food_cans_01', 'cardboard_box_01', 'plastic_bottle_gallon',
+  'medical_box', 'ammo_box', 'metal_jerrycan',
 ] as const
 
 export interface ParadiseKit {

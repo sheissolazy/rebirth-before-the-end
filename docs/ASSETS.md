@@ -16,3 +16,5 @@ Poly Haven 的素材是 CC0，不署名也可以；但它的 API 条款要求用
 | 小道具模型 | `src/world/meshes.ts` 代码画的：霰弹枪、撬棍、擀面杖、弩、钉板和螺旋铁丝网、坟和石碑、送东西的箱子 | 自己写的 | 拿在手上的武器、守家道具 |
 | 衣服贴图修改 | `src/world/people.ts` 的 `WARDROBE`：加载时在画布上盖掉 MakeHuman 衣服上的标志、给上衣换颜色、改发色 | 基于 CC0 贴图改的 | 江野、顾沉、礼帽大叔、辫子姑娘、王阿姨、女主、妈妈、谢临 |
 | 野外采集的植物 `public/models/ph/{weed_plant_02,nettle_plant,flower_gazania,shrub_04}.glb` | Poly Haven（polyhaven.com），`tools/blender/slim_polyhaven.py` 减面 | CC0 | 世外桃源画风的荠菜、荨麻、野菊花、野果丛（2026-10-09 加） |
+| 卧室和储藏室的模型 `public/models/ph/*.glb`（20 个） | Poly Haven（polyhaven.com）：GothicBed_01、old_bed_frame、vintage_wooden_drawer_01、mantel_clock_01、wall_clock、alarm_clock_01、standing_picture_frame_01、desk_lamp_arm_01、throw_pillows_01、rubber_duck_toy、vintage_suitcase、book_encyclopedia_set_01、steel_frame_shelves_01、long_life_food、russian_food_cans_01、cardboard_box_01、plastic_bottle_gallon、medical_box、ammo_box、metal_jerrycan，`tools/blender/slim_polyhaven.py` 减面 | CC0 | 世外桃源画风的五张床和卧室摆设、储藏室分类架子（2026-10-09 加） |
+| 代码搭的床 | `src/world/bedroom.ts`：木框矮床、行军床、铁架床上的褥子和毯子 | 自己写的 | 客房一、客房二 |

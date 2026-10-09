@@ -141,7 +141,7 @@ export class NavGrid {
 const WALL_HALF_T = 0.15
 
 /** 一楼和院子、街道的可走地图。`extra` 是画风特有的家具。 */
-export function buildNav(extra: Placement[] = []): NavGrid {
+export function buildNav(extra: Placement[] = [], paradise = false): NavGrid {
   const nav = new NavGrid(WORLD)
   for (const s of WALLS) {
     if (s.floor !== 0 || s.kind === 'door') continue
@@ -154,7 +154,7 @@ export function buildNav(extra: Placement[] = []): NavGrid {
     else nav.blockRect(s.x - 0.1, s.z - 0.5, s.x + 0.1, s.z + 0.5)
   }
   for (const p of [...FURNITURE, ...extra]) {
-    if (p.floor !== 0 || !p.block) continue
+    if (p.floor !== 0 || !p.block || (paradise && p.toonOnly)) continue
     const swap = Math.abs(p.rot) % 180 === 90
     const [hw, hd] = swap ? [p.block[1], p.block[0]] : p.block
     nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
@@ -176,7 +176,7 @@ export function buildNav(extra: Placement[] = []): NavGrid {
 }
 
 /** 二楼的可走地图：只有房子里面，挡掉墙、家具和楼梯口 */
-export function buildNavUpstairs(extra: Placement[] = [], skip: string[] = []): NavGrid {
+export function buildNavUpstairs(extra: Placement[] = [], paradise = false): NavGrid {
   const nav = new NavGrid(WORLD)
   nav.blockRect(WORLD.x0, WORLD.z0, WORLD.x1, HOUSE.z0)
   // 南边多出 2 米的阳台（栏杆那一线挡住）
@@ -190,7 +190,7 @@ export function buildNavUpstairs(extra: Placement[] = [], skip: string[] = []): 
   }
   nav.blockRect(STAIR_HOLE.x0, STAIR_HOLE.z0, STAIR_HOLE.x1, STAIR_HOLE.z1)
   for (const p of [...FURNITURE, ...extra]) {
-    if (p.floor !== 1 || !p.block || skip.includes(p.piece)) continue
+    if (p.floor !== 1 || !p.block || (paradise && p.toonOnly)) continue
     const swap = Math.abs(p.rot) % 180 === 90
     const [hw, hd] = swap ? [p.block[1], p.block[0]] : p.block
     nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
@@ -198,10 +198,11 @@ export function buildNavUpstairs(extra: Placement[] = [], skip: string[] = []): 
   return nav
 }
 
-/** 两层楼各一张寻路图。世外桃源画风的床是另外摆的，卡通床不挡路 */
+/** 两层楼各一张寻路图。世外桃源画风的床、储藏室的架子是另外摆的（卡通画风那套不挡路） */
 export function navFloors(style: 'toon' | 'paradise'): Record<Floor, NavGrid> {
-  const extra = style === 'paradise' ? PARADISE_EXTRAS : []
-  return { 0: buildNav(extra), 1: buildNavUpstairs(extra, style === 'paradise' ? ['bed'] : []) }
+  const paradise = style === 'paradise'
+  const extra = paradise ? PARADISE_EXTRAS : []
+  return { 0: buildNav(extra, paradise), 1: buildNavUpstairs(extra, paradise) }
 }
 
 /** 跨楼层寻路：同层直接走；不同层先走到楼梯口，按楼梯路线爬上/爬下，再走到目的地。 */
