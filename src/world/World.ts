@@ -1998,9 +1998,15 @@ export class World {
 
   /** 原型调试：一家人换成 Q 版 / 真人（重新加载页面） */
   togglePeople(): void {
-    setPeopleStyle(peopleStyle() === 'toon' ? 'real' : 'toon')
+    const next = peopleStyle() === 'toon' ? 'real' : 'toon'
+    setPeopleStyle(next)
     saveWorld(this.life)
-    location.reload()
+    // 网址里带了 ?people= 的话，网址里的优先：一起改掉
+    const url = new URL(location.href)
+    if (url.searchParams.has('people')) {
+      url.searchParams.set('people', next)
+      location.replace(url.toString())
+    } else location.reload()
   }
 
   /** 原型调试：普通 / 困难切换（切到困难时子弹减半） */

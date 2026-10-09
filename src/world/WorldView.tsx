@@ -10,10 +10,11 @@ import { MapPanel, type MapMember } from './MapPanel'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
+import { peopleStyle } from './people'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
-const WELCOME_KEY = 'rbte-proto-welcome-v5'
-const WELCOME_ITEMS = ['world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
+const WELCOME_KEY = 'rbte-proto-welcome-v6'
+const WELCOME_ITEMS = ['world.welcome.today', 'world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
 
@@ -324,6 +325,12 @@ export default function WorldView() {
         <button onClick={toggleStyle} className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
           {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
         </button>
+        {style === 'paradise' && (
+          <button onClick={() => world.current?.togglePeople()} title={t('world.people.tip')}
+            className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
+            {t('world.people', { name: t(peopleStyle() === 'toon' ? 'world.people.toon' : 'world.people.real') })}
+          </button>
+        )}
         <a href="#text" className="rounded-full bg-zinc-900/70 px-3 py-1 text-xs text-white shadow">
           {t('world.textVersion')}
         </a>
