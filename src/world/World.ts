@@ -1309,6 +1309,8 @@ export class World {
           if (!m.isMesh) return
           const fix = (mat: THREE.Material) => {
             const c = mat.clone() as THREE.MeshStandardMaterial
+            // 眼睛：暗红色、在夜里发光（普通丧尸是黄的）
+            if (c.name.endsWith('low-poly')) { c.color.set('#3a0d0d'); c.emissive = new THREE.Color('#d0281e'); c.emissiveIntensity = 1.4; return c }
             c.color.set(c.name.endsWith('.body') ? '#e4e2de' : /short|hair|eyebrow/.test(c.name) ? '#111111' : '#1c1c20')
             return c
           }
