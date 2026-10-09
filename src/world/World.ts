@@ -24,7 +24,7 @@ import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
-import { applyPerks, awardRebirthPoints, clearWorld, currentLife, hardPref, loadWorld, nextLife, saveWorld, setHardPref } from './save'
+import { applyPerks, awardRebirthPoints, clearWorld, currentLife, hardPref, loadWorld, nextLife, recordDeath, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -2006,6 +2006,8 @@ export class World {
 
   /** 女主死了：带着记忆进入下一世（新开局，第几世 +1） */
   rebirth(): void {
+    const o = this.life.over
+    if (o) recordDeath(Math.max(0, o.day - PROLOGUE_DAYS + 1), o.cause)
     this.disposed = true
     nextLife()
     location.reload()

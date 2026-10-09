@@ -3,7 +3,7 @@ import { t, lt, type UiKey } from '../i18n'
 import { memoriesYear1 } from '../content/memories'
 import { DAYS_PER_MONTH, PROLOGUE_DAYS, SUNSET, calendarLabel } from './life'
 import type { LogEntry } from './residents'
-import { currentLife, rebirthPoints } from './save'
+import { currentLife, lastDeath, rebirthPoints } from './save'
 
 export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean; home?: boolean }
 
@@ -37,6 +37,11 @@ export function DiaryPanel({ day, hour, log, people, onClose }: {
             <button onClick={onClose} className="rounded-full px-2 text-lg text-zinc-500 hover:bg-black/5">✕</button>
           </div>
           <div className="mt-3 rounded-lg bg-red-900/90 px-3 py-2 text-sm text-amber-50">⏳ {countdown}</div>
+          {currentLife() > 1 && lastDeath() && (
+            <div className="mt-2 rounded-lg bg-zinc-800/85 px-3 py-1.5 text-xs text-zinc-100">
+              {t('world.diary.lastLife', { days: lastDeath()!.days, cause: t(`world.diary.cause.${lastDeath()!.cause}` as UiKey) })}
+            </div>
+          )}
 
           <div className="mt-4 text-sm font-semibold text-red-900">{t('world.diary.past')}</div>
           <div className="mt-1 text-[11px] text-zinc-500">{t('world.diary.blurHint')}</div>

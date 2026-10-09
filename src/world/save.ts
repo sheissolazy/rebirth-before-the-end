@@ -334,6 +334,18 @@ export function applyPerks(life: Household): PerkId[] {
   return have
 }
 
+const LAST_DEATH = `${PREFIX}-last-death`
+
+/** 上一世是怎么死的（日记里写） */
+export function lastDeath(): { days: number; cause: string } | null {
+  try { return JSON.parse(read(LAST_DEATH) ?? 'null') as { days: number; cause: string } | null } catch { return null }
+}
+
+/** 女主死了：记下这一世的结局，进入下一世（删掉这一世的存档） */
+export function recordDeath(days: number, cause: string): void {
+  write(LAST_DEATH, JSON.stringify({ days, cause }))
+}
+
 /** 女主死了：进入下一世（删掉这一世的存档） */
 export function nextLife(): void {
   try { localStorage.setItem(LIVES, String(currentLife() + 1)) } catch { /* 没关系 */ }
