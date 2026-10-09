@@ -368,6 +368,40 @@ export class Sound {
     }
   }
 
+  /** 面包车到门口按两下喇叭：滴滴（两个方波音叠在一起，有点破的老车喇叭） */
+  honk(vol = 1): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    for (const [at, len] of [[0, 0.16], [0.24, 0.22]]) {
+      for (const f of [415, 523]) {
+        const o = ctx.createOscillator()
+        o.type = 'square'
+        o.frequency.value = f
+        const lp = ctx.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 1800
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.0001, t + at)
+        g.gain.exponentialRampToValueAtTime(0.06 * vol, t + at + 0.015)
+        g.gain.setValueAtTime(0.06 * vol, t + at + len - 0.03)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + at + len)
+        o.connect(lp).connect(g).connect(this.master!)
+        o.start(t + at)
+        o.stop(t + at + len + 0.02)
+      }
+    }
+  }
+
+  /** 铁门吱呀一声：窄带噪声慢慢往上滑 */
+  creak(vol = 1): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    this.noiseBurst(t, 'bandpass', 900, 18, 0.12 * vol, 0.7, 1500)
+    this.tone(t + 0.05, 'sawtooth', 260, 330, 0.02 * vol, 0.6, 0.15)
+  }
+
   /** 喵：一声往上挑再落下的"咪——呜"（锯齿波过两个共振峰） */
   meow(): void {
     const ctx = this.ready

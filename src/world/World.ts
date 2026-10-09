@@ -222,6 +222,8 @@ export class World {
   /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
   private gateDoors: { pivot: THREE.Object3D; sign: number }[] = []
   private gateAngle = 0
+  private lastGateWant = 0
+  private honked = false
   private readonly rain = new Rain()
   private readonly glass: THREE.Material[] = []
   private fogBase = 0.013
@@ -1412,6 +1414,15 @@ export class World {
     const vanAtGate = !!this.life.vanMove && vp.visible && Math.hypot(vp.x - GATE.x, vp.z - GATE.z) < 6.5
     const walker = !fighting && this.actors.some((a) => !a.away && a.floor === 0 && Math.abs(a.pos.x - GATE.x) < 1.3 && Math.abs(a.pos.z - GATE.z) < 1.5)
     const gateWant = vanAtGate ? 1.5 : walker ? 1.0 : 0
+    // 门刚要开：吱呀一声（离镜头远就小声点）
+    if (gateWant > 0 && this.gateAngle < 0.05 && this.lastGateWant === 0) {
+      this.sound.creak(THREE.MathUtils.clamp(1.3 - Math.hypot(GATE.x - this.pose.target.x, GATE.z - this.pose.target.z) / 20, 0.15, 1))
+    }
+    this.lastGateWant = gateWant
+    // 车开回来停在门口：按两下喇叭
+    const honkNow = this.life.vanMove?.dir === 'in' && vp.visible && Math.abs(vp.speed) < 0.2 && vp.loaded
+    if (honkNow && !this.honked) this.sound.honk(THREE.MathUtils.clamp(1.3 - Math.hypot(vp.x - this.pose.target.x, vp.z - this.pose.target.z) / 25, 0.2, 1))
+    this.honked = this.life.vanMove?.dir === 'in' ? this.honked || !!honkNow : false
     this.gateAngle += (gateWant - this.gateAngle) * Math.min(1, dt * (gateWant > this.gateAngle ? 4 : 2))
     for (const d of this.gateDoors) d.pivot.rotation.y = d.sign * this.gateAngle
     this.sound.engine(this.life.vanMove && vp.visible && this.life.speed > 0 ? Math.max(0, 1 - vanFar / 34) : 0, Math.min(1, Math.abs(vp.speed) / 2))
