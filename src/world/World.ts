@@ -66,6 +66,8 @@ export interface Hud {
   /** 空间异能里放了多少、最多放多少 */
   space: { food: number; water: number; cap: number }
   molotovs: number
+  /** 末日前要做的事（做完打勾） */
+  goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
   garden: { built: boolean; growth: number }
   /** 屋外：女主身边能搜的地方 */
@@ -94,7 +96,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null,
 }
 
 export class World {
@@ -1256,6 +1258,20 @@ export class World {
     return spot ? { kind: spot.kind, state: this.life.canSearch(spot), progress: null } : null
   }
 
+  /** 序章清单：都是看得见的状态，不用另外记 */
+  private goals(): Hud['goals'] {
+    const l = this.life
+    const total = l.available
+    return [
+      { key: 'world.goal.food', done: total.food >= 20 },
+      { key: 'world.goal.water', done: total.water >= 20 },
+      { key: 'world.goal.medkit', done: l.medkits >= 2 },
+      { key: 'world.goal.gate', done: l.gateBonus > 0 },
+      { key: 'world.goal.ammo', done: l.ammo.n >= 30 },
+      { key: 'world.goal.jiangye', done: l.warnedJiangye },
+    ]
+  }
+
   /** 屋外按 E 或点按钮：搜身边这个地方 */
   searchHere(): void {
     const spot = nearestSpot(this.heroine.pos)
@@ -1329,6 +1345,7 @@ export class World {
       molotovs: this.life.molotovs,
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
+      goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

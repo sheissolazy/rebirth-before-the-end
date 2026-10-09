@@ -226,6 +226,17 @@ export default function WorldView() {
         <div className="pointer-events-none w-fit rounded-full bg-white/70 px-3 py-1 text-xs shadow">
           {t(home ? 'world.mode.home' : 'world.mode.outside')}
         </div>
+        {hud.goals && !hud.siege && (
+          <div className="pointer-events-none w-56 rounded-xl bg-white/85 px-3 py-2 text-xs shadow">
+            <div className="mb-1 font-semibold text-zinc-800">{t('world.goal.title')}</div>
+            {hud.goals.map((g) => (
+              <div key={g.key} className={`flex gap-1.5 leading-snug ${g.done ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                <span>{g.done ? '✅' : '⬜'}</span><span>{t(g.key as UiKey)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
 
       {home && (
