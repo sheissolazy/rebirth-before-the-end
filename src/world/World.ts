@@ -675,7 +675,7 @@ export class World {
     const v = this.life.visitor
     if (v?.placeholder) {
       const m = this.siegeView.npc(this.life.visitModel) ?? this.siegeView.npc(v.def.model)
-      if (m) v.setModel(m)
+      if (m) { if (this.life.visitModel === 'xielin') darkCoat(m); v.setModel(m) }
     }
     const c = this.life.courier
     if (c?.placeholder) {
