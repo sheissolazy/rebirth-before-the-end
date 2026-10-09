@@ -97,11 +97,14 @@ export default function WorldView() {
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }
     setDiaryState(open)
   }
+  // 键盘快捷键（M 地图）用：effect 里拿到的总是最新的 setMap
+  const setMapRef = useRef<(open: boolean) => void>(() => {})
   const setMap = (open: boolean) => {
     const w = world.current
     if (w && open) setMapData({ checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])), members: w.homeMembers() })
     setMapState(open)
   }
+  useEffect(() => { setMapRef.current = setMap })
 
   useEffect(() => {
     let w: World | null = null
@@ -160,7 +163,8 @@ export default function WorldView() {
       } else if (e.key === '1' || e.key === '2' || e.key === '3') {
         if (uiPaused.current) resume.current = Number(e.key)
         else w.setSpeed(Number(e.key))
-      }
+      } else if (e.key === 'm' || e.key === 'M') setMapRef.current(true)
+      else if (e.key === 'j' || e.key === 'J') setDiary(true)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

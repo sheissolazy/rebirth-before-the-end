@@ -617,6 +617,13 @@ export class Household {
       this.fishCaught++
       this.onFish?.(true)
       if (this.fishCaught === 1 || this.fishCaught % 4 === 0) this.note('world.log.fish', { n: this.fishCaught })
+    } else if (this.clock.day >= PROLOGUE_DAYS && this.rand() < 0.12) {
+      // 末日后偶尔钩上一个顺江漂下来的背包（上游有人没逃掉）
+      const ammo = this.rand() < 0.6
+      if (ammo) this.ammo.n += 3
+      else this.medkits += 1
+      this.onFish?.(true)
+      this.note(ammo ? 'world.log.fishBagAmmo' : 'world.log.fishBagMedkit')
     } else this.onFish?.(false)
     if (this.clock.day >= PROLOGUE_DAYS && isNight(this.clock.hour) && this.rand() < 0.2) {
       this.stopFishing()
