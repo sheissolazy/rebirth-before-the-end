@@ -11,6 +11,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 自己在 main.tsx 里注册，新版本装好后立刻刷新页面（否则要多刷新一次才看得到新版）
+      injectRegister: false,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: '重生末日之前',

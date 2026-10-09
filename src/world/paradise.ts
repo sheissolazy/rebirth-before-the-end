@@ -41,6 +41,7 @@ const SURFACES: Record<string, { slug: string; tile: number; rough: number; tint
   stone: { slug: 'cobblestone_floor_04', tile: 1, rough: 0.9 },
   bark: { slug: 'bark_brown_02', tile: 1, rough: 0.95 },
   sakuraBark: { slug: 'sakura_bark', tile: 1, rough: 0.95 },
+  riverbed: { slug: 'ganges_river_pebbles', tile: 2.2, rough: 0.75, normal: 1.3 },
 }
 
 /** 用到的 Poly Haven 模型（public/models/ph/<slug>.glb） */
@@ -120,7 +121,7 @@ export function placeModel(kit: ParadiseKit, slug: string, x: number, y: number,
 
 /** 按顶点法线把 UV 设成"米"为单位的盒式投影，贴图就不会被拉伸 */
 const projected = new WeakSet<THREE.BufferGeometry>()
-function boxProjectUV(geo: THREE.BufferGeometry): void {
+export function boxProjectUV(geo: THREE.BufferGeometry): void {
   if (projected.has(geo)) return
   projected.add(geo)
   if (!geo.attributes.normal) geo.computeVertexNormals()
@@ -321,11 +322,12 @@ export const samplers = {
     const x = WORLD.x0 - 8 + r() * (WORLD.x1 - WORLD.x0 + 16)
     const z = WORLD.z0 - 2 + r() * (WORLD.z1 - WORLD.z0 + 10)
     if (x > YARD.x0 - 0.4 && x < YARD.x1 + 0.4 && z > YARD.z0 - 0.4 && z < YARD.z1 + 0.4) return null
+    if (z < RIVER.south + 1.2 && z > RIVER.north - 1.2) return null
     return blocked(x, z) ? null : [x, z]
   },
   riverBank: (r: () => number): [number, number] | null => {
     const x = WORLD.x0 - 10 + r() * (WORLD.x1 - WORLD.x0 + 20)
-    const z = WORLD.z0 - 1.6 - r() * 1.2
+    const z = RIVER.south + 0.2 + r() * 1.4
     return [x, z]
   },
 }
@@ -417,43 +419,82 @@ export function hills(mat: THREE.Material): THREE.Group {
   return g
 }
 
-/** 屋后的江（临江市的那条江）：会闪光的水面 */
+/** 屋后那条江的位置（南岸、北岸的地面边缘，单位米） */
+export const RIVER = { south: WORLD.z0 - 1.3, north: WORLD.z0 - 9.7, bed: -0.55, water: -0.14, bank: 1.3 }
+
+/** 屋后的江：草坡岸 + Poly Haven 卵石河床 + 透亮的水面（水面效果是代码做的，Poly Haven 没有水） */
 export class River {
-  readonly mesh: THREE.Mesh
+  readonly group = new THREE.Group()
   private readonly normal: THREE.CanvasTexture
 
-  constructor() {
-    const c = document.createElement('canvas')
-    c.width = c.height = 128
-    const ctx = c.getContext('2d')!
-    const img = ctx.createImageData(128, 128)
-    for (let y = 0; y < 128; y++)
-      for (let x = 0; x < 128; x++) {
-        const a = (x / 128) * Math.PI * 2
-        const b = (y / 128) * Math.PI * 2
-        const dx = Math.cos(a * 3 + b) * 0.5 + Math.cos(a * 7 - b * 2) * 0.25
-        const dy = Math.cos(b * 4 - a) * 0.5 + Math.sin(b * 6 + a * 3) * 0.25
-        const i = (y * 128 + x) * 4
-        img.data[i] = 128 + dx * 60
-        img.data[i + 1] = 128 + dy * 60
-        img.data[i + 2] = 255
-        img.data[i + 3] = 255
-      }
-    ctx.putImageData(img, 0, 0)
-    this.normal = new THREE.CanvasTexture(c)
-    this.normal.wrapS = this.normal.wrapT = THREE.RepeatWrapping
-    this.normal.repeat.set(30, 3)
-    const mat = new THREE.MeshStandardMaterial({
-      color: '#4f9fb2', roughness: 0.06, metalness: 0.1, normalMap: this.normal,
-      normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.93,
+  constructor(mats: ParadiseMaterials) {
+    const len = 300
+    const bed = mats.textured('riverbed') ?? new THREE.MeshStandardMaterial({ color: '#7d7466' })
+    const grass = mats.textured('grassDark') ?? new THREE.MeshStandardMaterial({ color: '#6f9a55' })
+    const width = RIVER.south - RIVER.north - RIVER.bank * 2
+    const mid = (RIVER.south + RIVER.north) / 2
+    const plane = (w: number, d: number, mat: THREE.Material, y: number, z: number, tilt = 0) => {
+      const geo = new THREE.PlaneGeometry(w, d)
+      boxProjectUV(geo)
+      const m = new THREE.Mesh(geo, mat)
+      m.rotation.x = -Math.PI / 2 + tilt
+      m.position.set(5, y, z)
+      m.receiveShadow = true
+      this.group.add(m)
+      return m
+    }
+    // 北岸的地
+    plane(len, 80, grass, -0.02, RIVER.north - 40)
+    // 河床和两边的斜岸
+    plane(len, width, bed, RIVER.bed, mid)
+    const slope = Math.atan2(-RIVER.bed, RIVER.bank)
+    const bankLen = Math.hypot(RIVER.bank, -RIVER.bed)
+    plane(len, bankLen, bed, RIVER.bed / 2, RIVER.south - RIVER.bank / 2, -slope)
+    plane(len, bankLen, bed, RIVER.bed / 2, RIVER.north + RIVER.bank / 2, slope)
+    // 水面：透射材质，能看到下面的卵石；法线贴图慢慢流动
+    this.normal = rippleTexture()
+    this.normal.repeat.set(len / 9, (RIVER.south - RIVER.north) / 9)
+    const water = new THREE.MeshPhysicalMaterial({
+      color: '#f2fbfa', roughness: 0.02, metalness: 0, transmission: 1, ior: 1.33, thickness: 0.5,
+      attenuationColor: '#6fb7ae', attenuationDistance: 4, normalMap: this.normal, normalScale: new THREE.Vector2(0.1, 0.1),
+      specularIntensity: 0.6,
     })
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(160, 7), mat)
-    this.mesh.rotation.x = -Math.PI / 2
-    this.mesh.position.set(5, 0.03, WORLD.z0 - 5.5)
-    this.mesh.receiveShadow = true
+    const surface = new THREE.Mesh(new THREE.PlaneGeometry(len, RIVER.south - RIVER.north - 0.4), water)
+    surface.rotation.x = -Math.PI / 2
+    surface.position.set(5, RIVER.water, mid)
+    this.group.add(surface)
   }
 
   update(t: number): void {
-    this.normal.offset.set(t * 0.02, t * 0.008)
+    this.normal.offset.set(t * 0.025, t * 0.006)
   }
+}
+
+/** 可平铺的水波法线贴图：几组不同方向、频率的波叠在一起 */
+function rippleTexture(): THREE.CanvasTexture {
+  const n = 256
+  const c = document.createElement('canvas')
+  c.width = c.height = n
+  const ctx = c.getContext('2d')!
+  const img = ctx.createImageData(n, n)
+  const waves = [[1, 2, 0.9, 0.3], [3, -1, 0.6, 1.7], [-2, 5, 0.35, 2.4], [6, 3, 0.22, 0.8], [-7, -4, 0.15, 4.1], [9, -8, 0.1, 5.3]]
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      let dx = 0
+      let dy = 0
+      for (const [kx, ky, a, ph] of waves) {
+        const arg = ((kx * x + ky * y) / n) * Math.PI * 2 + ph
+        dx += a * kx * Math.cos(arg)
+        dy += a * ky * Math.cos(arg)
+      }
+      const i = (y * n + x) * 4
+      img.data[i] = 128 + Math.max(-127, Math.min(127, dx * 9))
+      img.data[i + 1] = 128 + Math.max(-127, Math.min(127, dy * 9))
+      img.data[i + 2] = 255
+      img.data[i + 3] = 255
+    }
+  ctx.putImageData(img, 0, 0)
+  const t = new THREE.CanvasTexture(c)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  return t
 }

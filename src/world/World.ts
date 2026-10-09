@@ -9,7 +9,7 @@ import {
 } from './layout'
 import { buildNav, type NavGrid, type Pt } from './nav'
 import {
-  ParadiseMaterials, Petals, River, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
+  ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
   COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, person, shelf, sofa, stairs,
@@ -132,6 +132,7 @@ export class World {
   private petals: Petals | null = null
   private river: River | null = null
   private elapsed = 0
+  private groundMesh: THREE.Mesh | null = null
 
   constructor(host: HTMLElement, onHud: (h: Hud) => void, style: ArtStyle = 'toon') {
     this.host = host
@@ -186,6 +187,7 @@ export class World {
     ground.rotation.x = -Math.PI / 2
     ground.position.set((WORLD.x0 + WORLD.x1) / 2, -0.02, (WORLD.z0 + WORLD.z1) / 2)
     ground.receiveShadow = true
+    this.groundMesh = ground
     const yard = new THREE.Mesh(new THREE.PlaneGeometry(YARD.x1 - YARD.x0, YARD.z1 - YARD.z0), toon(COLORS.grass))
     yard.rotation.x = -Math.PI / 2
     yard.position.set((YARD.x0 + YARD.x1) / 2, -0.01, (YARD.z0 + YARD.z1) / 2)
@@ -349,8 +351,18 @@ export class World {
     this.scene.add(this.petals.points)
     const hillMat = mats.textured('grassDark') ?? new THREE.MeshStandardMaterial({ color: '#6f9a55' })
     this.scene.add(hills(hillMat))
-    this.river = new River()
-    this.scene.add(this.river.mesh)
+    // 地面只铺到江的南岸，江和北岸由 River 自己铺
+    if (this.groundMesh) {
+      const w = WORLD.x1 - WORLD.x0 + 80
+      const z1 = WORLD.z1 + 40
+      const geo = new THREE.PlaneGeometry(w, z1 - RIVER.south)
+      boxProjectUV(geo)
+      this.groundMesh.geometry.dispose()
+      this.groundMesh.geometry = geo
+      this.groundMesh.position.z = (z1 + RIVER.south) / 2
+    }
+    this.river = new River(mats)
+    this.scene.add(this.river.group)
   }
 
   /** 世外桃源画风：把代码画的家具、铁门、车、木桶、树换成 Poly Haven 模型 */
