@@ -16,8 +16,10 @@ import {
   COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, shelf, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
-import { Actor, Household, type PersonHud } from './residents'
-import { calendarLabel, isCrisisNight, isNight } from './life'
+import { Actor, Household, type LogEntry, type PersonHud } from './residents'
+import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
+import { LAYERS, type LayerId } from './siege'
+import { SiegeView } from './siegeView'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -37,6 +39,11 @@ export interface Hud {
   people: PersonHud[]
   /** 短暂的提示（比如"有人在用"） */
   toast: string
+  ammo: number
+  cores: number
+  /** 正在打丧尸：还剩几只、守的是哪一层、这一层的耐久 */
+  siege: { left: number; layer: LayerId | null; hp: number; max: number } | null
+  log: LogEntry[]
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -51,11 +58,14 @@ const WALK_SPEED = 2.2
 const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+  | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
+
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '',
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [],
 }
 
 export class World {
@@ -99,6 +109,9 @@ export class World {
   private readonly bulbs: THREE.Mesh[] = []
   private readonly sunDir = new THREE.Vector3(0.4, 0.9, 0.2)
   private dayBase: StyleDay = { sky: SKY, fog: SKY, sun: '#fff1d6' }
+  private readonly siegeView: SiegeView
+  private frontDoor: THREE.Object3D | null = null
+  private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
   private hemiBase = 1.5
   private envBase = 0
@@ -147,6 +160,16 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
+    this.siegeView = new SiegeView(this.scene)
+    this.life.spawnZombie = (at) => this.siegeView.spawn(at)
+    this.life.onSiege = (e) => {
+      this.siegeView.onEvent(e)
+      if (e.kind === 'start') {
+        this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
+        if (this.mode === 'home') this.setViewFloor(0)
+      } else if (e.kind === 'broken') this.toast(`world.log.broken.${e.layer}` as ToastKey, 3)
+      else if (e.kind === 'end') this.toast(e.won ? 'world.toast.won' : 'world.toast.lost', 4)
+    }
 
     this.resize = new ResizeObserver(() => this.fit())
     this.resize.observe(host)
@@ -210,6 +233,7 @@ export class World {
         new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
         this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
         this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map(loadPerson)) : Promise.resolve(null),
+        this.style === 'paradise' ? this.siegeView.loadModels() : Promise.resolve(),
       ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
@@ -222,6 +246,9 @@ export class World {
       if (people) people.forEach((m, k) => this.actors[k].setModel(m))
       this.addLamps()
       this.collectClickables()
+      const gates: THREE.Object3D[] = []
+      this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
+      this.siegeView.bind(gates, this.frontDoor, this.barricade)
       this.setHud({ loading: false })
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
@@ -262,6 +289,26 @@ export class World {
     }
     // 家具
     for (const p of FURNITURE) floorGroup(p.floor).add(this.furniture(p, kit, place))
+    // 大门的门板：外层跟着矮墙一起压低，中间一层是门轴（开门、被砸倒），里面是门板
+    const hinge = new THREE.Group()
+    hinge.add(box(0.9, 2.05, 0.06, COLORS.woodDark, [0.45, 0, 0]))
+    const door = new THREE.Group()
+    door.position.set(3.05, 0, 6.0)
+    door.add(hinge)
+    this.nearWalls.push(door)
+    this.frontDoor = door
+    this.scene.add(door)
+    // 退到楼梯时堆在楼梯口的箱子（平时藏着）
+    const pile = new THREE.Group()
+    pile.add(
+      box(0.55, 0.55, 0.55, COLORS.wood, [4.55, 0, 4.2]),
+      box(0.55, 0.55, 0.55, COLORS.wood, [4.6, 0, 4.8]),
+      box(0.5, 0.45, 0.5, COLORS.woodDark, [4.58, 0.55, 4.5]),
+    )
+    pile.children.forEach((c, k) => { c.rotation.y = k * 0.4 })
+    pile.visible = false
+    this.barricade = pile
+    this.scene.add(pile)
     // 围栏和铁门
     for (const s of fenceSegments()) {
       const f = place(s.gate ? 'gate_1m' : 'fence_1m', s.x, 0, s.z, s.axis === 'z' ? 90 : 0)
@@ -513,6 +560,12 @@ export class World {
     const t = new THREE.Vector3(HOUSE_CENTER.x, baseY, HOUSE_CENTER.z)
     t.x += (h.x - HOUSE_CENTER.x) * 0.35
     t.z += (h.z - HOUSE_CENTER.z) * 0.35
+    // 打丧尸时镜头对着正在守的那一层
+    const layer = this.life?.siege && !this.life.siege.done ? this.life.siege.current : null
+    if (layer) {
+      const focus = layer.id === 'gate' ? [4, 12] : layer.id === 'door' ? [3.6, 6.2] : [4.8, 4.6]
+      t.set(focus[0], baseY, focus[1])
+    }
     t.add(this.pan)
     return { target: t, elev: HOME_VIEW.elev, dist: HOME_VIEW.dist * this.zoom.home, fov: HOME_VIEW.fov }
   }
@@ -544,6 +597,11 @@ export class World {
       target.z + Math.cos(YAW) * Math.cos(elev) * dist,
     )
     this.camera.lookAt(target)
+    if (this.siegeView?.shake > 0) {
+      const k = this.siegeView.shake * 0.25
+      this.camera.position.x += (Math.random() - 0.5) * k
+      this.camera.position.y += (Math.random() - 0.5) * k
+    }
     this.sun.position.copy(target).addScaledVector(this.sunDir, 26)
     this.sun.target.position.copy(target)
   }
@@ -605,9 +663,18 @@ export class World {
     // 时钟按真实时间走（掉帧时也不变慢），走路按小步算
     const sim = raw * this.life.speed
     this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && this.keysMoving))
-    this.updateHeroineKeys(sim)
-    this.updateFollowers(dt)
+    const fighting = !!this.life.siege && !this.life.siege.done
+    if (!fighting) this.updateHeroineKeys(sim)
+    else this.keysMoving = false
+    if (!fighting) this.updateFollowers(dt)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
+    for (const z of this.life.siege?.zombies ?? []) {
+      let walking = false
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), 0.95) || walking
+      z.animate(Math.min(sim, 0.1), walking)
+      z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
+    }
+    this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
     for (const a of this.actors) {
       let walking = a === this.heroine && this.keysMoving
       let gliding = false
@@ -765,6 +832,7 @@ export class World {
           return
         }
       }
+      if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
       // 点家具：让选中的人去用（坐沙发、做饭、睡觉…）
       const spot = this.spotUnder(floor)
       if (spot) {
@@ -811,9 +879,17 @@ export class World {
     this.marker.visible = true
   }
 
-  private toast(key: 'world.toast.busy'): void {
-    this.toastTimer = 2
+  private toast(key: ToastKey, seconds = 2): void {
+    this.toastTimer = seconds
     this.setHud({ toast: key })
+  }
+
+  /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
+  debugNight(crisis: boolean): void {
+    if (this.life.siege && !this.life.siege.done) return
+    this.life.clock = { day: PROLOGUE_DAYS + (crisis ? 3 : 0), hour: 20.85 }
+    this.life.resetNight()
+    this.pushLifeHud()
   }
 
   // --- 给界面用 ---------------------------------------------------------------
@@ -846,7 +922,18 @@ export class World {
       food: this.life.stock.food,
       water: this.life.stock.water,
       people: this.life.hud(),
+      ammo: this.life.ammo.n,
+      cores: this.life.cores,
+      siege: this.siegeHud(),
+      log: this.life.log.slice(-6).reverse(),
     })
+  }
+
+  private siegeHud(): Hud['siege'] {
+    const s = this.life.siege
+    if (!s || s.done) return null
+    const layer = s.current
+    return { left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0, max: layer?.max ?? LAYERS[0].max }
   }
 
   // --- 杂项 -------------------------------------------------------------------

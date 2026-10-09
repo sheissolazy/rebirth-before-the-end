@@ -32,6 +32,17 @@ PEOPLE = {
         skin='middleage_asian_male', hair='short02', eyebrows='eyebrow009', eyelashes='eyelashes03',
         clothes=['male_casualsuit05', 'shoes03'],
     ),
+    # 丧尸（游戏里再把皮肤调成灰绿、衣服弄脏）：干活的大叔、穿运动服的阿姨
+    'zombie_m': dict(
+        macro=dict(gender=1.0, age=0.8, muscle=0.4, weight=0.45, height=0.55, proportions=0.45, cupsize=0.5, firmness=0.4),
+        skin='old_asian_male', hair='short04', eyebrows='eyebrow010', eyelashes='eyelashes01',
+        clothes=['male_worksuit01', 'shoes02'],
+    ),
+    'zombie_f': dict(
+        macro=dict(gender=0.0, age=0.6, muscle=0.4, weight=0.4, height=0.48, proportions=0.5, cupsize=0.5, firmness=0.4),
+        skin='old_asian_female', hair='long01', eyebrows='eyebrow001', eyelashes='eyelashes02',
+        clothes=['female_sportsuit01', 'shoes05'],
+    ),
 }
 
 
@@ -135,7 +146,7 @@ def main():
     enable_mpfb()
     from bl_ext.blender_org.mpfb.services import LocationService, AssetService
     data = LocationService.get_user_data()
-    if not os.path.exists(os.path.join(data, 'hair', 'ponytail01')):
+    if not os.path.exists(os.path.join(data, 'hair', 'ponytail01')) and os.path.exists(pack):
         with zipfile.ZipFile(pack) as z:
             z.extractall(data)
         print('INSTALLED system assets into', data)

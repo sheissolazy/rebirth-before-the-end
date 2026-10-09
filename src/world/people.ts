@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export type PoseState = 'idle' | 'walk' | 'sit' | 'sleep' | 'work'
+  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead'
 
 const SIDE = new THREE.Vector3(1, 0, 0)
 const FWD = new THREE.Vector3(0, 0, 1)
@@ -94,8 +95,17 @@ export class PoseDriver {
     j.bone.quaternion.multiply(q)
   }
 
+  /** 开枪后的后坐力（秒） */
+  private kick = 0
+
+  recoil(): void {
+    this.kick = 0.18
+  }
+
   update(dt: number, state: PoseState, speed = 1): void {
-    this.t += dt * (state === 'walk' ? 7.5 * speed : 1.6)
+    const rate = state === 'walk' ? 7.5 * speed : state === 'zwalk' ? 4.2 : state === 'zattack' ? 7 : state === 'melee' ? 6.5 : 1.6
+    this.t += dt * rate
+    this.kick = Math.max(0, this.kick - dt)
     const s = Math.sin(this.t)
     const leftDown = this.armDown.get('Left')
     const rightDown = this.armDown.get('Right')
@@ -137,6 +147,47 @@ export class PoseDriver {
       this.rot('RightArm', SIDE, -0.9 - s * 0.15, rightDown)
       this.rot('LeftForeArm', SIDE, -0.8)
       this.rot('RightForeArm', SIDE, -0.8)
+    } else if (state === 'zwalk' || state === 'zattack') {
+      // 丧尸：双手往前伸，身子前倾，拖着脚走；攻击时手上下乱抓
+      const attack = state === 'zattack'
+      const leg = attack ? 0.08 : 0.32
+      this.rot('LeftUpLeg', SIDE, -s * leg)
+      this.rot('RightUpLeg', SIDE, s * leg)
+      this.rot('LeftLeg', SIDE, Math.max(0, s) * 0.45)
+      this.rot('RightLeg', SIDE, Math.max(0, -s) * 0.45)
+      const claw = attack ? Math.sin(this.t * 1.7) * 0.5 : Math.sin(this.t * 0.5) * 0.08
+      this.rot('LeftArm', SIDE, -1.35 + claw, leftDown)
+      this.rot('RightArm', SIDE, -1.25 - claw, rightDown)
+      this.rot('LeftForeArm', SIDE, -0.2)
+      this.rot('RightForeArm', SIDE, -0.35)
+      this.rot('Spine', SIDE, 0.22 + (attack ? Math.abs(s) * 0.12 : 0))
+      this.rot('Head', FWD, 0.25 + Math.sin(this.t * 0.31) * 0.12)
+      this.model.position.y = attack ? 0 : Math.abs(Math.cos(this.t)) * 0.015
+    } else if (state === 'shoot') {
+      // 端着霰弹枪瞄准，开枪时往后一顿
+      const k = this.kick > 0 ? this.kick / 0.18 : 0
+      this.rot('LeftArm', SIDE, -1.35 - k * 0.25, leftDown)
+      this.rot('RightArm', SIDE, -1.1 - k * 0.25, rightDown)
+      this.rot('LeftForeArm', SIDE, -0.25)
+      this.rot('RightForeArm', SIDE, -0.9)
+      this.rot('Spine', SIDE, -0.05 - k * 0.12)
+    } else if (state === 'melee') {
+      // 抡撬棍/擀面杖
+      const swing = Math.max(0, Math.sin(this.t))
+      this.rot('RightArm', SIDE, -0.4 - swing * 1.6, rightDown)
+      this.rot('RightForeArm', SIDE, -0.6 + swing * 0.4)
+      this.rot('LeftArm', SIDE, -0.5, leftDown)
+      this.rot('LeftForeArm', SIDE, -0.9)
+      this.rot('Spine', SIDE, 0.12 + swing * 0.15)
+      this.rot('LeftUpLeg', SIDE, -0.25)
+      this.rot('LeftLeg', SIDE, 0.2)
+    } else if (state === 'down' || state === 'dead') {
+      // 倒地：受伤的人仰面躺着，死掉的丧尸脸朝下
+      this.rot('LeftArm', SIDE, -0.6, leftDown)
+      this.rot('RightArm', SIDE, 0.3, rightDown)
+      this.rot('LeftUpLeg', SIDE, -0.2)
+      this.model.rotation.x = state === 'dead' ? Math.PI / 2 : -Math.PI / 2
+      this.model.position.y = 0.14
     } else {
       this.rot('LeftArm', SIDE, s * 0.03, leftDown)
       this.rot('RightArm', SIDE, -s * 0.03, rightDown)

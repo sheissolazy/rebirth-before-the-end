@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { t, type UiKey } from '../i18n'
 import { EMPTY_HUD, World, type Hud } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
-import { DEPRESSED, type NeedKey } from './life'
+import { DEPRESSED, calendarLabel, type NeedKey } from './life'
 import type { PersonHud } from './residents'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
@@ -27,6 +27,14 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
         </span>
       </div>
       <div className="mt-1.5 grid grid-cols-[2.2rem_1fr] items-center gap-x-1.5 gap-y-1">
+        {p.health < 100 && (
+          <div className="contents">
+            <span className="text-[11px] font-medium text-red-700">{t('world.need.health')}</span>
+            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+              <div className="h-full rounded-full bg-red-600" style={{ width: `${Math.round(p.health)}%` }} />
+            </div>
+          </div>
+        )}
         {NEEDS.map((k) => (
           <div key={k} className="contents">
             <span className="text-[11px] text-zinc-600">{t(`world.need.${k}` as UiKey)}</span>
@@ -108,6 +116,9 @@ export default function WorldView() {
           <div className={`mt-1.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
             🍚💧 {t('world.stock', { food: hud.food.toFixed(1), water: hud.water.toFixed(1) })}
           </div>
+          <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+            🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })}
+          </div>
         </div>
         {hud.crisis && (
           <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">{t('world.crisis')}</div>
@@ -146,6 +157,41 @@ export default function WorldView() {
       <div className="pointer-events-none absolute bottom-3 right-3 max-w-sm rounded-xl bg-zinc-900/65 px-4 py-2 text-xs leading-relaxed text-white">
         {home && hud.floor === 1 ? t('world.floor2Hint') : t(home ? 'world.help.home' : 'world.help.outside')}
       </div>
+
+      {hud.siege && (
+        <div className="pointer-events-none absolute left-1/2 top-14 w-72 -translate-x-1/2 rounded-xl bg-red-950/85 px-4 py-2 text-white shadow-lg">
+          <div className="text-sm font-semibold">🧟 {t('world.siege', { n: hud.siege.left })}</div>
+          {hud.siege.layer && (
+            <div className="mt-1 flex items-center gap-2 text-xs">
+              <span className="w-12 shrink-0">{t(`world.layer.${hud.siege.layer}` as UiKey)}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.round((hud.siege.hp / hud.siege.max) * 100)}%` }} />
+              </div>
+              <span className="tabular-nums">{Math.ceil(hud.siege.hp)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hud.log.length > 0 && (
+        <div className="pointer-events-none absolute right-3 top-14 w-64 rounded-xl bg-amber-50/90 px-3 py-2 text-xs shadow">
+          <div className="mb-1 font-semibold text-amber-900">📔 {t('world.diary')}</div>
+          {hud.log.slice(0, 4).map((l, k) => (
+            <div key={`${l.day}-${l.hour}-${k}`} className={`mb-1 leading-snug ${k ? 'text-zinc-500' : 'text-zinc-800'}`}>
+              <span className="mr-1 text-[10px] text-amber-800">{calendarLabel({ day: l.day, hour: l.hour })}</span>
+              {t(l.key as UiKey, l.vars)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <details className="absolute bottom-3 right-3 mb-24 text-xs">
+        <summary className="cursor-pointer list-none rounded-full bg-white/70 px-3 py-1 text-zinc-600 shadow">{t('world.debug')}</summary>
+        <div className="mt-1 flex flex-col gap-1">
+          <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
+          <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
+        </div>
+      </details>
 
       {hud.toast && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">

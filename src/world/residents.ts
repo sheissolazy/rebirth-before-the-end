@@ -2,14 +2,18 @@
 import * as THREE from 'three'
 import { BEDS, FLOOR_H, HOUSE, PARADISE_SPOTS, SPOTS, YARD, inRect, type Floor, type Spot, type StairPoint } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
+import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAY_SECONDS, DRINK, MEAL, advance, chooseWant, decayNeeds, isNight, shouldWake,
+  DAY_SECONDS, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
+import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
 
-export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle'
+export type { Where } from './walker'
+
+export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard'
 
 interface Task {
   kind: TaskKind
@@ -19,9 +23,10 @@ interface Task {
   hours: number
   manual: boolean
   then?: () => Task | null
+  /** 修哪一层防线 */
+  layer?: LayerId
 }
 
-export interface Where extends Pt { floor: Floor }
 
 const SETTLE_S = 0.45
 const rad = THREE.MathUtils.degToRad
@@ -31,37 +36,30 @@ function shortestAngle(from: number, to: number): number {
   return from + Math.atan2(Math.sin(d), Math.cos(d))
 }
 
-export class Actor {
+export class Actor extends Walker {
   readonly name: string
-  readonly root = new THREE.Group()
-  path: StairPoint[] = []
-  floor: Floor = 0
   pose: PoseState = 'idle'
   needs: Needs
+  /** 健康：被丧尸咬会掉，0 就倒地 */
+  health = 100
   task: Task | null = null
   /** 坐下/躺下之前站的位置，起身时回到这里 */
   anchor: StairPoint | null = null
   /** 玩家下过命令后，这么多游戏小时内不自己找事 */
   hold = 0
-  /** 这一帧换了楼层 */
-  floorChanged = false
-  private readonly legFrom = new THREE.Vector3()
   private settle: { from: THREE.Vector3; to: THREE.Vector3; r0: number; r1: number; t: number } | null = null
   private walkT = 0
-  private driver: PoseDriver | null = null
+  driver: PoseDriver | null = null
   private inner: THREE.Object3D
 
   constructor(name: string, shirt: string, hair: string, height: number, at: Pt, needs: Needs) {
+    super()
     this.name = name
     this.needs = { ...needs }
     this.inner = person(shirt, hair, height)
     this.root.add(this.inner)
     this.root.position.set(at.x, 0, at.z)
     this.root.userData.actor = this
-  }
-
-  get pos(): Where {
-    return { x: this.root.position.x, z: this.root.position.z, floor: this.floor }
   }
 
   get settling(): boolean {
@@ -74,45 +72,6 @@ export class Actor {
     this.inner = model
     this.root.add(model)
     this.driver = new PoseDriver(model)
-  }
-
-  setPath(p: StairPoint[]): void {
-    this.path = p
-    this.legFrom.copy(this.root.position)
-  }
-
-  /** 沿路点走（含楼梯的高度）；返回这一帧是否在走 */
-  follow(dt: number, speed: number): boolean {
-    const next = this.path[0]
-    if (!next) return false
-    const p = this.root.position
-    const dx = next.x - p.x
-    const dz = next.z - p.z
-    const d = Math.hypot(dx, dz)
-    const climbing = Math.abs(next.y - this.legFrom.y) > 0.01
-    const step = speed * dt * (climbing ? 0.5 : 1)
-    if (d <= step) {
-      p.set(next.x, next.y, next.z)
-      if (next.floor !== this.floor) this.floorChanged = true
-      this.floor = next.floor
-      this.path.shift()
-      this.legFrom.copy(p)
-    } else {
-      p.x += (dx / d) * step
-      p.z += (dz / d) * step
-      const total = Math.hypot(next.x - this.legFrom.x, next.z - this.legFrom.z)
-      const k = total > 1e-6 ? 1 - Math.hypot(next.x - p.x, next.z - p.z) / total : 1
-      p.y = this.legFrom.y + (next.y - this.legFrom.y) * k
-    }
-    if (d > 1e-3) this.face(dx, dz, dt)
-    return true
-  }
-
-  face(dx: number, dz: number, dt: number): void {
-    const want = Math.atan2(dx, dz)
-    let diff = want - this.root.rotation.y
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff))
-    this.root.rotation.y += diff * Math.min(1, dt * 12)
   }
 
   /** 平滑挪到某个位置（坐进沙发、躺上床、起身） */
@@ -158,17 +117,27 @@ export class Actor {
     this.walkT = walking ? this.walkT + dt * 11 : 0
     body.position.y = 0.55 + (walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0)
     body.rotation.z = walking ? Math.sin(this.walkT) * 0.06 : 0
-    inner.rotation.x = state === 'sleep' ? -Math.PI / 2 : state === 'work' ? 0.22 : 0
-    inner.position.y = state === 'sleep' ? 0.5 : state === 'sit' ? -0.22 : 0
+    const lying = state === 'sleep' || state === 'down'
+    inner.rotation.x = lying ? -Math.PI / 2 : state === 'work' || state === 'melee' ? 0.22 : 0
+    inner.position.y = lying ? (state === 'down' ? 0.2 : 0.5) : state === 'sit' ? -0.22 : 0
   }
 }
 
 // --- 一家人 -------------------------------------------------------------------
 
+/** 日记里的一条（界面用 i18n key 显示） */
+export interface LogEntry {
+  day: number
+  hour: number
+  key: string
+  vars?: Record<string, string | number>
+}
+
 export interface PersonHud {
   name: string
+  health: number
   needs: Needs
-  doing: TaskKind
+  doing: TaskKind | 'down'
   going: boolean
   floor: Floor
 }
@@ -180,6 +149,18 @@ export class Household {
   clock: Clock = { day: 0, hour: 7.5 }
   speed = 1
   stock: Stock = { food: 12, water: 12 }
+  /** 霰弹枪子弹 */
+  readonly ammo = { n: 24 }
+  /** 打丧尸掉的晶核 */
+  cores = 0
+  /** 每一层防线现在的耐久（被破了第二天要修） */
+  barriers: Barriers = fullBarriers()
+  siege: Siege | null = null
+  readonly log: LogEntry[] = []
+  /** World 提供：生成一只丧尸（带 3D 模型）、战斗特效 */
+  spawnZombie: ((at: Pt) => Zombie) | null = null
+  onSiege: ((e: SiegeEvent) => void) | null = null
+  private nightDone = -1
   private readonly spots: Spot[]
   private readonly beds: Spot[]
   private readonly taken = new Map<Spot, Actor>()
@@ -206,8 +187,13 @@ export class Household {
     if (this.speed <= 0) return
     this.clock = advance(this.clock, dt, this.speed)
     const hours = (dt * this.speed * 24) / DAY_SECONDS
+    this.siegeTick(dt * this.speed)
+    const fighting = !!this.siege && !this.siege.done
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
+      // 伤慢慢好：睡觉时好得快
+      a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6))
+      if (fighting) continue
       if (a.task) this.runTask(a, hours)
       else {
         a.hold = Math.max(0, a.hold - hours)
@@ -216,12 +202,106 @@ export class Household {
     }
   }
 
+  // --- 丧尸夜 ---------------------------------------------------------------
+
+  /** 今晚来几只：末日前没有；平时两三只、越往后越多；月底危机夜一大群 */
+  static nightCount(c: Clock): { count: number; crisis: boolean } {
+    if (c.day < PROLOGUE_DAYS) return { count: 0, crisis: false }
+    const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
+    if (isCrisisNight({ ...c, hour: 21 })) return { count: 9 + month * 3, crisis: true }
+    return { count: 2 + month + (c.day % 2), crisis: false }
+  }
+
+  private siegeTick(simSeconds: number): void {
+    const c = this.clock
+    if (!this.siege && this.spawnZombie && c.hour >= 21 && this.nightDone !== c.day) {
+      const { count, crisis } = Household.nightCount(c)
+      this.nightDone = c.day
+      if (count > 0) this.startSiege(count, crisis)
+    }
+    const s = this.siege
+    if (!s) return
+    s.tick(simSeconds)
+    if (!s.done && c.hour >= SUNRISE && c.hour < 12) s.dawn()
+    if (s.finished) this.siege = null
+  }
+
+  /** 原型调试：重新允许今晚来丧尸 */
+  resetNight(): void {
+    this.nightDone = -1
+  }
+
+  /** 原型调试用：马上来一波 */
+  startSiege(count: number, crisis: boolean): void {
+    if (!this.spawnZombie || (this.siege && !this.siege.done)) return
+    for (const a of this.actors) {
+      this.cancel(a)
+      a.hold = 0
+    }
+    if (this.speed > 1) this.speed = 1
+    this.siege = new Siege({
+      count, crisis, navs: this.navs, defenders: this.actors, barriers: this.barriers, ammo: this.ammo,
+      spawn: this.spawnZombie,
+      emit: (e) => this.onSiegeEvent(e),
+    })
+  }
+
+  private note(key: string, vars?: Record<string, string | number>): void {
+    this.log.push({ day: this.clock.day, hour: this.clock.hour, key, vars })
+    if (this.log.length > 40) this.log.shift()
+  }
+
+  private onSiegeEvent(e: SiegeEvent): void {
+    if (e.kind === 'start') this.note(e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
+    else if (e.kind === 'broken') {
+      this.note(`world.log.broken.${e.layer}`)
+      // 大门一破，丧尸冲进一楼把囤货柜打翻了
+      if (e.layer === 'door') {
+        const food = this.stock.food * 0.25
+        const water = this.stock.water * 0.25
+        this.stock = { food: this.stock.food - food, water: this.stock.water - water }
+        this.note('world.log.spilled', { food: food.toFixed(1), water: water.toFixed(1) })
+      }
+    }
+    else if (e.kind === 'down') this.note('world.log.down', { who: e.who })
+    else if (e.kind === 'kill') this.cores += 1
+    else if (e.kind === 'end') {
+      this.siege?.revive()
+      if (e.won) {
+        this.note('world.log.won', { kills: e.kills })
+        for (const a of this.actors) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 6) }
+      } else {
+        // 没守住：丧尸把屋里翻了一遍，吃的喝的丢了一半，大家都吓坏了
+        const food = this.stock.food * 0.5
+        const water = this.stock.water * 0.4
+        this.stock = { food: this.stock.food - food, water: this.stock.water - water }
+        this.note('world.log.lost', { food: food.toFixed(1), water: water.toFixed(1) })
+        for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, a.needs.mood - 20) }
+      }
+    }
+    this.onSiege?.(e)
+  }
+
+  /** 最外面一层坏了的防线（白天爸爸会去修） */
+  private damagedLayer(): (typeof LAYERS)[number] | null {
+    return LAYERS.find((l) => this.barriers[l.id] < l.max) ?? null
+  }
+
+  private repairTask(): Task | null {
+    const layer = this.damagedLayer()
+    if (!layer) return null
+    const p = layer.posts[1]
+    const spot: Spot = { kind: 'stroll', x: p.x, z: p.z, floor: p.floor, face: 0, pose: 'work' }
+    return { kind: 'repair', spot, phase: 'go', hours: 1.5, manual: false, layer: layer.id }
+  }
+
   private activity(a: Actor): Activity {
     if (a.path.length) return 'walk'
     const t = a.task
     if (!t || t.phase !== 'use') return 'idle'
     if (t.kind === 'sit') return 'relax'
-    if (t.kind === 'walk') return 'idle'
+    if (t.kind === 'walk' || t.kind === 'guard') return 'idle'
+    if (t.kind === 'repair') return 'cook'
     return t.kind
   }
 
@@ -246,7 +326,10 @@ export class Household {
     const night = isNight(this.clock.hour)
     const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
     let task: Task | null = null
-    if (want === 'sleep') task = this.sleepTask(a, false)
+    // 白天爸爸有空就去修被丧尸砸坏的门
+    const handy = this.actors.indexOf(a) === 2 && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
+    if (handy) task = this.repairTask()
+    if (task) { /* 修门 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
     else if (want === 'eat') task = this.eatTask(a)
     else if (want === 'relax' || (want === 'stroll' && night)) {
@@ -332,6 +415,11 @@ export class Household {
       return
     }
     t.hours -= hours
+    if (t.kind === 'repair' && t.layer) {
+      const max = LAYERS.find((l) => l.id === t.layer)!.max
+      this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
+      if (this.barriers[t.layer] >= max) t.hours = 0
+    }
     if (this.isDone(a, t)) this.finish(a)
   }
 
@@ -411,8 +499,9 @@ export class Household {
   hud(): PersonHud[] {
     return this.actors.map((a) => ({
       name: a.name,
+      health: a.health,
       needs: { ...a.needs },
-      doing: a.task?.kind ?? 'idle',
+      doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
       going: !!a.task && a.task.phase === 'go' && a.task.kind !== 'walk',
       floor: a.floor,
     }))

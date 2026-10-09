@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { navFloors } from './nav'
 import { Actor, Household } from './residents'
-import { DAY_SECONDS } from './life'
+import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
+import { Zombie } from './siege'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -66,4 +67,71 @@ describe('一家人自己过日子', () => {
       expect(12 - life.stock.food).toBeLessThan(7.5)
     })
   }
+})
+
+/** 丧尸夜：不渲染，直接跑一晚 */
+function siegeNight(count: number, crisis: boolean, ammo = 24) {
+  const { life } = simulate('paradise', 0)
+  life.ammo.n = ammo
+  const actors = life.actors
+  life.spawnZombie = (at) => new Zombie(at)
+  life.clock = { day: PROLOGUE_DAYS, hour: 20.9 }
+  life.speed = 1
+  const events: string[] = []
+  life.onSiege = (e) => { if (e.kind !== 'hit' && e.kind !== 'shot') events.push(e.kind === 'broken' ? `broken:${e.layer}` : e.kind) }
+  const dt = 0.05
+  let started = false
+  for (let i = 0; i < 20000; i++) {
+    if (i === 10 && !life.siege) { started = true; life.startSiege(count, crisis) }
+    life.tick(dt, () => false)
+    for (const a of actors) { a.follow(dt, 2.2); a.updateSettle(dt) }
+    for (const z of life.siege?.zombies ?? []) z.follow(dt, 0.95)
+    if (life.siege === null && events.includes('end')) break
+  }
+  return { life, events, started }
+}
+
+describe('丧尸夜', () => {
+  it('末日前没有丧尸，平时两三只，月底危机夜一大群', () => {
+    expect(Household.nightCount({ day: 1, hour: 21 }).count).toBe(0)
+    const n = Household.nightCount({ day: PROLOGUE_DAYS, hour: 21 })
+    expect(n.count).toBeGreaterThanOrEqual(2)
+    expect(n.crisis).toBe(false)
+    const c = Household.nightCount({ day: PROLOGUE_DAYS + 3, hour: 21 })
+    expect(c.crisis).toBe(true)
+    expect(c.count).toBeGreaterThan(8)
+  })
+
+  it('三只丧尸：一家人在铁门守住，铁门掉点血，用了几发子弹，捡到晶核', () => {
+    const { life, events } = siegeNight(3, false)
+    expect(events).toContain('end')
+    expect(events.filter((e) => e === 'kill').length).toBe(3)
+    expect(events.some((e) => e.startsWith('broken'))).toBe(false)
+    expect(life.barriers.gate).toBeLessThan(180)
+    expect(life.ammo.n).toBeLessThan(24)
+    expect(life.cores).toBe(3)
+    expect(life.log.some((l) => l.key === 'world.log.won')).toBe(true)
+  })
+
+  it('危机夜一大群、子弹又少：铁门被撞开，一家人退进屋里继续守', () => {
+    const { life, events } = siegeNight(14, true, 4)
+    expect(events).toContain('broken:gate')
+    expect(life.log.some((l) => l.key === 'world.log.broken.gate')).toBe(true)
+    expect(events).toContain('end')
+    console.log('crisis', events.join(' '), life.barriers, life.actors.map((a) => Math.round(a.health)))
+  })
+
+  it('白天爸爸会去把砸坏的铁门修好', () => {
+    const { life } = simulate('paradise', 0)
+    life.barriers.gate = 40
+    life.clock = { day: 1, hour: 9 }
+    life.speed = 3
+    for (const a of life.actors) a.needs = { hunger: 95, thirst: 95, energy: 95, mood: 95 }
+    const dt = 0.1
+    for (let i = 0; i < 3000 && life.barriers.gate < 180; i++) {
+      life.tick(dt, () => true)
+      for (const a of life.actors) { a.follow(dt * 3, 2.2); a.updateSettle(dt * 3) }
+    }
+    expect(life.barriers.gate).toBe(180)
+  })
 })
