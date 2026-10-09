@@ -8,6 +8,7 @@ import { Courier, VISITORS, Visitor } from './visitors'
 import { SCAVENGE } from './scavenge'
 import { settleTrip } from './expedition'
 import { rainAt } from './weather'
+import { SPOTS } from './layout'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -120,6 +121,32 @@ describe('家里人会说话', () => {
     expect(all).toMatch(/开饭啦|吃饭咯|趁热吃/)
     expect(all).toMatch(/晚安|早点睡|明天见/)
     expect(all).toMatch(/早呀|睡得真香|天气不错/)
+  })
+})
+
+describe('陪聊', () => {
+  it('妈妈坐在沙发上歇着：爸爸能找到她身边一块空地过去陪她说话（不会站进墙里、桌子里）', () => {
+    for (const style of ['paradise', 'toon'] as const) {
+      const { life } = simulate(style, 0)
+      life.clock = { day: 0, hour: 15 }
+      const [, mom, dad] = life.actors
+      const sofa = SPOTS.find((s) => s.kind === 'relax' && s.x === 0.62)!
+      life.cancel(mom)
+      mom.root.position.set(sofa.x, 0, sofa.z)
+      mom.anchor = { x: sofa.ax!, z: sofa.az!, y: 0, floor: 0 }
+      mom.task = { kind: 'relax', spot: sofa, phase: 'use', hours: 2, manual: false } as never
+      mom.pose = 'sit'
+      dad.root.position.set(4, 0, 3.5)
+      dad.floor = 0
+      let found = 0
+      for (let i = 0; i < 20; i++) {
+        const t = (life as unknown as { companyTask(a: unknown): { spot: { x: number; z: number; floor: 0 | 1 } } | null }).companyTask(dad)
+        if (!t) continue
+        found++
+        expect(life.navs[t.spot.floor].isBlockedAt(t.spot.x, t.spot.z)).toBe(false)
+      }
+      expect(found).toBeGreaterThan(0)
+    }
   })
 })
 

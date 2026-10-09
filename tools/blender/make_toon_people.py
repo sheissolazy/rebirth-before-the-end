@@ -30,16 +30,16 @@ STYLES = {
     # --- 男主：比一家人高挑一点（腿长一些、头小一点、眼睛细长一点）---
     # 江野：青梅竹马、阳光，乱糟糟的短发，牛仔外套、黑裤子、白球鞋
     'jiangye': dict(skin='#eec29c', hair='#3a271e', top='#4f7fbf', bottom='#2b2b31', shoes='#efefea', sole='#cfcfca',
-                    hair_style='messy', girl=False, lead=True, inner='#f4f1e8'),
+                    hair_style='messy', girl=False, lead=True, inner='#f4f1e8', eyetilt=0.03, browtilt=0.04),
     # 沈砚：医生，整齐的侧分、细框眼镜，白大褂里是浅蓝衬衫
     'shenyan': dict(skin='#f3d3b8', hair='#1f1a1c', top='#f4f4f0', bottom='#5b6272', shoes='#2d2a2a', sole='#1c1a1a',
-                    hair_style='sidepart', girl=False, lead=True, glasses=True, coat='#f4f4f0', inner='#a9c6e3'),
+                    hair_style='sidepart', girl=False, lead=True, glasses=True, coat='#f4f4f0', inner='#a9c6e3', eyetilt=0.0),
     # 顾沉：军区基地长，板寸、高大，一身军绿作训服、黑靴子
     'guchen': dict(skin='#e2b48e', hair='#191514', top='#55623f', bottom='#4c5638', shoes='#1d1b1a', sole='#111010',
-                   hair_style='buzz', girl=False, lead=True, chest=0.19),
+                   hair_style='buzz', girl=False, lead=True, chest=0.19, eyetilt=0.16),
     # 谢临：同为重生者，偏长的黑发、苍白，黑色长风衣
     'xielin': dict(skin='#f5ddcc', hair='#141216', top='#2a2930', bottom='#24232a', shoes='#1a191d', sole='#0f0e11',
-                   hair_style='long', girl=False, lead=True, coat='#2a2930', inner='#55525c'),
+                   hair_style='long', girl=False, lead=True, coat='#2a2930', inner='#55525c', eyetilt=0.11),
     # --- 其他人 ---
     # 王阿姨：花白的发髻、紫红碎花上衣
     'neighbor': dict(skin='#ecc5a3', hair='#a49e98', top='#8d5a8f', bottom='#4b4650', shoes='#3a3333', sole='#221e1e',
@@ -362,7 +362,8 @@ def main():
     for s in (-1, 1):
         ex, ey = s * 0.36, -0.06
         eye_d = R * 0.07
-        ew, eh = (R * 0.135, R * 0.19) if girl else (R * 0.125, R * 0.155) if lead else (R * 0.12, R * 0.16)
+        ew, eh = (R * 0.135, R * 0.19) if girl else (R * 0.145, R * 0.125) if lead else (R * 0.12, R * 0.16)
+        n0 = len(head_parts)
         head_parts.append(ellipsoid(f'{name}.eye', on_face(ex, ey, 0.045), face_axis(ex, ey), (ew, eh, eye_d), eye, 20, 14))
         if not zombie:
             # 眼珠下半截透出暖棕色（像动画里的眼睛），上面一大一小两个高光
@@ -370,10 +371,18 @@ def main():
             head_parts.append(ellipsoid(f'{name}.iris', on_face(ex, ey - eh / R * 0.28, 0.03), face_axis(ex, ey), (ew * 0.72, eh * 0.55, eye_d * 0.6), iris, 18, 12))
             head_parts.append(ellipsoid(f'{name}.shine', on_face(ex + s * 0.04, ey + 0.07 * (eh / (R * 0.16)), 0.0), face_axis(ex, ey), (R * 0.045, R * 0.05, R * 0.025), shine, 12, 8))
             head_parts.append(ellipsoid(f'{name}.shine2', on_face(ex - s * 0.045, ey - eh / R * 0.45, 0.005), face_axis(ex, ey), (R * 0.022, R * 0.022, R * 0.015), shine, 10, 6))
+        if lead and not zombie:
+            # 男主：杏仁眼——上眼皮一道深色的线，眼尾微微上挑（整只眼睛绕着脸的法线转一点）
+            head_parts.append(ellipsoid(f'{name}.lid', on_face(ex, ey + eh / R * 0.9, 0.0), face_axis(ex, ey), (ew * 1.12, R * 0.022, R * 0.03), eye, 16, 8))
+            c = on_face(ex, ey, 0.0)
+            # 眼尾上挑多少看性格：江野阳光、沈砚温和几乎不挑，顾沉严肃、谢临冷一点
+            turn = Matrix.Translation(c) @ Matrix.Rotation(s * st.get('eyetilt', 0.08), 4, face_axis(ex, ey)) @ Matrix.Translation(-c)
+            for o in head_parts[n0:]:
+                o.matrix_world = turn @ o.matrix_world
         # 眉毛：眼睛上方一点、外侧微微往下（显得温和）
         bx, by = s * 0.37, 0.24 if not lead else 0.2
         # 男主的眉毛更平、更浓；丧尸皱着眉
-        tilt = -0.18 if not lead else 0.04
+        tilt = -0.18 if not lead else st.get('browtilt', 0.12)
         if zombie:
             tilt = 0.35
         brow_dir = (side * s + up * tilt).normalized()

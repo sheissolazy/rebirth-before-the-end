@@ -945,8 +945,10 @@ export class Household {
   private rainTick(hours: number): void {
     const r = this.rain
     const raining = r > 0.1
-    if (raining && !this.wasRaining && (!this.siege || this.siege.done)) this.runInside()
-    this.wasRaining = raining
+    if (raining && !this.wasRaining) {
+      // 打丧尸（或者女主在街上被围）时先不管，打完了还在下就再叫大家回屋
+      if (!this.siege || this.siege.done) { this.runInside(); this.wasRaining = true }
+    } else this.wasRaining = raining
     if (r > 0) {
       const got = r * 0.3 * hours
       this.rainWater += got
@@ -968,10 +970,9 @@ export class Household {
       if (!a.task && a.path.length) continue
       this.release(a)
       a.task = null
-      a.anchor = null
-      // 先走到屋檐下（大门里面一点），之后自己再想干什么（下雨天不会再去院子）
+      // 先走到屋檐下（大门里面一点），之后自己再想干什么（下雨天不会再去院子）；坐着的先从起身的位置走
       this.assign(a, { kind: 'idle', spot: null, phase: 'use', hours: 0.15, manual: false })
-      const p = route(this.navs, a.pos, { x: 3.5 + (shouted ? 0.6 : 0), z: 5.2, floor: 0 })
+      const p = this.routeFor(a, { x: 3.5 + (shouted ? 0.6 : 0), z: 5.2, floor: 0 })
       if (p) a.setPath(p)
       if (!shouted) { a.line = { text: t_('world.say.rain'), hours: 0.2 }; shouted = true }
     }
@@ -1693,7 +1694,8 @@ export class Household {
     for (const turn of [0, 0.8, -0.8, 1.6, -1.6, 2.6, -2.6]) {
       const x = b.pos.x + Math.sin(base + turn) * 0.95
       const z = b.pos.z + Math.cos(base + turn) * 0.95
-      if (nav.isBlockedAt(x, z) || !nav.clearLine(b.pos, { x, z })) continue
+      // 坐着的人从 TA 起身的位置算（沙发、椅子本身是挡路的格子）
+      if (nav.isBlockedAt(x, z) || !nav.clearLine(b.anchor ?? b.pos, { x, z })) continue
       if (this.actors.some((o) => o !== a && o.task?.spot && Math.hypot(o.task.spot.x - x, o.task.spot.z - z) < 0.6)) continue
       const face = THREE.MathUtils.radToDeg(Math.atan2(b.pos.x - x, b.pos.z - z))
       const spot: Spot = { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
@@ -1722,7 +1724,8 @@ export class Household {
   /** 家里人听到车开回来 / 出门的人进了街口：没在忙的出来迎一迎（吃饭做饭睡觉的不动） */
   private greetArrivals(t: Trip): void {
     const free = ['idle', 'stroll', 'relax', 'company', 'tidy', 'wash', 'sit']
-    if (this.siege && !this.siege.done) return
+    // 打丧尸时、下着雨都不出去迎（雨天跟夜里一样待在屋里）
+    if ((this.siege && !this.siege.done) || this.rain > 0.1) return
     let k = 0
     for (const a of this.actors) {
       // 在街上的女主（和跟着她的人）不往回叫
@@ -1789,6 +1792,8 @@ export class Household {
   private modVanTask(): Task | null {
     if (this.vanAway || this.vanMove) return null
     if (this.trip?.van && this.trip.phase === 'out') return null
+    // 一个人改就够了
+    if (this.actors.some((o) => o.task?.kind === 'modvan')) return null
     // 站在车头前面装防撞杠（离上车的门远一点，不挡人上车）
     const spot: Spot = { kind: 'stroll', x: VAN_PARK.x + 2.45, z: VAN_PARK.z, floor: 0, face: -90, pose: 'work' }
     return { kind: 'modvan', spot, phase: 'go', hours: 1.2, manual: false }
@@ -1797,8 +1802,12 @@ export class Household {
   /** 擦车：站到车北边，面朝车 */
   private washTask(): Task | null {
     if (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out')) return null
-    // 擦车头或者车尾（车门那边留给上下车的人）
-    const front = this.rand() < 0.5
+    // 擦车头或者车尾（车门那边留给上下车的人）；那一头有人在擦 / 在改装就去另一头，两头都有人就算了
+    const busyEnd = (fx: number) => this.actors.some((o) => (o.task?.kind === 'wash' || o.task?.kind === 'modvan') && o.task.spot && Math.abs(o.task.spot.x - fx) < 0.5)
+    const fx = VAN_PARK.x + 2.45
+    const bx = VAN_PARK.x - 2.45
+    if (busyEnd(fx) && busyEnd(bx)) return null
+    const front = busyEnd(bx) || (!busyEnd(fx) && this.rand() < 0.5)
     const spot: Spot = front
       ? { kind: 'stroll', x: VAN_PARK.x + 2.45, z: VAN_PARK.z, floor: 0, face: -90, pose: 'work' }
       : { kind: 'stroll', x: VAN_PARK.x - 2.45, z: VAN_PARK.z, floor: 0, face: 90, pose: 'work' }
@@ -1915,11 +1924,12 @@ export class Household {
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了、不改了
     if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out'))) return true
+    if (t.kind === 'modvan' && this.vanArmor) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trip) return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
       // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
-      if (isMealTime(this.clock.hour) && n.hunger < 75 && this.available.food >= MEAL.food && t.kind !== 'greet') return true
+      if (isMealTime(this.clock.hour) && n.hunger < 75 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false
@@ -1948,7 +1958,7 @@ export class Household {
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
-    if (t.kind === 'modvan' && t.hours <= 0) {
+    if (t.kind === 'modvan' && t.hours <= 0 && !this.vanArmor) {
       this.vanArmor = true
       this.vanKit = false
       this.note('world.log.vanArmor', { who: a.name })
