@@ -395,7 +395,9 @@ export class Siege {
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }
-    } else if ((z.repath -= dt) <= 0) {
+    } else if ((z.repath -= dt) <= 0 || !z.path.length) {
+      // 正在往别的楼层走（爬楼梯）就别重新找路：爬一趟要两三秒，每秒重算会被拉回楼梯口，永远上不去
+      if (z.path.length && z.path.some((p) => p.floor !== z.floor)) return
       z.repath = 1
       z.setPath(route(this.o.navs, z.pos, prey.pos) ?? [])
     }
@@ -455,6 +457,8 @@ export class Siege {
       const d = Math.hypot(z.pos.x - a.pos.x, z.pos.z - a.pos.z)
       // 近战只打已经贴上来砸门的
       if (!w.range && (z.state === 'walk' || z.state === 'wait')) continue
+      // 最后一道防线也没了：近战只能打同一层的（以前楼上的人能隔着楼板打到楼下，丧尸却咬不到他们）
+      if (!w.range && !layer && z.floor !== a.floor) continue
       if (d < bd) { bd = d; target = z }
     }
     if (!target) {

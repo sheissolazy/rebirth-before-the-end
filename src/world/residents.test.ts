@@ -1033,3 +1033,25 @@ describe('困难模式', () => {
     expect(b.hard).toBe(true)
   })
 })
+
+describe('防线全破以后', () => {
+  it('丧尸能爬上楼梯扑人（以前每秒重新找路会被拉回楼梯口，两边干耗到天亮算"守住了"）', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.ammo.n = 0
+    life.barriers.gate = 0
+    life.barriers.door = 0
+    // 楼梯口只剩 1 点：守的人先退到二楼，丧尸一砸就破，然后得爬上来
+    life.barriers.stairs = 1
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.05 }
+    life.startSiege(4, false)
+    const dt = 0.05
+    let upstairs = false
+    for (let i = 0; i < 20000 && !upstairs && life.siege && !life.siege.done; i++) {
+      life.tick(dt, () => false)
+      for (const z of life.siege?.zombies ?? []) { z.follow(dt, z.speed); if (z.alive && z.floor === 1) upstairs = true }
+      for (const a of life.actors) a.follow(dt, 2.2)
+    }
+    expect(upstairs).toBe(true)
+  })
+})
