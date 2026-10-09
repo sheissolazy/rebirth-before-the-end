@@ -228,8 +228,8 @@ export function decorateHouse(scene: THREE.Object3D, upper: THREE.Object3D, tabl
   return [g, g1]
 }
 
-/** 晾衣绳在院子西边（房子左手、镜头看得见、平时没人走）：两根杆子、一根绳 */
-export const CLOTHESLINE = { x: -3.2, z0: 2.2, z1: 6.8 }
+/** 晾衣绳在院子西边偏南（房子左手、镜头看得见、平时没人走；北边那片草地留给坟）：两根杆子、一根绳 */
+export const CLOTHESLINE = { x: -3.3, z0: 6.4, z1: 9.8 }
 
 /** 一件晾着的衣服 / 毛巾：纯色画布 + 一道花边，挂在绳上可以随风摆 */
 function cloth(kind: 'shirt' | 'towel' | 'pants' | 'dress', color: string, trim: string): THREE.Object3D {

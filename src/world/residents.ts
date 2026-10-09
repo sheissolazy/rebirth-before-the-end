@@ -970,7 +970,7 @@ export class Household {
 
   /** 下雨了：在院子里溜达、种地、擦车、撸猫、迎人的放下手里的事回屋（第一个人喊一声） */
   private runInside(): void {
-    const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy', 'greet', 'modvan']
+    const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy', 'greet', 'modvan', 'hang']
     let shouted = false
     for (const a of this.actors) {
       if (this.isOut(a) || a.dead || a.floor !== 0 || a.settling || inRect(HOUSE, a.pos.x, a.pos.z)) continue
@@ -988,9 +988,12 @@ export class Household {
     // 衣服还晾在外面：离得最近的闲人冒雨去收
     if (this.laundryOut && !this.actors.some((o) => o.task?.kind === 'fetch')) {
       const free = ['idle', 'stroll', 'relax', 'tidy', 'company', 'pet', 'wash', 'hang']
+      // 楼上的人下楼要多走一段：按距离 + 楼层挑最近的
+      const midZ = (CLOTHESLINE.z0 + CLOTHESLINE.z1) / 2
+      const dist = (o: Actor) => Math.hypot(o.pos.x - CLOTHESLINE.x, o.pos.z - midZ) + o.floor * 8
       const cand = this.actors
-        .filter((o) => o !== this.actors[0] && !this.isOut(o) && !o.dead && !o.settling && this.isHomeBody(o) && (!o.task || (!o.task.manual && free.includes(o.task.kind))))
-        .sort((p, q) => Math.hypot(p.pos.x - CLOTHESLINE.x, p.pos.z - 4.5) - Math.hypot(q.pos.x - CLOTHESLINE.x, q.pos.z - 4.5))[0]
+        .filter((o) => o !== this.actors[0] && !o.guest && !this.isOut(o) && !o.dead && !o.settling && this.isHomeBody(o) && (!o.task || (!o.task.manual && free.includes(o.task.kind))))
+        .sort((p, q) => dist(p) - dist(q))[0]
       const task = cand && this.laundryTask('fetch')
       if (cand && task) {
         this.release(cand)
@@ -1403,6 +1406,13 @@ export class Household {
     }
   }
 
+  /** 白天开车出去过：发动机的动静今晚多引来一只（记一笔日记） */
+  private noiseExtra(day: number): number {
+    if (this.noiseDay !== day) return 0
+    this.note('world.log.vanNoise')
+    return 1
+  }
+
   private siegeTick(simSeconds: number): void {
     const c = this.clock
     this.guestTick()
@@ -1423,7 +1433,7 @@ export class Household {
         // 气候：暴雨夜，丧尸少，但天亮时一楼会进水
         this.storm = c.day
         this.note('world.log.storm')
-        this.startSiege(2, false)
+        this.startSiege(2 + this.noiseExtra(c.day), false)
       } else if (kind === 'plague') {
         // 疫病：有人病倒（急救包能顶一下），丧尸也来了几只
         const sick = this.actors.filter((a) => !a.away && !a.lost)
@@ -1435,13 +1445,12 @@ export class Household {
           // 跟沈砚有交情的话，他第二天一早会送药来
           if ((this.affection.shenyan ?? 0) >= 10 && !this.shenyanHome) this.medicTomorrow = c.day + 1
         }
-        this.startSiege(3, false)
+        this.startSiege(3 + this.noiseExtra(c.day), false)
       } else if (count > 0) {
         // 顾沉的对讲机提醒过东门有尸群：提前堵好了，少来两只
         let n = this.fewerTonight ? Math.max(1, count - 2) : count
         this.fewerTonight = false
-        // 白天开车出去过：发动机的动静引来一只
-        if (this.noiseDay === c.day) { n += 1; this.note('world.log.vanNoise') }
+        n += this.noiseExtra(c.day)
         this.startSiege(n, crisis)
       }
     }
@@ -1688,10 +1697,12 @@ export class Household {
     const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
     // 晴天上午有空的人去院子西边晾衣服；傍晚收回来
     const freeish = want === 'idle' || want === 'stroll' || want === 'relax'
-    if (!task && freeish && a !== this.actors[0] && this.rain < 0.05 && !this.laundryOut && this.laundryDay !== this.clock.day
+    if (!task && freeish && a !== this.actors[0] && !a.guest && this.rain < 0.05 && !this.laundryOut && this.laundryDay !== this.clock.day
       && this.clock.hour >= 8 && this.clock.hour < 11) task = this.laundryTask('hang')
+    // 下着雨衣服还在外面：谁闲下来谁去收（不等傍晚）
+    if (!task && a !== this.actors[0] && !a.guest && this.laundryOut && this.rain > 0.1 && want !== 'sleep' && a.needs.energy > 10) task = this.laundryTask('fetch')
     // 收衣服是轻活：傍晚到睡前，还有点力气就去
-    if (!task && freeish && a !== this.actors[0] && this.laundryOut && this.clock.hour >= 17 && this.clock.hour < 22 && a.needs.energy > 15) task = this.laundryTask('fetch')
+    if (!task && freeish && a !== this.actors[0] && !a.guest && this.laundryOut && this.clock.hour >= 17 && this.clock.hour < 22 && a.needs.energy > 15) task = this.laundryTask('fetch')
     // 改装面包车的材料带回来了：会修东西的人（爸爸）一有空就去改装，比歇着、溜达优先
     if (!task && !late && !night && fixer && this.vanKit && !this.vanArmor && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.modVanTask()
     if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
@@ -1972,6 +1983,8 @@ export class Household {
     // 车开走了就不擦了、不改了
     if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out'))) return true
     if (t.kind === 'modvan' && this.vanArmor) return true
+    // 晾到一半下雨了：不晾了
+    if (t.kind === 'hang' && this.rain > 0.1) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trip) return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {

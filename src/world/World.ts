@@ -1657,7 +1657,9 @@ export class World {
       cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: ck.hour, siege: fighting, rain: this.life.rain > 0.1, danger })
       if (!hissing && cat.hiss > 0) {
         this.sound.hiss()
-        this.life.logNote('world.log.catHiss')
+        // 日记只在第一次、或者今晚格外凶险（危机夜、黑鸦、白天开过车）时记，不然每晚一条刷屏
+        const special = !!Household.crisisKind(ck) || this.life.raidTonight || this.life.noiseDay === ck.day
+        if (special || firstTime('catHiss')) this.life.logNote('world.log.catHiss')
       }
       this.catHeart.material = cat.hiss > 0 ? this.catAngry : this.catLove
       cat.root.visible = !(upstairsHidden && cat.root.position.y > FLOOR_H - 0.4)
