@@ -27,6 +27,35 @@ STYLES = {
     # 爸爸：寸头、军绿外套、牛仔裤
     'dad': dict(skin='#ebc19e', hair='#2b221f', top='#5f7350', bottom='#3d5a86', shoes='#3a302a', sole='#221c18',
                 hair_style='short', girl=False),
+    # --- 男主：比一家人高挑一点（腿长一些、头小一点、眼睛细长一点）---
+    # 江野：青梅竹马、阳光，乱糟糟的短发，牛仔外套、黑裤子、白球鞋
+    'jiangye': dict(skin='#eec29c', hair='#3a271e', top='#4f7fbf', bottom='#2b2b31', shoes='#efefea', sole='#cfcfca',
+                    hair_style='messy', girl=False, lead=True, inner='#f4f1e8'),
+    # 沈砚：医生，整齐的侧分、细框眼镜，白大褂里是浅蓝衬衫
+    'shenyan': dict(skin='#f3d3b8', hair='#1f1a1c', top='#f4f4f0', bottom='#5b6272', shoes='#2d2a2a', sole='#1c1a1a',
+                    hair_style='sidepart', girl=False, lead=True, glasses=True, coat='#f4f4f0', inner='#a9c6e3'),
+    # 顾沉：军区基地长，板寸、高大，一身军绿作训服、黑靴子
+    'guchen': dict(skin='#e2b48e', hair='#191514', top='#55623f', bottom='#4c5638', shoes='#1d1b1a', sole='#111010',
+                   hair_style='buzz', girl=False, lead=True, chest=0.19),
+    # 谢临：同为重生者，偏长的黑发、苍白，黑色长风衣
+    'xielin': dict(skin='#f5ddcc', hair='#141216', top='#2a2930', bottom='#24232a', shoes='#1a191d', sole='#0f0e11',
+                   hair_style='long', girl=False, lead=True, coat='#2a2930', inner='#55525c'),
+    # --- 其他人 ---
+    # 王阿姨：花白的发髻、紫红碎花上衣
+    'neighbor': dict(skin='#ecc5a3', hair='#a49e98', top='#8d5a8f', bottom='#4b4650', shoes='#3a3333', sole='#221e1e',
+                     hair_style='bun', girl=True),
+    # 门外的陌生人：工装夹克的大叔
+    'stranger': dict(skin='#dcae86', hair='#2f2a27', top='#6d7177', bottom='#8a7b5c', shoes='#3b3128', sole='#221c18',
+                     hair_style='short', girl=False),
+    'survivor_f': dict(skin='#f2cdb0', hair='#5a3b2a', top='#c9a982', bottom='#3f4a63', shoes='#6a5240', sole='#3d2f25',
+                       hair_style='ponytail', tie='#7a5a44', girl=True),
+    'survivor_m': dict(skin='#e5ba95', hair='#2e2420', top='#a64c43', bottom='#585d66', shoes='#3a3633', sole='#222020',
+                       hair_style='messy', girl=False),
+    # 丧尸：灰绿的皮肤、发黄的眼睛、衣服上有血
+    'zombie_m': dict(skin='#9cae8a', hair='#2c2a26', top='#6c6a5e', bottom='#4b4a45', shoes='#2e2b27', sole='#1c1a17',
+                     hair_style='messy', girl=False, zombie=True),
+    'zombie_f': dict(skin='#a3b293', hair='#3b302a', top='#7d6b6a', bottom='#4c4650', shoes='#2e2b27', sole='#1c1a17',
+                     hair_style='bob', girl=True, skirt=True, zombie=True),
 }
 
 
@@ -38,6 +67,7 @@ def lin(h):
 
 MATS = {}
 MB_SCALE = 1.6
+DECIMATE = 0.42
 # Q 版比例：腿、手臂按比例缩短（只平移骨头，不改朝向，所以游戏里代码摆的姿势照样能用）
 LEG_SCALE = 0.78
 ARM_SCALE = 0.86
@@ -123,6 +153,10 @@ def metaball(name, elems, material, resolution=0.012):
     me_ob.name = name
     me_ob.data.materials.clear()
     me_ob.data.materials.append(material)
+    # 融球转出来的网格很密：减到四成多（光滑的形状减面后看不出来），网页加载快一倍多
+    dec = me_ob.modifiers.new('dec', 'DECIMATE')
+    dec.ratio = DECIMATE
+    bpy.ops.object.modifier_apply(modifier='dec')
     for p in me_ob.data.polygons:
         p.use_smooth = True
     return me_ob
@@ -155,7 +189,8 @@ def main():
     for o in [o for o in bpy.data.objects if o.type == 'MESH']:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.context.view_layer.update()
-    chibi(rig, LEG_SCALE, ARM_SCALE)
+    lead = st.get('lead', False)
+    chibi(rig, 0.88 if lead else LEG_SCALE, 0.92 if lead else ARM_SCALE)
     mw = rig.matrix_world
     short = {b.name.split(':')[-1]: b for b in rig.data.bones}
     H = lambda b: mw @ short[b].head_local
@@ -175,10 +210,11 @@ def main():
     bottom = mat('bottom', st['bottom'])
     shoes = mat('shoes', st['shoes'], 0.6)
     sole = mat('sole', st['sole'], 0.6)
-    eye = mat('eye', '#231c22', 0.2)
+    zombie = st.get('zombie', False)
+    eye = mat('eye', '#e3cf62' if zombie else '#231c22', 0.2)
     shine = mat('eyeshine', '#ffffff', 0.2)
     blush = mat('blush', '#f4a3a0', 0.9)
-    mouth = mat('mouth', '#b04e52', 0.6)
+    mouth = mat('mouth', '#3a2a2a' if zombie else '#b04e52', 0.6)
     girl = st['girl']
 
     def seg(a, b, r, kind='capsule', shrink=0.0):
@@ -188,7 +224,7 @@ def main():
 
     # --- 身体（融球，一体光滑）---
     neck_top = H('Head')
-    chest_w = 0.15 if girl else 0.17
+    chest_w = st.get('chest', 0.15 if girl else 0.17)
     torso = [
         ('ellipsoid', (H('Spine2') + H('Neck')) / 2 - up * 0.01, side, 0.17, (chest_w / 0.17, 0.1 / 0.17, 0.115 / 0.17)),
         ('ellipsoid', (H('Spine') + H('Spine2')) / 2, side, 0.16, ((chest_w - 0.02) / 0.16, 0.085 / 0.16, 0.12 / 0.16)),
@@ -200,6 +236,16 @@ def main():
         sleeves.append(('capsule', a + (f - a) * cut / 2, f - a, 0.056, (f - a).length * cut / 2))
     hem = ('ellipsoid', H('Spine') + up * 0.03, side, 0.15, ((chest_w + 0.005) / 0.15, 0.1 / 0.15, 0.07 / 0.15))
     shirt = metaball(f'{name}_top', torso + sleeves + [hem, ('capsule', H('Spine2'), side, 0.07, 0.11)], top)
+    # 领口：脖子根一圈深一点的边
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.062, minor_radius=0.016, major_segments=32, minor_segments=10,
+                                     location=H('Neck') + up * 0.005 + fwd * 0.012)
+    collar = bpy.context.view_layer.objects.active
+    collar.name = f'{name}.collar'
+    collar.scale = (1.0, 0.9, 1.0)
+    darker = '#' + ''.join(f'{int(int(st["top"][i:i + 2], 16) * 0.72):02x}' for i in (1, 3, 5))
+    collar.data.materials.append(mat('collar', darker, 0.8))
+    for pl in collar.data.polygons:
+        pl.use_smooth = True
 
     legs = [('ellipsoid', H('Hips') + up * 0.015, side, 0.15, ((0.155 if girl else 0.15) / 0.15, 0.1 / 0.15, 0.1 / 0.15))]
     for s in ('Left', 'Right'):
@@ -229,6 +275,40 @@ def main():
             p0, p1 = H(f'{s}Leg'), H(f'{s}Foot')
             extra.append(metaball(f'{name}_shin{s}', [('capsule', (p0 + p1) / 2, p1 - p0, 0.05, (p1 - p0).length / 2)], skin))
 
+    if st.get('coat'):
+        # 长外套 / 白大褂：从腰到膝盖的下摆（圆台），跟着胯走
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=False, cap_tris=False, segments=32, radius1=0.25, radius2=0.2, depth=0.5)
+        # 前面开襟：去掉正前方一条，露出裤子（不然像裙子）
+        f2 = Vector((fwd.x, fwd.y))
+        cut = [f for f in bm.faces if Vector((f.calc_center_median().x, f.calc_center_median().y)).normalized().dot(f2) > 0.93]
+        bmesh.ops.delete(bm, geom=cut, context='FACES')
+        me = bpy.data.meshes.new(f'{name}.coat')
+        bm.to_mesh(me)
+        bm.free()
+        ct = bpy.data.objects.new(f'{name}.coat', me)
+        bpy.context.collection.objects.link(ct)
+        ct.location = H('Hips') - up * 0.16
+        ct.scale = (1.0, 0.8, 1.0)
+        ct.data.materials.append(mat('coat', st['coat'], 0.8))
+        for pl in ct.data.polygons:
+            pl.use_smooth = True
+        ct.modifiers.new('solid', 'SOLIDIFY').thickness = 0.012
+        bpy.context.view_layer.objects.active = ct
+        bpy.ops.object.modifier_apply(modifier='solid')
+        rigid_hips.append(ct.name)
+        extra.append(ct)
+    if st.get('inner'):
+        # 敞开的外套里露出来的衬衫 / T 恤：胸口一竖条
+        c = (H('Spine2') + H('Spine1')) / 2 + fwd * 0.098 - up * 0.02
+        extra.append(ellipsoid(f'{name}.inner', c, fwd, (0.05, 0.16, 0.018), mat('inner', st['inner'], 0.8), 24, 14))
+    if zombie:
+        # 衣服上几块血迹
+        blood = mat('blood', '#5e1a1a', 0.5)
+        for k, (sx, uy) in enumerate([(0.06, 0.02), (-0.08, -0.08), (0.1, -0.15)]):
+            c = H('Spine1') + side * sx + up * uy + fwd * (0.105 + 0.01 * k)
+            extra.append(ellipsoid(f'{name}.blood{k}', c, fwd, (0.045 - k * 0.008, 0.035, 0.012), blood, 14, 8))
+
     arms = []
     for s in ('Left', 'Right'):
         a, f, h = H(f'{s}Arm'), H(f'{s}ForeArm'), H(f'{s}Hand')
@@ -236,7 +316,9 @@ def main():
             arms.append(('capsule', a + (f - a) * 0.7, f - a, 0.045, (f - a).length * 0.32))
         arms.append(('capsule', (f + h) / 2, h - f, 0.042, (h - f).length / 2))
         d = (h - f).normalized()
-        arms.append(('ellipsoid', h + d * 0.05, d, 0.05, (1.0, 0.75, 0.9)))
+        # 手：扁一点的小手掌 + 往前的大拇指（像手套）
+        arms.append(('ellipsoid', h + d * 0.055, d, 0.054, (1.05, 0.62, 0.95)))
+        arms.append(('capsule', h + d * 0.035 + fwd * 0.035, d * 0.6 + fwd, 0.02, 0.02))
     arms.append(('capsule', (H('Neck') + neck_top) / 2 + up * 0.02, up, 0.05, 0.05))
     limbs = metaball(f'{name}_skin', arms, skin)
 
@@ -252,7 +334,7 @@ def main():
     soles = []
 
     # --- 头（干净的球 + 大眼睛）---
-    R = 0.185 if girl else 0.19
+    R = 0.17 if lead else 0.185 if girl else 0.19
     hc = neck_top + up * (R * 0.78) + fwd * 0.02
     head_parts = [ellipsoid(f'{name}.head', hc, up, (R * 1.0, R * 0.96, R * 1.0), skin, 40, 28)]
 
@@ -268,28 +350,131 @@ def main():
     for s in (-1, 1):
         ex, ey = s * 0.36, -0.06
         eye_d = R * 0.07
-        head_parts.append(ellipsoid(f'{name}.eye', on_face(ex, ey, 0.045), face_axis(ex, ey), (R * 0.135 if girl else R * 0.12, R * 0.19 if girl else R * 0.16, eye_d), eye, 20, 14))
-        head_parts.append(ellipsoid(f'{name}.shine', on_face(ex + s * 0.04, ey + 0.07, 0.0), face_axis(ex, ey), (R * 0.045, R * 0.05, R * 0.025), shine, 12, 8))
-        head_parts.append(ellipsoid(f'{name}.brow', on_face(s * 0.37, 0.28, 0.02), side, (R * 0.035, R * 0.035, R * 0.15), hair, 12, 8))
-        head_parts.append(ellipsoid(f'{name}.blush', on_face(s * 0.58, -0.3, 0.03), face_axis(s * 0.58, -0.3), (R * 0.14, R * 0.085, R * 0.04), blush, 16, 8))
-    head_parts.append(ellipsoid(f'{name}.mouth', on_face(0, -0.42, 0.02), side, (R * 0.03, R * 0.03, R * 0.1), mouth, 12, 8))
+        ew, eh = (R * 0.135, R * 0.19) if girl else (R * 0.125, R * 0.155) if lead else (R * 0.12, R * 0.16)
+        head_parts.append(ellipsoid(f'{name}.eye', on_face(ex, ey, 0.045), face_axis(ex, ey), (ew, eh, eye_d), eye, 20, 14))
+        if not zombie:
+            head_parts.append(ellipsoid(f'{name}.shine', on_face(ex + s * 0.04, ey + 0.07 * (eh / (R * 0.16)), 0.0), face_axis(ex, ey), (R * 0.045, R * 0.05, R * 0.025), shine, 12, 8))
+        # 眉毛：眼睛上方一点、外侧微微往下（显得温和）
+        bx, by = s * 0.37, 0.24 if not lead else 0.2
+        # 男主的眉毛更平、更浓；丧尸皱着眉
+        tilt = -0.18 if not lead else 0.04
+        if zombie:
+            tilt = 0.35
+        brow_dir = (side * s + up * tilt).normalized()
+        head_parts.append(ellipsoid(f'{name}.brow', on_face(bx, by, 0.015), brow_dir, (R * (0.04 if lead else 0.032), R * 0.032, R * 0.14), hair, 12, 8))
+        if girl:
+            # 女生：眼睛外上角一小撮睫毛
+            lx, ly = ex + s * 0.11, ey + 0.15
+            head_parts.append(ellipsoid(f'{name}.lash', on_face(lx, ly, 0.005), (side * s + up * 0.9).normalized(), (R * 0.022, R * 0.022, R * 0.075), eye, 10, 6))
+        if not zombie:
+            head_parts.append(ellipsoid(f'{name}.blush', on_face(s * 0.58, -0.3, 0.03), face_axis(s * 0.58, -0.3), (R * (0.1 if lead else 0.14), R * 0.06 if lead else R * 0.085, R * 0.04), blush, 16, 8))
+    # 嘴：一道往上弯的小笑弧（曲线挤成细管）
+    curve = bpy.data.curves.new(f'{name}.smile', 'CURVE')
+    curve.dimensions = '3D'
+    curve.bevel_depth = R * 0.02
+    curve.bevel_resolution = 3
+    sp = curve.splines.new('POLY')
+    pts = [(-0.11, -0.385), (-0.06, -0.42), (0.0, -0.432), (0.06, -0.42), (0.11, -0.385)]
+    if lead:
+        pts = [(-0.08, -0.4), (0.0, -0.418), (0.08, -0.4)]
+    if zombie:
+        pts = [(-0.11, -0.45), (-0.05, -0.415), (0.0, -0.405), (0.05, -0.415), (0.11, -0.45)]
+    sp.points.add(len(pts) - 1)
+    for i, (x, y) in enumerate(pts):
+        sp.points[i].co = (*on_face(x, y, 0.01), 1.0)
+    smile = bpy.data.objects.new(f'{name}.smile', curve)
+    bpy.context.collection.objects.link(smile)
+    bpy.ops.object.select_all(action='DESELECT')
+    smile.select_set(True)
+    bpy.context.view_layer.objects.active = smile
+    bpy.ops.object.convert(target='MESH')
+    smile = bpy.context.view_layer.objects.active
+    smile.data.materials.append(mouth)
+    head_parts.append(smile)
     head_parts.append(ellipsoid(f'{name}.nose', on_face(0, -0.18, 0.0), fwd, (R * 0.05, R * 0.045, R * 0.035), skin, 12, 8))
+    if st.get('glasses'):
+        # 细框眼镜：两个圆框 + 鼻梁
+        frame = mat('glasses', '#2b2622', 0.4)
+        for s in (-1, 1):
+            c = on_face(s * 0.36, -0.06, -0.06)
+            bpy.ops.mesh.primitive_torus_add(major_radius=R * 0.2, minor_radius=R * 0.018, major_segments=28, minor_segments=6, location=c)
+            g = bpy.context.view_layer.objects.active
+            g.rotation_mode = 'QUATERNION'
+            g.rotation_quaternion = face_axis(s * 0.36, -0.06).to_track_quat('Z', 'Y')
+            g.data.materials.append(frame)
+            head_parts.append(g)
+        a, b = on_face(-0.17, -0.02, -0.07), on_face(0.17, -0.02, -0.07)
+        head_parts.append(ellipsoid(f'{name}.bridge', (a + b) / 2, side, (R * 0.015, R * 0.015, (b - a).length / 2), frame, 8, 6))
     # 头发：融球捏的发型
     hs = st['hair_style']
     # 发顶：往后、往上挪，前沿正好在额头；不用挖洞，脸自然露出来
-    hair_el = [('ellipsoid', hc + up * (R * 0.16) - fwd * (R * 0.12), side, R * 1.03, (1.0, 1.02, 0.98))]
+    # 板寸：贴着头皮的一层，整个头顶和后脑都盖住，前面发际线高一点
+    if hs == 'buzz':
+        hair_el = [('ellipsoid', hc + up * (R * 0.1) - fwd * (R * 0.16), side, R * 1.0, (1.0, 1.0, 1.0))]
+    else:
+        hair_el = [('ellipsoid', hc + up * (R * 0.16) - fwd * (R * 0.12), side, R * 1.03, (1.0, 1.02, 0.98))]
     # 前额那一片：把发顶和刘海连起来，不露头皮
     hair_el.append(('ellipsoid', hc + fwd * (R * 0.45) + up * (R * 0.72), side, R * 0.55, (1.35, 0.7, 0.55)))
-    # 刘海：一排小团盖住上半个额头
-    for s in (-0.8, -0.4, 0.0, 0.4, 0.8):
-        hair_el.append(('ellipsoid', hc + fwd * (R * 0.72) + up * (R * (0.5 - 0.08 * abs(s))) + side * (s * R * 0.6), up, R * 0.24, (0.85, 0.55, 1.0)))
-    if girl:
+    # 刘海：几缕贴着额头、斜着垂下来的发束（以前是一圈"发箍"）
+    def on_head(sx, uy, lift):
+        n = face_axis(sx, uy)
+        return hc + n * (R * (0.96 + lift))
+
+    def strand(pts, r):
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            a, b = on_head(x0, y0, 0.06), on_head(x1, y1, 0.06)
+            hair_el.append(('capsule', (a + b) / 2, b - a, R * r, (b - a).length / 2))
+
+    if hs == 'ponytail':
+        # 女主：右边分缝，大半往左扫
+        strand([(0.28, 0.9), (0.0, 0.72), (-0.42, 0.5), (-0.62, 0.36)], 0.15)
+        strand([(0.18, 0.86), (-0.12, 0.6), (-0.3, 0.42)], 0.13)
+        strand([(0.36, 0.86), (0.52, 0.62), (0.64, 0.42)], 0.12)
+    elif hs == 'bob':
+        # 妈妈：中分的八字刘海
+        for s in (-1, 1):
+            strand([(s * 0.05, 0.92), (s * 0.3, 0.7), (s * 0.55, 0.48), (s * 0.66, 0.3)], 0.15)
+    elif hs == 'messy':
+        # 江野：乱糟糟往两边翘的碎发，头顶几撮支棱着
+        for x, y0, y1 in ((-0.55, 0.8, 0.5), (-0.25, 0.9, 0.55), (0.05, 0.92, 0.6), (0.35, 0.88, 0.52), (0.6, 0.75, 0.45)):
+            strand([(x * 0.8, y0), (x, y1)], 0.15)
+        for x in (-0.3, 0.1, 0.4):
+            hair_el.append(('ellipsoid', hc + up * (R * 1.05) + side * (x * R) - fwd * (R * 0.1), up + side * x, R * 0.22, (0.6, 0.6, 1.2)))
+    elif hs == 'sidepart':
+        # 沈砚：左边分缝，整齐地往右梳
+        strand([(-0.3, 0.9), (0.1, 0.8), (0.5, 0.6), (0.68, 0.42)], 0.16)
+        strand([(-0.35, 0.82), (-0.55, 0.62)], 0.13)
+    elif hs == 'buzz':
+        pass
+    elif hs == 'long':
+        strand([(0.1, 0.92), (-0.25, 0.7), (-0.5, 0.45), (-0.6, 0.15)], 0.15)
+        strand([(0.2, 0.9), (0.45, 0.62), (0.6, 0.3)], 0.14)
+    elif hs == 'bun':
+        for s in (-1, 1):
+            strand([(s * 0.05, 0.9), (s * 0.4, 0.72)], 0.15)
+    else:
+        # 爸爸：短短的、往上翘一点的前额碎发
+        for x in (-0.45, -0.15, 0.15, 0.42):
+            strand([(x * 0.9, 0.84), (x, 0.66)], 0.15)
+    if hs == 'bun':
+        # 王阿姨：短发贴着耳朵，脑后一个发髻
+        for s in (-1, 1):
+            hair_el.append(('ellipsoid', hc + side * (s * R * 0.84) + fwd * (R * 0.05), up, R * 0.3, (0.6, 0.8, 1.1)))
+        hair_el.append(('ellipsoid', hc - fwd * (R * 1.0) + up * (R * 0.35), -fwd, R * 0.33, (1.0, 1.0, 0.9)))
+    elif hs == 'long':
+        # 谢临：盖住耳朵、垂到脖子的黑发
+        for s in (-1, 1):
+            hair_el.append(('capsule', hc + side * (s * R * 0.86) - up * (R * 0.2) + fwd * (R * 0.05), up, R * 0.26, R * 0.5))
+        hair_el.append(('ellipsoid', hc - fwd * (R * 0.55) - up * (R * 0.35), up, R * 0.8, (1.25, 0.75, 1.0)))
+    elif girl:
         # 女生：两侧长发垂到下巴下面
         for s in (-1, 1):
             hair_el.append(('capsule', hc + side * (s * R * 0.84) - up * (R * 0.25) + fwd * (R * 0.18), up, R * 0.24, R * 0.45))
+    elif hs == 'buzz':
+        pass
     else:
         for s in (-1, 1):
-            hair_el.append(('ellipsoid', hc + side * (s * R * 0.86) + up * (R * 0.15) + fwd * (R * 0.1), up, R * 0.25, (0.55, 0.7, 1.1)))
+            hair_el.append(('ellipsoid', hc + side * (s * R * 0.78) + up * (R * 0.22) + fwd * (R * 0.02), up, R * 0.2, (0.5, 0.7, 1.0)))
     if hs == 'ponytail':
         pc = hc - fwd * (R * 1.0) + up * (R * 0.45)
         hair_el.append(('ellipsoid', pc - fwd * (R * 0.1), -fwd, R * 0.3, (0.9, 0.9, 0.9)))
@@ -304,7 +489,7 @@ def main():
         head_parts.append(ellipsoid(f'{name}.tie', hc - fwd * (R * 1.08) + up * (R * 0.45), -fwd, (R * 0.2, R * 0.2, R * 0.1), mat('tie', st['tie'], 0.5), 16, 10))
 
     # --- 合并、蒙皮 ---
-    body_parts = [shirt, pants, limbs, shoe, *soles, *extra]
+    body_parts = [shirt, collar, pants, limbs, shoe, *soles, *extra]
     everything = body_parts + head_parts
     for o in everything:
         bpy.context.view_layer.objects.active = o

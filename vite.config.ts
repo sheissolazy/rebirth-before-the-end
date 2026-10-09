@@ -27,9 +27,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,glb}'],
         // Poly Haven 的模型和贴图很大，不预先缓存；第一次用到时再存下来
-        globIgnores: ['models/ph/**', 'textures/**'],
+        // Q 版人物（*_toon.glb）也一样：只有切到 Q 版的人才下载
+        globIgnores: ['models/ph/**', 'textures/**', 'models/people/*_toon.glb'],
         runtimeCaching: [{
-          urlPattern: /\/(models\/ph|textures)\//,
+          urlPattern: /\/(models\/ph|textures)\/|_toon\.glb$/,
           handler: 'CacheFirst',
           options: { cacheName: 'polyhaven-assets', expiration: { maxEntries: 120 } },
         }],

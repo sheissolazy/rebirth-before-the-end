@@ -6,7 +6,7 @@ import { FLOOR_H } from './layout'
 import type { Pt } from './nav'
 import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
 import type { Household } from './residents'
-import { loadPerson } from './people'
+import { loadPerson, peopleStyle } from './people'
 import { crowbar } from './meshes'
 
 interface Fx { obj: THREE.Object3D; t: number; life: number; update: (k: number, dt: number) => void }
@@ -128,9 +128,12 @@ export class SiegeView {
   /** 真人画风：加载两个 MakeHuman 丧尸，皮肤调灰绿、衣服弄脏、加血迹 */
   async loadModels(): Promise<void> {
     const loader = new GLTFLoader()
+    // Q 版：来访的人、丧尸也用 Blender 捏的 Q 版（文件名后面加 _toon），跟一家人一个画风
+    const toon = peopleStyle() === 'toon'
+    const file = (n: string) => (toon ? `${n}_toon` : n)
     const [gl, npcs] = await Promise.all([
-      Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`))),
-      Promise.all(NPC_MODELS.map(loadPerson)),
+      Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${file(n)}.glb`))),
+      Promise.all(NPC_MODELS.map((n) => loadPerson(file(n)))),
     ])
     NPC_MODELS.forEach((n, k) => this.npcs.set(n, npcs[k]))
     // 丧尸：两个专门捏的，再加上老太太、年轻男人的丧尸版（复制一份材质，不影响正常来访的人）
@@ -143,6 +146,16 @@ export class SiegeView {
         const fix = (mat: THREE.Material) => {
           const std = (copy ? mat.clone() : mat) as THREE.MeshStandardMaterial
           const n = std.name
+          if (toon) {
+            // Q 版材质是纯色、按部位起名：皮肤变灰绿、眼睛发黄发光、腮红高光去掉、衣服暗一点
+            std.transparent = false
+            if (n === 'skin') std.color.set('#9cae8a')
+            else if (n === 'eye' || n === 'eyeshine') { std.color.set('#e3cf62'); std.emissive = new THREE.Color('#d6b04a'); std.emissiveIntensity = 0.9 }
+            else if (n === 'blush') std.color.set('#93a383')
+            else if (n === 'mouth') std.color.set('#3a2a2a')
+            else if (copy && /top|bottom|coat|inner|collar/.test(n)) std.color.multiplyScalar(0.7)
+            return std
+          }
           if (/eyebrow|eyelash|short|long|hair|bob|ponytail|braid/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; return std }
           std.transparent = false
           if (n.endsWith('.body')) { std.color.set('#9aab8c'); bloody(std, 0.5) }
