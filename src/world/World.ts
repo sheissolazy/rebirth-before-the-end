@@ -989,7 +989,7 @@ export class World {
     const blade = crowbar()
     blade.visible = false
     const driver = a.driver as { attach(o: THREE.Object3D, bone: string): boolean } | null
-    if (driver?.attach(blade, 'RightHand')) this.weapons.push(blade)
+    if (driver?.attach(blade, 'RightHand')) { this.weapons.push(blade); this.kitOf.set(a, blade) }
   }
 
   /** 屋里的暖灯和路灯：一直在场景里，白天亮度为 0（灯的数量不变，免得着色器重新编译） */
