@@ -212,7 +212,7 @@ export interface PersonHud {
   /** 住进来的人的特质名（比如"修车工"） */
   trait?: string
   /** 离家出走 / 不在了 */
-  gone?: 'runaway' | 'lost' | 'dead'
+  gone?: 'runaway' | 'lost' | 'dead' | 'lent'
   /** 出门在外：去哪了、还有几小时回来 */
   trip?: { id: string; left: number }
   health: number
@@ -346,6 +346,7 @@ export class Household {
     this.tripTick()
     this.careTick()
     this.runawayTick()
+    this.lentTick()
     this.rainTick(hours)
     this.gardenGrow(hours)
     this.searchTick(hours)
@@ -363,7 +364,7 @@ export class Household {
         a.health = Math.min(100, a.health + 40)
         this.note('world.log.medkit', { who: a.name })
       }
-      if (fighting || this.onTrip(a) || a.runaway || a.lost) continue
+      if (fighting || this.onTrip(a) || a.runaway || a.lost || this.lent?.name === a.name) continue
       this.consequences(a, hours)
       // 刚刚死了或者离家出走了：别再给 TA 派活（不然会一直占着床、占着位置）
       if (a.lost || a.dead || a.runaway) continue
@@ -383,7 +384,7 @@ export class Household {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
-      affection: this.affection, warnedJiangye: this.warnedJiangye,
+      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
   }
@@ -425,6 +426,36 @@ export class Household {
     this.visitor = v
     // 一天最多来一个；"来过"等回完话再记（路上刷新网页的话，这个访客以后还会来）
     this.visitDay = this.clock.day
+  }
+
+  /** 借给顾沉守防线的家人：什么时候回来 */
+  lent: { name: string; back: number } | null = null
+  static readonly LEND_HOURS = 48
+
+  /** 能借出去的家人：不算女主、来帮忙的客人、出门的、出走的 */
+  lendable(): Actor[] {
+    return this.actors.filter((a) => a !== this.actors[0] && !a.guest && !a.away && !a.lost && !a.dead && !a.runaway && !this.onTrip(a))
+  }
+
+  /** 借出去的人：走出街口就不见了；两天后带着子弹和吃的回来 */
+  private lentTick(): void {
+    const l = this.lent
+    if (!l) return
+    const a = this.actors.find((x) => x.name === l.name)
+    if (!a || a.dead) { this.lent = null; return }
+    if (!a.away && !a.path.length) a.away = true
+    if (a.away && this.absHour >= l.back && !(this.siege && !this.siege.done)) {
+      this.lent = null
+      a.away = false
+      a.floor = 0
+      a.root.position.set(EXIT.x, 0, EXIT.z)
+      a.needs = { hunger: 60, thirst: 60, energy: 45, mood: 60 }
+      a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+      this.ammo.n += 10
+      this.stock = { ...this.stock, food: this.stock.food + 3 }
+      this.affection.guchen = Math.min(100, (this.affection.guchen ?? 0) + 5)
+      this.note('world.guchen.back', { who: a.name })
+    }
   }
 
   /** 对话里的代词：门外是姑娘就用"她" */
@@ -682,6 +713,24 @@ export class Household {
       const love = (n: number) => { this.affection.shenyan = Math.min(100, (this.affection.shenyan ?? 0) + n) }
       if (choice === 'treat') { love(10); for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35) }
       else if (choice === 'medkit') { love(18); this.medkits -= 1; all(5) }
+    } else if (def.id === 'guchen_visit') {
+      const love = (n: number) => { this.affection.guchen = Math.max(0, Math.min(100, (this.affection.guchen ?? 0) + n)) }
+      if (choice === 'lend') {
+        // 挑一个能打的（壮实的优先，其次最健康的），跟着顾沉走出铁门
+        const pick = this.lendable().sort((x, y) => (y.trait === 'trait_strong' ? 1 : 0) - (x.trait === 'trait_strong' ? 1 : 0) || y.health - x.health)[0]
+        if (pick) {
+          this.cancel(pick)
+          pick.setPath(route(this.navs, pick.pos, EXIT) ?? [])
+          this.lent = { name: pick.name, back: this.absHour + Household.LEND_HOURS }
+          love(10)
+          this.note('world.visit.guchen_visit.log.lend', { who: pick.name })
+          this.talking = null
+          v.phase = 'leave'
+          v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+          return
+        }
+      } else if (choice === 'ammo') { food(-4); this.ammo.n += 6; love(5) }
+      else love(-2)
     } else if (def.id === 'jiangye_care') {
       this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + 5)
       if (this.careVariant === 0) this.stock = { ...this.stock, food: this.stock.food + 4 }
@@ -1569,7 +1618,7 @@ export class Household {
       name: a.name,
       health: a.health,
       trait: a.trait ? lt(survivorTraits.find((x) => x.id === a.trait)?.name ?? { zh: '' }) : undefined,
-      gone: a.dead ? 'dead' : a.lost ? 'lost' : a.runaway ? 'runaway' : undefined,
+      gone: a.dead ? 'dead' : a.lost ? 'lost' : a.runaway ? 'runaway' : this.lent?.name === a.name ? 'lent' : undefined,
       trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',

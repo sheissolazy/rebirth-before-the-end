@@ -1619,7 +1619,7 @@ export class World {
     if (!def) return null
     const ctx = this.life.visitorCtx()
     // 男主用文字版的名字和身份
-    const lead = ['jiangye', 'shenyan'].find((id) => def.id.startsWith(id))
+    const lead = ['jiangye', 'shenyan', 'guchen'].find((id) => def.id.startsWith(id))
     const npc = lead ? npcs.find((n) => n.id === lead) : null
     const vars = this.life.visitVars()
     return {

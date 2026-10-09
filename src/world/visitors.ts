@@ -6,8 +6,8 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet'
-export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan'
+export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit'
+export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen'
 
 export interface VisitorCtx {
   day: number
@@ -29,6 +29,10 @@ export interface VisitorCtx {
   /** 家里最重的伤（最低的健康） */
   worstHealth: number
   medkits: number
+  /** 去过军区、认识顾沉 */
+  guchenMet: boolean
+  /** 能借出去的家人（不算女主、客人、出门的） */
+  lendable: number
 }
 
 export interface VisitorDef {
@@ -77,6 +81,13 @@ export const VISITORS: VisitorDef[] = [
     when: (c) => !c.prologue && daytime(c) && c.worstHealth < 55
       && (c.seen.shenyan_meet === undefined || c.day - c.seen.shenyan_meet >= 4),
     choices: [{ id: 'treat' }, { id: 'medkit', need: (c) => c.medkits >= 1 }, { id: 'refuse' }],
+  },
+  // 男主：顾沉（军区基地长）。末日前去军区门口见过他，末日后他会亲自上门借人守防线
+  {
+    id: 'guchen_visit', model: 'guchen', icon: '⚡', chance: 0.3,
+    when: (c) => !c.prologue && c.guchenMet && daytime(c) && c.day >= 6
+      && (c.seen.guchen_visit === undefined || c.day - c.seen.guchen_visit >= 5),
+    choices: [{ id: 'lend', need: (c) => c.lendable >= 1 }, { id: 'ammo', need: (c) => c.food >= 4 }, { id: 'refuse' }],
   },
   {
     id: 'crow_tax', model: 'stranger', icon: '🐦‍⬛', chance: 0.25,

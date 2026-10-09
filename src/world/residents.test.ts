@@ -855,3 +855,33 @@ describe('生死', () => {
     expect(life.report?.died).toEqual([dead[0].name])
   })
 })
+
+describe('顾沉上门借人', () => {
+  it('借一个人去守防线：跟着出门、不在家时不会饿死、两天后带着子弹和吃的回来', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.guchenMet = true
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 10 }
+    expect(life.lendable().length).toBe(2)
+    life.startVisit(VISITORS.find((v) => v.id === 'guchen_visit')!)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    expect(life.talking?.id).toBe('guchen_visit')
+    const ammo = life.ammo.n
+    life.answerVisitor('lend')
+    const who = life.actors.find((a) => a.name === life.lent?.name)!
+    expect(who).toBeTruthy()
+    expect(who).not.toBe(life.actors[0])
+    for (let i = 0; i < 4000 && !who.away; i++) { life.tick(0.05, () => false); who.follow(0.05, 2.2) }
+    expect(who.away).toBe(true)
+    expect(life.hud().find((p) => p.name === who.name)?.gone).toBe('lent')
+    // 两天后回来（中间家里不打仗）
+    who.needs = { ...who.needs, hunger: 0, thirst: 0 }
+    life.clock = { day: life.clock.day + 2, hour: 17 }
+    life.tick(0.05, () => false)
+    expect(life.lent).toBeNull()
+    expect(who.away).toBe(false)
+    expect(who.dead).toBe(false)
+    expect(life.ammo.n).toBe(ammo + 10)
+    expect(life.log.some((l) => l.key === 'world.guchen.back')).toBe(true)
+  })
+})

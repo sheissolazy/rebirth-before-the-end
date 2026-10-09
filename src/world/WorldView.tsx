@@ -359,6 +359,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
           <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.jiangye')}</button>
           <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.shenyan')}</button>
+          <button onClick={() => world.current?.debugVisitor('guchen_visit')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.guchenVisit')}</button>
           <button onClick={() => world.current?.debugCourier('guchen')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.guchen')}</button>
           <button onClick={() => world.current?.debugCourier('xielin')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.xielin')}</button>
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
