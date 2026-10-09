@@ -20,7 +20,7 @@ from mathutils.geometry import intersect_point_line
 STYLES = {
     # 林知夏：高马尾、蓝 T 恤、牛仔裤、白鞋
     'heroine': dict(skin='#f6d2b3', hair='#3b2823', top='#5b9be0', bottom='#40639a', shoes='#d9734a', sole='#c9653f',
-                    hair_style='ponytail', tie='#ef6a78', girl=True, short_sleeve=True),
+                    hair_style='ponytail', tie='#ef6a78', girl=True, short_sleeve=True, clip='#ffd25a'),
     # 妈妈：深棕齐耳短发、酒红上衣、深灰长裙
     'mom': dict(skin='#f1caa8', hair='#4b3229', top='#a8404f', bottom='#545460', shoes='#4a3a34', sole='#2a2220',
                 hair_style='bob', girl=True, skirt=True),
@@ -353,7 +353,11 @@ def main():
         ew, eh = (R * 0.135, R * 0.19) if girl else (R * 0.125, R * 0.155) if lead else (R * 0.12, R * 0.16)
         head_parts.append(ellipsoid(f'{name}.eye', on_face(ex, ey, 0.045), face_axis(ex, ey), (ew, eh, eye_d), eye, 20, 14))
         if not zombie:
+            # 眼珠下半截透出暖棕色（像动画里的眼睛），上面一大一小两个高光
+            iris = mat('iris', st.get('iris', '#6b4330'), 0.25)
+            head_parts.append(ellipsoid(f'{name}.iris', on_face(ex, ey - eh / R * 0.28, 0.03), face_axis(ex, ey), (ew * 0.72, eh * 0.55, eye_d * 0.6), iris, 18, 12))
             head_parts.append(ellipsoid(f'{name}.shine', on_face(ex + s * 0.04, ey + 0.07 * (eh / (R * 0.16)), 0.0), face_axis(ex, ey), (R * 0.045, R * 0.05, R * 0.025), shine, 12, 8))
+            head_parts.append(ellipsoid(f'{name}.shine2', on_face(ex - s * 0.045, ey - eh / R * 0.45, 0.005), face_axis(ex, ey), (R * 0.022, R * 0.022, R * 0.015), shine, 10, 6))
         # 眉毛：眼睛上方一点、外侧微微往下（显得温和）
         bx, by = s * 0.37, 0.24 if not lead else 0.2
         # 男主的眉毛更平、更浓；丧尸皱着眉
@@ -485,6 +489,15 @@ def main():
         hair_el.append(('ellipsoid', hc - fwd * (R * 0.6) - up * (R * 0.2), up, R * 0.75, (1.3, 0.8, 1.0)))
     hair_mesh = metaball(f'{name}_hair', hair_el, hair, 0.01)
     head_parts.append(hair_mesh)
+    if st.get('clip'):
+        # 女主：右边刘海上一个小星星发夹
+        c = on_head_pt = hc + face_axis(0.55, 0.58) * (R * 1.06)
+        star = mat('clip', st['clip'], 0.4)
+        for k in range(5):
+            a = math.radians(90 + k * 72)
+            d = (side * math.cos(a) + up * math.sin(a)) * (R * 0.07)
+            head_parts.append(ellipsoid(f'{name}.clip{k}', c + d, d.normalized(), (R * 0.03, R * 0.03, R * 0.06), star, 8, 6))
+        head_parts.append(ellipsoid(f'{name}.clipc', c, face_axis(0.55, 0.58), (R * 0.055, R * 0.055, R * 0.03), star, 12, 8))
     if hs == 'ponytail':
         head_parts.append(ellipsoid(f'{name}.tie', hc - fwd * (R * 1.08) + up * (R * 0.45), -fwd, (R * 0.2, R * 0.2, R * 0.1), mat('tie', st['tie'], 0.5), 16, 10))
 
