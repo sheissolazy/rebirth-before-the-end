@@ -540,8 +540,10 @@ export class World {
     const q = new THREE.Quaternion()
     let n = 0
     for (const [x, z, r] of boards) {
+      // 人行道（z < 15）比马路高 8 厘米
+      const y0 = z < STREET.z0 ? 0.08 : 0
       const b = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.035, 0.3), wood)
-      b.position.set(x, 0.018, z)
+      b.position.set(x, y0 + 0.018, z)
       b.rotation.y = r
       b.receiveShadow = true
       g.add(b)
@@ -550,7 +552,7 @@ export class World {
         const lz = k < 5 ? -0.07 : 0.07
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r)
         const off = new THREE.Vector3(lx, 0, lz).applyQuaternion(q)
-        m.compose(new THREE.Vector3(x + off.x, 0.075, z + off.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))
+        m.compose(new THREE.Vector3(x + off.x, y0 + 0.075, z + off.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))
         nails.setMatrixAt(n++, m)
       }
     }
