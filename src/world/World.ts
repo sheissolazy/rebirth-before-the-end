@@ -419,7 +419,7 @@ export class World {
       else if (e.kind === 'hit') this.sound.hurt()
       else if (e.kind === 'fire') this.sound.fire()
       else if (e.kind === 'trapBroken') this.sound.crash()
-      else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1) }
+      else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1, 0.55) }
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home') this.setViewFloor(0)
@@ -1365,7 +1365,7 @@ export class World {
       const left = (this.groanT.get(z) ?? 1 + Math.random() * 4) - sim
       if (left <= 0) {
         const d = Math.hypot(z.pos.x - this.pose.target.x, z.pos.z - this.pose.target.z)
-        this.sound.groan(THREE.MathUtils.clamp(1.2 - d / 20, 0.1, 1))
+        this.sound.groan(THREE.MathUtils.clamp(1.2 - d / 20, 0.1, 1), z.brute ? 0.55 : 1)
         this.groanT.set(z, 4 + Math.random() * 6)
       } else this.groanT.set(z, left)
     }

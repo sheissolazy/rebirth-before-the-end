@@ -437,8 +437,9 @@ export default function WorldView() {
             <div className="mt-0.5 text-xs opacity-70">{t(hud.report.crisis ? 'world.report.crisis' : 'world.report.normal')}</div>
             <ul className="mt-3 space-y-1 text-sm">
               <li>🧟 {t('world.report.kills', { n: hud.report.kills })}</li>
-              {(hud.report.trapKills > 0 || hud.report.fireKills > 0) && (
+              {(hud.report.trapKills > 0 || hud.report.fireKills > 0 || hud.report.bruteKills > 0) && (
                 <li className="pl-5 text-xs text-zinc-600">{[
+                  hud.report.bruteKills > 0 ? t('world.report.bruteKills', { n: hud.report.bruteKills }) : '',
                   hud.report.trapKills > 0 ? t('world.report.trapKills', { n: hud.report.trapKills }) : '',
                   hud.report.fireKills > 0 ? t('world.report.fireKills', { n: hud.report.fireKills }) : '',
                 ].filter(Boolean).join(' · ')}</li>

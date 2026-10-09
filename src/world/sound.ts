@@ -178,14 +178,15 @@ export class Sound {
   }
 
   /** 丧尸的低吼：带颤音的锯齿波过两个共振峰 */
-  groan(vol = 1): void {
+  /** pitch < 1 更低沉（大块头） */
+  groan(vol = 1, pitch = 1): void {
     const ctx = this.ready
     if (!ctx) return
     const t = ctx.currentTime
-    const dur = 0.9 + Math.random() * 0.7
+    const dur = (0.9 + Math.random() * 0.7) / Math.sqrt(pitch)
     const o = ctx.createOscillator()
     o.type = 'sawtooth'
-    const base = 75 + Math.random() * 45
+    const base = (75 + Math.random() * 45) * pitch
     o.frequency.setValueAtTime(base, t)
     o.frequency.linearRampToValueAtTime(base * 0.8, t + dur)
     const lfo = ctx.createOscillator()
