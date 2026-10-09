@@ -4,6 +4,7 @@ import { t, type UiKey } from '../i18n'
 import type { Stock } from './life'
 
 export interface TripStock extends Stock {
+  molotovs: number
   money: number
   ammo: number
   medkits: number
@@ -60,7 +61,7 @@ export function settleTrip(id: string, people: number, armed: boolean, r: () => 
         return { gain: { money: -trip.cost, food: f, water: f }, hurt, key: 'world.trip.supermarket', vars: { food: f, water: f } }
       }
       case 'pharmacy': return { gain: { money: -trip.cost, medkits: 2 }, hurt, key: 'world.trip.pharmacy', vars: { n: 2 } }
-      case 'hardware': return { gain: { money: -trip.cost }, gateBonus: 60, hurt, key: 'world.trip.hardware', vars: { n: 60 } }
+      case 'hardware': return { gain: { money: -trip.cost, molotovs: 3 }, gateBonus: 60, hurt, key: 'world.trip.hardware', vars: { n: 60 } }
       case 'blackmarket': {
         if (r() < 0.15) return { gain: { money: -trip.cost }, hurt, key: 'world.trip.scammed', vars: { money: trip.cost } }
         return { gain: { money: -trip.cost, ammo: 12 }, hurt, key: 'world.trip.blackmarket', vars: { n: 12 } }
@@ -78,7 +79,7 @@ export function settleTrip(id: string, people: number, armed: boolean, r: () => 
   const gain: Partial<TripStock> = {}
   if (id === 'ruin_market') { gain.food = Math.round(int(r, 2, 5) * more); gain.water = Math.round(int(r, 1, 3) * more) }
   if (id === 'hospital') gain.medkits = int(r, 1, 3)
-  if (id === 'armory') gain.ammo = Math.round(int(r, 6, 12) * more)
+  if (id === 'armory') { gain.ammo = Math.round(int(r, 6, 12) * more); gain.molotovs = 1 }
   if (id === 'apartments') { gain.food = int(r, 1, 3); gain.water = int(r, 1, 3) }
   if (id === 'river') gain.water = Math.round(int(r, 5, 8) * more)
   if (fight) gain.cores = 1

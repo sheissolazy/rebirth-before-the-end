@@ -245,6 +245,8 @@ export class Household {
   tip: string | null = null
   /** 女主的空间异能：放进去的吃喝不会被抢、被淹、被打翻（文字版的设定：用空间不涨暴露） */
   space: Stock = { food: 0, water: 0 }
+  /** 燃烧瓶（酒精 + 布条），打丧尸时可以扔 */
+  molotovs = 2
   spaceCap = 6
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
@@ -357,6 +359,15 @@ export class Household {
 
   get residents(): number {
     return this.actors.filter((a) => !a.lost).length
+  }
+
+  /** 打丧尸时扔一个燃烧瓶 */
+  throwMolotov(): boolean {
+    const s = this.siege
+    if (!s || s.done || this.molotovs <= 0) return false
+    if (!s.molotov()) return false
+    this.molotovs -= 1
+    return true
   }
 
   /** 有人住进来 */
@@ -608,6 +619,7 @@ export class Household {
       this.ammo.n += g.ammo ?? 0
       this.medkits += g.medkits ?? 0
       this.cores += g.cores ?? 0
+      this.molotovs += g.molotovs ?? 0
       if (r.gateBonus) {
         this.gateBonus = Math.min(120, this.gateBonus + r.gateBonus)
         this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + r.gateBonus)

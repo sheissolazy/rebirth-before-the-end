@@ -251,8 +251,14 @@ export default function WorldView() {
       </div>
 
       {hud.siege && (
-        <div className="pointer-events-none absolute left-1/2 top-14 w-72 -translate-x-1/2 rounded-xl bg-red-950/85 px-4 py-2 text-white shadow-lg">
-          <div className="text-sm font-semibold">🧟 {t('world.siege', { n: hud.siege.left })}</div>
+        <div className="absolute left-1/2 top-14 w-72 -translate-x-1/2 rounded-xl bg-red-950/85 px-4 py-2 text-white shadow-lg">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold">🧟 {t('world.siege', { n: hud.siege.left })}</div>
+            <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
+              className="rounded-md bg-orange-600 px-2 py-0.5 text-xs font-semibold shadow disabled:opacity-40">
+              {t('world.molotov', { n: hud.molotovs })}
+            </button>
+          </div>
           {hud.siege.layer && (
             <div className="mt-1 flex items-center gap-2 text-xs">
               <span className="w-12 shrink-0">{t(`world.layer.${hud.siege.layer}` as UiKey)}</span>

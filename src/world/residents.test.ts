@@ -396,3 +396,26 @@ describe('空间异能', () => {
     expect(life.spaceCap).toBe(12)
   })
 })
+
+describe('燃烧瓶', () => {
+  it('扔到砸门的丧尸堆里：烧掉一片，用掉一个', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.ammo.n = 0
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(6, true)
+    const s = life.siege!
+    const dt = 0.05
+    // 等丧尸都贴到铁门上
+    for (let i = 0; i < 4000 && s.zombies.filter((z) => z.state === 'bash').length < 3; i++) {
+      life.tick(dt, () => false)
+      for (const z of s.zombies) z.follow(dt, z.speed)
+      for (const a of life.actors) a.follow(dt, 2.2)
+    }
+    const hp = s.zombies.filter((z) => z.alive).reduce((v, z) => v + z.hp, 0)
+    expect(life.throwMolotov()).toBe(true)
+    expect(life.molotovs).toBe(1)
+    const after = s.zombies.filter((z) => z.alive).reduce((v, z) => v + z.hp, 0)
+    expect(after).toBeLessThan(hp - 80)
+  })
+})

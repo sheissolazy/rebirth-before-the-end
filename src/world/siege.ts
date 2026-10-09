@@ -69,6 +69,8 @@ export class Zombie extends Walker {
   repath = 0
   /** 被打中时闪一下 */
   hitT = 0
+  /** 还要烧几秒 */
+  burn = 0
   driver: PoseDriver | null = null
   private inner: THREE.Object3D
 
@@ -113,6 +115,7 @@ export type SiegeEvent =
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
   | { kind: 'bash'; layer: LayerId; at: Pt }
+  | { kind: 'fire'; at: Pt }
   | { kind: 'down'; who: string }
   | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[] }
 
@@ -290,6 +293,12 @@ export class Siege {
   private zombieTick(z: Zombie, dt: number): void {
     z.hitT = Math.max(0, z.hitT - dt)
     if (z.state === 'dead') return
+    // 身上着火：每秒掉血
+    if (z.burn > 0 && z.state !== 'leave') {
+      z.burn -= dt
+      z.hp -= 9 * dt
+      if (z.hp <= 0) { this.kill(z, 'fire'); return }
+    }
     if (z.state === 'leave') {
       if (!z.path.length) { z.state = 'dead'; z.deadT = 7 }
       return
@@ -421,16 +430,42 @@ export class Siege {
     target.hp -= dmg
     target.hitT = 0.15
     this.o.emit({ kind: 'hit', at: target.pos })
-    if (target.hp <= 0) {
-      target.state = 'dead'
-      target.path = []
-      target.slot = -1
-      this.kills++
-      this.o.emit({ kind: 'kill', at: target.pos, by: a.name, raider: target.raider })
-      this.fillSlots()
-      // 黑鸦的人倒下一大半，剩下的就跑了
-      if (this.o.raid && this.kills >= Math.ceil(this.o.count * 0.6)) this.finish(true)
+    if (target.hp <= 0) this.kill(target, a.name)
+  }
+
+  private kill(z: Zombie, by: string): void {
+    z.state = 'dead'
+    z.path = []
+    z.slot = -1
+    z.burn = 0
+    this.kills++
+    this.o.emit({ kind: 'kill', at: z.pos, by, raider: z.raider })
+    this.fillSlots()
+    // 黑鸦的人倒下一大半，剩下的就跑了
+    if (this.o.raid && this.kills >= Math.ceil(this.o.count * 0.6)) this.finish(true)
+  }
+
+  /** 扔燃烧瓶：砸在正在砸门的那一堆中间，烧伤一片，还会接着烧几秒 */
+  molotov(): Pt | null {
+    if (this.done) return null
+    const layer = this.current
+    const alive = this.zombies.filter((z) => z.alive && z.state !== 'leave')
+    if (!alive.length) return null
+    let at: Pt
+    if (layer) {
+      const bashing = alive.filter((z) => z.state === 'bash' || z.state === 'wait')
+      const pts = bashing.length ? bashing.map((z) => z.pos) : layer.bash
+      at = { x: pts.reduce((v, p) => v + p.x, 0) / pts.length, z: pts.reduce((v, p) => v + p.z, 0) / pts.length }
+    } else at = alive[0].pos
+    for (const z of alive) {
+      if (Math.hypot(z.pos.x - at.x, z.pos.z - at.z) > 2.4) continue
+      z.hp -= 40
+      z.burn = 3
+      z.hitT = 0.3
+      if (z.hp <= 0) this.kill(z, 'fire')
     }
+    this.o.emit({ kind: 'fire', at })
+    return at
   }
 
   /** 战斗结束后：倒下的人爬起来 */

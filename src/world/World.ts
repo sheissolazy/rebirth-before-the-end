@@ -61,6 +61,7 @@ export interface Hud {
   report: NightReport | null
   /** 空间异能里放了多少、最多放多少 */
   space: { food: number; water: number; cap: number }
+  molotovs: number
   /** 有人在门口等回话 */
   visit: { id: string; icon: string; choices: { id: string; ok: boolean }[] } | null
 }
@@ -85,7 +86,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0,
 }
 
 export class World {
@@ -220,6 +221,7 @@ export class World {
       else if (e.kind === 'broken') this.sound.crash()
       else if (e.kind === 'kill') this.sound.squelch()
       else if (e.kind === 'hit') this.sound.hurt()
+      else if (e.kind === 'fire') this.sound.fire()
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home') this.setViewFloor(0)
@@ -1127,6 +1129,11 @@ export class World {
     if (def) this.life.startVisit(def)
   }
 
+  throwMolotov(): void {
+    this.life.throwMolotov()
+    this.pushLifeHud()
+  }
+
   moveToSpace(kind: 'food' | 'water', n: number): void {
     this.life.moveToSpace(kind, n)
     this.pushLifeHud()
@@ -1178,6 +1185,7 @@ export class World {
       report: this.life.report,
       visit: this.visitHud(),
       space: { ...this.life.space, cap: this.life.spaceCap },
+      molotovs: this.life.molotovs,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

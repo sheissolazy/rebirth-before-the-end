@@ -163,6 +163,16 @@ export class Sound {
     }
   }
 
+  /** 燃烧瓶：玻璃碎的一声，呼地烧起来，然后噼啪噼啪 */
+  fire(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    this.noiseBurst(t, 'highpass', 3500, 0.8, 0.35, 0.12)
+    this.noiseBurst(t + 0.05, 'bandpass', 500, 0.7, 0.6, 1.2, 1600)
+    for (let k = 0; k < 14; k++) this.noiseBurst(t + 0.3 + Math.random() * 2.6, 'highpass', 2500 + Math.random() * 2000, 1, 0.12 + Math.random() * 0.1, 0.03)
+  }
+
   /** 一层防线倒了 */
   crash(): void {
     const ctx = this.ready

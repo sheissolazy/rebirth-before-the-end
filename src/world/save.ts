@@ -45,6 +45,7 @@ export interface WorldSave {
   storm?: number
   space?: Stock
   spaceCap?: number
+  molotovs?: number
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -72,6 +73,7 @@ export function snapshot(life: Household): WorldSave {
     storm: life.storm,
     space: { ...life.space },
     spaceCap: life.spaceCap,
+    molotovs: life.molotovs,
   }
 }
 
@@ -93,6 +95,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.storm = s.storm ?? -1
   life.space = { ...(s.space ?? { food: 0, water: 0 }) }
   life.spaceCap = s.spaceCap ?? 6
+  life.molotovs = s.molotovs ?? 2
   for (const as of s.actors) {
     let a = life.actors.find((x) => x.name === as.name)
     // 后来住进来的人：重新请进门

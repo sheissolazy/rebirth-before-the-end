@@ -56,6 +56,13 @@ export class SiegeView {
   /** 来敲门的人、黑鸦的人用的正常人模型 */
   private readonly npcs = new Map<string, THREE.Object3D>()
   private readonly flash = new THREE.PointLight('#ffd58a', 0, 8, 2)
+  /** 燃烧瓶的火光（一直在场景里，平时亮度 0） */
+  private readonly fireLight = new THREE.PointLight('#ff8a3c', 0, 9, 1.6)
+  private fireT = 0
+  /** 地上烧着的一圈火光 */
+  private readonly fireGlow: THREE.Mesh
+  /** 火星：一团循环使用的粒子 */
+  private readonly embers: { pts: THREE.Points; pos: Float32Array; vel: Float32Array; life: Float32Array; next: number }
   private flashT = 0
   private readonly fx: Fx[] = []
   private readonly bars = new Map<LayerId, Bar>()
@@ -71,7 +78,32 @@ export class SiegeView {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
-    this.scene.add(this.flash)
+    this.scene.add(this.flash, this.fireLight)
+    const glow = document.createElement('canvas')
+    glow.width = glow.height = 64
+    const g = glow.getContext('2d')!
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 32)
+    grad.addColorStop(0, 'rgba(255,220,120,1)')
+    grad.addColorStop(0.4, 'rgba(255,120,30,0.7)')
+    grad.addColorStop(1, 'rgba(255,60,0,0)')
+    g.fillStyle = grad
+    g.fillRect(0, 0, 64, 64)
+    this.fireGlow = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(glow), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    this.fireGlow.rotation.x = -Math.PI / 2
+    this.fireGlow.visible = false
+    this.scene.add(this.fireGlow)
+    const n = 400
+    const pos = new Float32Array(n * 3).fill(-99)
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: '#ffb04a', size: 0.12, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    pts.frustumCulled = false
+    this.scene.add(pts)
+    this.embers = { pts, pos, vel: new Float32Array(n * 3), life: new Float32Array(n), next: 0 }
     for (let k = 0; k < 3; k++) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 28), new THREE.MeshBasicMaterial({
         color: k === 0 ? '#7cc4ff' : '#ffb35c', transparent: true, opacity: 0.75, depthWrite: false,
@@ -177,6 +209,23 @@ export class SiegeView {
     } else if (e.kind === 'hit') this.blood(e.at)
     else if (e.kind === 'kill') this.core(e.at)
     else if (e.kind === 'broken') this.shake = 0.5
+    else if (e.kind === 'fire') {
+      this.fireLight.position.set(e.at.x, 1.2, e.at.z)
+      this.fireGlow.position.set(e.at.x, 0.06, e.at.z)
+      this.fireT = 3.5
+      this.shake = 0.2
+      for (let k = 0; k < 70; k++) this.ember(e.at.x + (Math.random() - 0.5) * 2.4, 0.1, e.at.z + (Math.random() - 0.5) * 2.4, 1.6)
+    }
+  }
+
+  /** 放一颗火星：往上飘、慢慢灭 */
+  private ember(x: number, y: number, z: number, life: number): void {
+    const e = this.embers
+    const i = e.next
+    e.next = (e.next + 1) % e.life.length
+    e.pos.set([x, y, z], i * 3)
+    e.vel.set([(Math.random() - 0.5) * 0.6, 0.8 + Math.random() * 1.6, (Math.random() - 0.5) * 0.6], i * 3)
+    e.life[i] = life * (0.5 + Math.random() * 0.5)
   }
 
   private add(obj: THREE.Object3D, life: number, update: Fx['update']): void {
@@ -222,6 +271,28 @@ export class SiegeView {
   update(dt: number, life: Household, actors: { root: THREE.Object3D }[]): void {
     this.flashT -= dt
     this.flash.intensity = this.flashT > 0 ? 9 : 0
+    // 燃烧瓶：火光一闪一闪，火堆和身上着火的丧尸冒火星
+    this.fireT = Math.max(0, this.fireT - dt)
+    this.fireLight.intensity = this.fireT > 0 ? (5 + Math.random() * 4) * Math.min(1, this.fireT) : 0
+    this.fireGlow.visible = this.fireT > 0
+    ;(this.fireGlow.material as THREE.MeshBasicMaterial).opacity = Math.min(1, this.fireT) * (0.7 + Math.random() * 0.3)
+    if (this.fireT > 0.5) for (let k = 0; k < 3; k++) {
+      const p = this.fireLight.position
+      this.ember(p.x + (Math.random() - 0.5) * 2, 0.1, p.z + (Math.random() - 0.5) * 2, 1.2)
+    }
+    for (const z of life.siege?.zombies ?? []) {
+      if (z.burn > 0 && z.alive && Math.random() < 0.6) this.ember(z.pos.x + (Math.random() - 0.5) * 0.4, 0.4 + Math.random() * 1.2, z.pos.z + (Math.random() - 0.5) * 0.4, 0.9)
+    }
+    const em = this.embers
+    for (let i = 0; i < em.life.length; i++) {
+      if (em.life[i] <= 0) continue
+      em.life[i] -= dt
+      if (em.life[i] <= 0) { em.pos[i * 3 + 1] = -99; continue }
+      em.pos[i * 3] += em.vel[i * 3] * dt
+      em.pos[i * 3 + 1] += em.vel[i * 3 + 1] * dt
+      em.pos[i * 3 + 2] += em.vel[i * 3 + 2] * dt
+    }
+    em.pts.geometry.attributes.position.needsUpdate = true
     this.shake = Math.max(0, this.shake - dt)
     for (let k = this.fx.length - 1; k >= 0; k--) {
       const f = this.fx[k]
