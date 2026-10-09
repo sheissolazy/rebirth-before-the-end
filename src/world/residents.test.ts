@@ -1105,3 +1105,35 @@ describe('存档往返（今晚新加的字段）', () => {
     expect(b.over).toBeNull()
   })
 })
+
+describe('江野住下来', () => {
+  it('好感 70 以上来访时可以请他住下来：成为家里的一员，以后不再来访、危机夜不用另外来帮忙', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _model, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    const def = VISITORS.find((v) => v.id === 'jiangye_care')!
+    life.clock = { day: PROLOGUE_DAYS + 2, hour: 10 }
+    life.warnedJiangye = true
+    life.affection.jiangye = 60
+    expect(def.choices.find((c) => c.id === 'stay')!.need!(life.visitorCtx())).toBe(false)
+    life.affection.jiangye = 75
+    expect(def.choices.find((c) => c.id === 'stay')!.need!(life.visitorCtx())).toBe(true)
+    life.startVisit(def)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.answerVisitor('stay')
+    const j = life.actors.find((a) => a.name === '江野')!
+    expect(j).toBeTruthy()
+    expect(j.model).toBe('jiangye')
+    expect(j.guest).toBe(false)
+    expect(life.jiangyeHome).toBe(true)
+    expect(life.residents).toBe(4)
+    expect(def.when({ ...life.visitorCtx(), day: life.clock.day + 5 })).toBe(false)
+    // 危机夜傍晚不会再"来一个江野"
+    let d = PROLOGUE_DAYS
+    while (!Household.crisisKind({ day: d, hour: 21 })) d++
+    life.clock = { day: d, hour: 19.8 }
+    life.tick(0.05, () => false)
+    expect(life.guest).toBeNull()
+    expect(life.actors.filter((a) => a.name === '江野').length).toBe(1)
+  })
+})

@@ -35,6 +35,8 @@ export interface VisitorCtx {
   lendable: number
   /** 谢临塞过几张纸条 */
   xielinNotes: number
+  /** 江野已经住进来了 */
+  jiangyeHome: boolean
 }
 
 export interface VisitorDef {
@@ -73,9 +75,10 @@ export const VISITORS: VisitorDef[] = [
   },
   {
     id: 'jiangye_care', model: 'jiangye', icon: '🔥', chance: 0.25,
-    when: (c) => !c.prologue && daytime(c) && (c.warnedJiangye || (c.affection.jiangye ?? 0) >= 55)
+    when: (c) => !c.prologue && daytime(c) && !c.jiangyeHome && (c.warnedJiangye || (c.affection.jiangye ?? 0) >= 55)
       && (c.seen.jiangye_care === undefined || c.day - c.seen.jiangye_care >= 3),
-    choices: [{ id: 'thanks' }],
+    // 好感到"暧昧"以上、家里还有位置：可以请他住下来（设计文档：暧昧 = 可入住基地）
+    choices: [{ id: 'thanks' }, { id: 'stay', need: (c) => (c.affection.jiangye ?? 0) >= 70 && c.residents < 5 }],
   },
   // 男主：沈砚（天才医生）。末日后家里有人伤得重，他会闻着血腥味找上门
   {

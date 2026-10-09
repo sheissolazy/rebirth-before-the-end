@@ -390,7 +390,7 @@ export class Household {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
-      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes,
+      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes, jiangyeHome: this.jiangyeHome,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
   }
@@ -436,6 +436,9 @@ export class Household {
 
   /** 困难模式（给设计者对比用：丧尸多一半、更狠、大块头更多、开局子弹减半） */
   hard = false
+
+  /** 江野住进来了（不再来访、危机夜也不用"来帮忙"了） */
+  jiangyeHome = false
 
   /** 这一局已经因为困难模式减过一次子弹（来回切换不会一直减） */
   hardHalved = false
@@ -773,6 +776,21 @@ export class Household {
       else this.barriers.gate = this.maxOf('gate')
       this.note(`world.visit.jiangye_care.log${this.careVariant}`)
       this.talking = null
+      // 请他住下来：门口的江野直接变成家里人，走进院子
+      if (choice === 'stay') {
+        const a = this.addResident('江野', 'jiangye', { x: v.pos.x, z: v.pos.z }, 'trait_strong')
+        if (a) {
+          a.health = 100
+          a.needs = { hunger: 80, thirst: 80, energy: 85, mood: 90 }
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+          this.jiangyeHome = true
+          this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + 10)
+          this.note('world.visit.jiangye_care.log.stay')
+          v.root.removeFromParent()
+          this.visitor = null
+          return
+        }
+      }
       v.phase = 'leave'
       v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
       return
@@ -1185,7 +1203,7 @@ export class Household {
   private guestTick(): void {
     const c = this.clock
     const g = this.guest
-    if (!g && this.makeActor && c.hour >= 19.5 && c.hour < 21 && this.guestNight !== c.day
+    if (!g && !this.jiangyeHome && this.makeActor && c.hour >= 19.5 && c.hour < 21 && this.guestNight !== c.day
       && Household.crisisKind(c) && (this.affection.jiangye ?? 0) >= 60) {
       this.guestNight = c.day
       const a = this.makeActor('江野', 'jiangye', { x: 30, z: 18 })

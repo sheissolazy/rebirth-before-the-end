@@ -257,6 +257,8 @@ export const zh = {
   'world.visit.jiangye_care.text1': '"给你的。"一把新磨的斧子，木柄上刻了你名字的首字母。"枪没子弹的时候用它。"',
   'world.visit.jiangye_care.text2': '江野看了看被撞歪的铁门，二话不说蹲下来，把它重新焊好了。',
   'world.visit.jiangye_care.choice.thanks': '谢谢你，江野',
+  'world.visit.jiangye_care.choice.stay': '"……要不，你就住下来吧。"（他会成为家里的一员）',
+  'world.visit.jiangye_care.log.stay': '江野愣了很久，把背包放在了沙发边上："好。"——江野住进了外婆的老宅',
   'world.visit.jiangye_care.log0': '江野留下一箱罐头（4 份吃的）',
   'world.visit.jiangye_care.log1': '江野送了一把刻着名字首字母的斧子：没子弹时女主改用斧子（伤害更高）',
   'world.visit.jiangye_care.log2': '江野把铁门重新焊好了',
