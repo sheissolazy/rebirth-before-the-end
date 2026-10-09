@@ -6,8 +6,8 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit'
-export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen'
+export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
+export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen' | 'xielin'
 
 export interface VisitorCtx {
   day: number
@@ -33,6 +33,8 @@ export interface VisitorCtx {
   guchenMet: boolean
   /** 能借出去的家人（不算女主、客人、出门的） */
   lendable: number
+  /** 谢临塞过几张纸条 */
+  xielinNotes: number
 }
 
 export interface VisitorDef {
@@ -88,6 +90,12 @@ export const VISITORS: VisitorDef[] = [
     when: (c) => !c.prologue && c.guchenMet && daytime(c) && c.day >= 6
       && (c.seen.guchen_visit === undefined || c.day - c.seen.guchen_visit >= 5),
     choices: [{ id: 'lend', need: (c) => c.lendable >= 1 }, { id: 'ammo', need: (c) => c.food >= 4 }, { id: 'refuse' }],
+  },
+  // 男主：谢临（同为重生者）。塞过两张纸条以后，某个傍晚他会亲自站到铁门外（只来这一次）
+  {
+    id: 'xielin_meet', model: 'xielin', icon: '⏳', chance: 0.35,
+    when: (c) => !c.prologue && c.xielinNotes >= 2 && c.hour >= 17 && c.hour < 19.5 && c.seen.xielin_meet === undefined,
+    choices: [{ id: 'ask' }, { id: 'dinner', need: (c) => c.food >= 1 }, { id: 'shut' }],
   },
   {
     id: 'crow_tax', model: 'stranger', icon: '🐦‍⬛', chance: 0.25,

@@ -356,7 +356,9 @@ export class World {
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider, brute) => this.siegeView.spawn(at, raider, brute)
     this.life.spawnVisitor = (def, at, model) => {
-      const v = new Visitor(def, at, this.siegeView.npc(model) ?? this.siegeView.npc(def.model), isFemaleModel(model))
+      const m = this.siegeView.npc(model) ?? this.siegeView.npc(def.model)
+      if (m && model === 'xielin') darkCoat(m)
+      const v = new Visitor(def, at, m, isFemaleModel(model))
       this.scene.add(v.root)
       return v
     }
@@ -1684,7 +1686,7 @@ export class World {
     if (!def) return null
     const ctx = this.life.visitorCtx()
     // 男主用文字版的名字和身份
-    const lead = ['jiangye', 'shenyan', 'guchen'].find((id) => def.id.startsWith(id))
+    const lead = ['jiangye', 'shenyan', 'guchen', 'xielin'].find((id) => def.id.startsWith(id))
     const npc = lead ? npcs.find((n) => n.id === lead) : null
     const vars = this.life.visitVars()
     return {

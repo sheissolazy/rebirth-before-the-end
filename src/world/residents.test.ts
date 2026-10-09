@@ -993,3 +993,26 @@ describe('危机夜的大块头', () => {
     expect(b.siege!.zombies.some((z) => z.brute)).toBe(false)
   })
 })
+
+describe('谢临傍晚来访', () => {
+  it('塞过两张纸条后傍晚才会来，只来一次；请他吃饭会把楼梯口的箱子堆满', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    const def = VISITORS.find((v) => v.id === 'xielin_meet')!
+    life.clock = { day: PROLOGUE_DAYS + 2, hour: 18 }
+    life.xielinNotes = 1
+    expect(def.when(life.visitorCtx())).toBe(false)
+    life.xielinNotes = 2
+    expect(def.when(life.visitorCtx())).toBe(true)
+    life.clock = { day: PROLOGUE_DAYS + 2, hour: 11 }
+    expect(def.when(life.visitorCtx())).toBe(false)
+    life.clock = { day: PROLOGUE_DAYS + 2, hour: 17.2 }
+    life.barriers.stairs = 10
+    life.startVisit(def)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.answerVisitor('dinner')
+    expect(life.barriers.stairs).toBe(life.maxOf('stairs'))
+    expect(life.affection.xielin).toBeGreaterThanOrEqual(15)
+    expect(def.when(life.visitorCtx())).toBe(false)
+  })
+})

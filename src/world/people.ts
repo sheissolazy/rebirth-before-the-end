@@ -52,6 +52,8 @@ const WARDROBE: Record<string, Outfit> = {
   },
   // 妈妈：原来是一头白发，染回深棕色（五十岁出头）
   'mom.bob02': { hair: '#5a4438' },
+  // 谢临：一头黑色长发
+  'xielin.long01': { hair: '#3a3436' },
 }
 
 function restyle(mat: THREE.MeshStandardMaterial, o: Outfit): void {

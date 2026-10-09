@@ -388,7 +388,7 @@ export class Household {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
-      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length,
+      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
   }
@@ -730,6 +730,11 @@ export class Household {
       const love = (n: number) => { this.affection.shenyan = Math.min(100, (this.affection.shenyan ?? 0) + n) }
       if (choice === 'treat') { love(10); for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35) }
       else if (choice === 'medkit') { love(18); this.medkits -= 1; all(5) }
+    } else if (def.id === 'xielin_meet') {
+      const love = (n: number) => { this.affection.xielin = Math.max(0, Math.min(100, (this.affection.xielin ?? 0) + n)) }
+      if (choice === 'ask') { love(8); this.cores += 2 }
+      else if (choice === 'dinner') { love(15); food(-1); all(5); this.barriers.stairs = this.maxOf('stairs') }
+      else love(-5)
     } else if (def.id === 'guchen_visit') {
       const love = (n: number) => { this.affection.guchen = Math.max(0, Math.min(100, (this.affection.guchen ?? 0) + n)) }
       if (choice === 'lend') {
