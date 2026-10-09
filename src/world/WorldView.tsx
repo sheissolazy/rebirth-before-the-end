@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lt, t, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
 import { EMPTY_HUD, World, type FurnitureMenu, type Hud } from './World'
@@ -170,7 +170,7 @@ export default function WorldView() {
   const [shop, setShop] = useState<ShopView | null>(null)
   const setDiary = (open: boolean) => {
     const w = world.current
-    if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }
+    if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()); setLogSeen(w.latestLogKey()) }
     setDiaryState(open)
   }
   // 键盘快捷键（M 地图）用：effect 里拿到的总是最新的 setMap
@@ -216,8 +216,9 @@ export default function WorldView() {
   }, [style])
 
   const visitId = hud.visit?.id ?? null
-  const blocking = welcome || diary || map || !!visitId
-  useEffect(() => {
+  const blocking = welcome || diary || map || !!visitId || !!shop
+  // 面板一出现就停（layout effect 跟渲染同步，中间不会漏掉一次按空格或调速）
+  useLayoutEffect(() => {
     const w = world.current
     if (!w) return
     if (blocking && !uiPaused.current) {

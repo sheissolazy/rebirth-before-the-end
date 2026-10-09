@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
-import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN, COURT } from './layout'
+import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN, COURT, PORCH } from './layout'
 
 export type ArtStyle = 'toon' | 'paradise'
 
@@ -304,6 +304,8 @@ export function scatter(kit: ParadiseKit, slug: string, total: number, sample: (
 function blocked(x: number, z: number): boolean {
   if (x > HOUSE.x0 - 0.3 && x < HOUSE.x1 + 0.3 && z > HOUSE.z0 - 0.3 && z < HOUSE.z1 + 0.3) return true
   if (x > COURT.x0 - 0.2 && x < COURT.x1 + 0.2 && z > HOUSE.z1 - 0.3 && z < COURT.z1 + 0.6) return true
+  // 檐廊（地砖上不长草）
+  if (x > PORCH.x0 - 0.3 && x < PORCH.x1 + 0.3 && z > PORCH.z0 - 0.3 && z < PORCH.z1 + 0.3) return true
   if (z > STREET.z0 - 1.4 && z < STREET.z1 + 1.4) return true
   for (const p of PROPS) if (p.kind !== 'tree' && Math.abs(x - p.x) < p.w / 2 + 0.6 && Math.abs(z - p.z) < p.d / 2 + 0.6) return true
   if (Math.abs(z - YARD.z0) < 0.25 || Math.abs(z - YARD.z1) < 0.25 || Math.abs(x - YARD.x0) < 0.25 || Math.abs(x - YARD.x1) < 0.25) return true

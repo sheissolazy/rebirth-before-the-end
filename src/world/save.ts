@@ -2,7 +2,9 @@
 // 打丧尸的时候不存（刷新后从开打前重新来）。
 import { FLOOR_H, type Floor } from './layout'
 import type { Household, LogEntry, Trip } from './residents'
-import { TRIPS } from './expedition'
+import { TRIPS, tripHours } from './expedition'
+import { shopFor } from './shop'
+import { PROLOGUE_DAYS } from './life'
 import type { Barriers } from './siege'
 import type { Clock, Needs, Stock } from './life'
 
@@ -251,9 +253,11 @@ export function restore(life: Household, s: WorldSave): void {
     if (!def || !members.length) continue
     for (const m of members) m.away = true
     const x = st as NonNullable<WorldSave['trips']>[number]
+    // 存档时正走去店里的（还没定到店时间）：照出发时的来回时间补上，不然会跳过店、白拿东西
+    const shopAt = x.shopAt ?? (shopFor(def.id, life.clock.day < PROLOGUE_DAYS) && !x.shopped ? st.back - tripHours(def, !!st.van) / 2 : undefined)
     life.trips.push({
-      id: life.trips.length + 1, def, members, phase: x.phase ?? 'away', back: st.back, van: st.van,
-      shopAt: x.shopAt, shopped: x.shopped, cargo: x.cargo as Trip['cargo'], spent: x.spent,
+      id: life.nextTripId(), def, members, phase: x.phase ?? 'away', back: st.back, van: st.van,
+      shopAt, shopped: x.shopped, cargo: x.cargo as Trip['cargo'], spent: x.spent,
     })
     // 开车出去的：车也不在家（回来时从街口开进来）
     if (st.van) life.vanAway = true

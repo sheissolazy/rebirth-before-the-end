@@ -228,7 +228,7 @@ export function decorateHouse(scene: THREE.Object3D, upper: THREE.Object3D, tabl
   add(curtains('#d9b7c4'), 0.14, FLOOR_H, 3.5, Math.PI / 2)
   // 墙上的画
   // （只挂在北墙、西墙这两面外墙上：屋里的隔墙在家里视角会压低，挂上去会悬空）
-  add(painting(0, 0.5, 0.62), 1.0, 1.65, -2.87, 0) // 厨房灶台上方的挂历
+  add(painting(0, 0.5, 0.62), 2.5, 1.65, -2.87, 0) // 厨房两扇窗中间的挂历
   add(painting(1, 0.7, 0.5), 0.13, 1.55, 5.0, Math.PI / 2) // 爸妈屋里
   add(painting(2, 0.8, 0.55), 0.13, FLOOR_H + 1.5, 2.2, Math.PI / 2) // 女主床头
   add(painting(0, 0.6, 0.45), 2.6, FLOOR_H + 1.6, -2.87, 0) // 客房二
@@ -443,11 +443,11 @@ export class StockView {
     let s = sacks
     let p = packs
     let c = cans
-    while (s + p + c > 0 && want.length < this.slots.length) {
-      if (s > 0) { want.push('s'); s-- }
-      if (p > 0) { want.push('p'); p-- }
-      if (c > 0 && want.length % 3 === 0) { want.push('c'); c-- }
-      else if (c > 0 && s === 0 && p === 0) { want.push('c'); c-- }
+    const room = () => want.length < this.slots.length
+    while (s + p + c > 0 && room()) {
+      if (s > 0 && room()) { want.push('s'); s-- }
+      if (p > 0 && room()) { want.push('p'); p-- }
+      if (c > 0 && room() && (want.length % 3 === 0 || (s === 0 && p === 0))) { want.push('c'); c-- }
     }
     const n = { s: 0, p: 0, c: 0 }
     want.forEach((kind, i) => {

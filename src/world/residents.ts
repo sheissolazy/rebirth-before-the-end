@@ -1,7 +1,7 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -320,6 +320,10 @@ export class Household {
   /** 在外面的几拨人 */
   trips: Trip[] = []
   private tripSeq = 0
+  /** 新的一趟的编号（读档恢复的也要从这里拿，不然会跟后来出门的重号） */
+  nextTripId(): number {
+    return ++this.tripSeq
+  }
   /** 第一拨在外面的人（老代码和测试用） */
   get trip(): Trip | null {
     return this.trips[0] ?? null
@@ -1062,7 +1066,8 @@ export class Household {
     const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy', 'greet', 'modvan', 'hang']
     let shouted = false
     for (const a of this.actors) {
-      if (this.isOut(a) || a.dead || a.floor !== 0 || a.settling || inRect(HOUSE, a.pos.x, a.pos.z)) continue
+      // 檐廊上面有阳台挡着，也算屋檐下
+      if (this.isOut(a) || a.dead || a.floor !== 0 || a.settling || inRect(HOUSE, a.pos.x, a.pos.z) || inRect(PORCH, a.pos.x, a.pos.z)) continue
       if (!inRect(YARD, a.pos.x, a.pos.z)) continue
       if (a.task && (a.task.manual || !outdoor.includes(a.task.kind))) continue
       if (!a.task && a.path.length) continue
@@ -1070,7 +1075,7 @@ export class Household {
       a.task = null
       // 先走到屋檐下（大门里面一点），之后自己再想干什么（下雨天不会再去院子）；坐着的先从起身的位置走
       this.assign(a, { kind: 'idle', spot: null, phase: 'use', hours: 0.15, manual: false })
-      const p = this.routeFor(a, { x: 3.5 + (shouted ? 0.6 : 0), z: 5.2, floor: 0 })
+      const p = this.routeFor(a, { x: FRONT_DOOR.x - 0.4 + (shouted ? 0.8 : 0), z: FRONT_DOOR.z - 0.8, floor: 0 })
       if (p) a.setPath(p)
       if (!shouted) { a.line = { text: t_('world.say.rain'), hours: 0.2 }; shouted = true }
     }
@@ -1255,6 +1260,8 @@ export class Household {
   tripCheck(id: string, van = false): ReturnType<typeof canGo> | 'busy' | 'cores' | 'fuel' {
     // 有人在外面不耽误别人出门；只有打丧尸的时候不行
     if (this.siege && !this.siege.done) return 'busy'
+    // 上班只有一份工：一次只能去一个人
+    if (id === 'office' && this.trips.some((t) => t.def.id === 'office')) return 'busy'
     if (van && !this.vanReady(id)) return 'fuel'
     const ok = canGo(TRIPS.find((t) => t.id === id)!, this.clock.day < PROLOGUE_DAYS, this.money, this.clock.hour, van)
     if (ok === 'ok' && id === 'armygate' && this.clock.day >= PROLOGUE_DAYS && this.cores < 1) return 'cores'
@@ -1360,7 +1367,7 @@ export class Household {
       this.cancel(a)
       a.setPath(route(this.navs, a.pos, van ? { ...VAN_DOORS[k % VAN_DOORS.length], floor: 0 } : EXIT) ?? [])
     })
-    this.trips.push({ id: ++this.tripSeq, def, members, phase: 'out', back: this.absHour + tripHours(def, van), van })
+    this.trips.push({ id: this.nextTripId(), def, members, phase: 'out', back: this.absHour + tripHours(def, van), van })
     this.note('world.log.tripOut', { who: members.map((m) => m.name).join('、'), where: placeName(id) })
     return true
   }
@@ -1446,7 +1453,9 @@ export class Household {
 
   /** "只能买一次"的东西家里已经有了 */
   owns(it: ShopItem): boolean {
-    return (!!it.give.crossbow && this.crossbow) || (!!it.give.helmet && this.helmet)
+    // 别的一拨人已经买了、还在路上带回来的，也算有了
+    const coming = (k: 'crossbow' | 'helmet') => this.trips.some((t) => !!t.cargo?.[k])
+    return (!!it.give.crossbow && (this.crossbow || coming('crossbow'))) || (!!it.give.helmet && (this.helmet || coming('helmet')))
   }
 
   /** 买回来的东西入库 */

@@ -654,7 +654,7 @@ export class World {
       // 大橘：不挡开场，后台加载好了再放到客厅地毯上
       void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/cat_toon.glb`).then((g) => {
         if (this.disposed) return
-        this.cat = new Cat(g.scene, { x: 1.3, z: 4.45, floor: 0 })
+        this.cat = new Cat(g.scene, { x: 7.3, z: 3.8, floor: 0 })
         this.catHeart.scale.setScalar(0.32)
         this.catHeart.position.y = 0.62
         this.catHeart.renderOrder = 11
@@ -1028,11 +1028,18 @@ export class World {
     const floorGroup = (f: Floor) => (f === 0 ? this.scene : this.floor2)
     // 地板
     const hole = (x: number, z: number) => x > STAIR_HOLE.x0 && x < STAIR_HOLE.x1 && z > STAIR_HOLE.z0 && z < STAIR_HOLE.z1
+    // 地砖：一层一个实例化网格（两百多块砖一块一次绘制太费）
+    const tiles0: [number, number][] = []
+    const tiles1: [number, number][] = []
     for (let i = HOUSE.x0; i < HOUSE.x1; i++)
       for (let j = HOUSE.z0; j < HOUSE.z1; j++) {
-        this.scene.add(place('floor_1x1', i + 0.5, 0, j + 0.5, 0))
-        if (!hole(i + 0.5, j + 0.5)) this.floor2.add(place('floor_1x1', i + 0.5, FLOOR_H, j + 0.5, 0))
+        tiles0.push([i + 0.5, j + 0.5])
+        if (!hole(i + 0.5, j + 0.5)) tiles1.push([i + 0.5, j + 0.5])
       }
+    for (let i = PORCH.x0; i < PORCH.x1; i++)
+      for (let j = PORCH.z0; j < PORCH.z1; j++) { tiles0.push([i + 0.5, j + 0.5]); tiles1.push([i + 0.5, j + 0.5]) }
+    this.scene.add(...this.tileFloor(kit, tiles0, 0))
+    this.floor2.add(...this.tileFloor(kit, tiles1, FLOOR_H))
     const w = HOUSE.x1 - HOUSE.x0
     const d = HOUSE.z1 - HOUSE.z0
     // 二楼楼板（楼梯那一块留空）
@@ -1083,11 +1090,6 @@ export class World {
       this.scene.add(f)
     }
     // 檐廊：地砖、四根柱子；二楼阳台：楼板、地砖、栏杆（柱子和栏杆在家里视角下跟着矮墙压低）
-    for (let i = PORCH.x0; i < PORCH.x1; i++)
-      for (let j = PORCH.z0; j < PORCH.z1; j++) {
-        this.scene.add(place('floor_1x1', i + 0.5, 0, j + 0.5, 0))
-        this.floor2.add(place('floor_1x1', i + 0.5, FLOOR_H, j + 0.5, 0))
-      }
     slab(PORCH.x0, PORCH.z0, PORCH.x1, PORCH.z1)
     for (const x of [PORCH.x0 + 0.15, (PORCH.x0 + PORCH.x1) / 2 - 2, (PORCH.x0 + PORCH.x1) / 2 + 2, PORCH.x1 - 0.15]) {
       const col = box(0.24, FLOOR_H - 0.3, 0.24, COLORS.wall, [x, 0, PORCH.z1 - 0.15])
@@ -1113,6 +1115,28 @@ export class World {
     this.roof = root
     this.roofMats = mats
     this.scene.add(this.floor2, root)
+  }
+
+  /** 一层的地砖：把 floor_1x1 组件里的每个网格做成一个实例化网格，摆到每一格上 */
+  private tileFloor(kit: Map<string, THREE.Object3D>, cells: [number, number][], y: number): THREE.InstancedMesh[] {
+    const src = kit.get('floor_1x1')
+    if (!src) return []
+    src.updateMatrixWorld(true)
+    const inv = new THREE.Matrix4().copy(src.matrixWorld).invert()
+    const out: THREE.InstancedMesh[] = []
+    src.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      const local = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)
+      const inst = new THREE.InstancedMesh(m.geometry, m.material, cells.length)
+      const at = new THREE.Matrix4()
+      cells.forEach(([x, z], k) => inst.setMatrixAt(k, at.makeTranslation(x, y, z).multiply(local)))
+      inst.computeBoundingSphere()
+      inst.receiveShadow = true
+      inst.name = m.name
+      out.push(inst)
+    })
+    return out
   }
 
   private furniture(p: Placement, kit: Map<string, THREE.Object3D>,
@@ -1272,9 +1296,9 @@ export class World {
   }
 
   private spawnActors(): void {
-    this.heroine = new Actor('林知夏', '#d9534f', '#2b1d16', 1, { x: 3.2, z: 4.4 }, { hunger: 72, thirst: 66, energy: 92, mood: 64 })
-    const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
-    const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
+    this.heroine = new Actor('林知夏', '#d9534f', '#2b1d16', 1, { x: 6.5, z: 4.4 }, { hunger: 72, thirst: 66, energy: 92, mood: 64 })
+    const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 5.3, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
+    const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 7.0, z: 1.5 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
     this.heroine.weapon = 'shotgun'
     this.heroine.model = 'heroine'
     mom.weapon = 'pin'
@@ -2431,9 +2455,10 @@ export class World {
     const siege = this.life.siege
     const layer = siege && !siege.done ? siege.current : null
     if (!siege || !layer || this.selected.away) return false
+    // 守位可能在不同楼层（铁门那一层拿枪的在二楼阳台）：每个守位按它自己那层的地面算
     const p = new THREE.Vector3()
-    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -layer.posts[0].floor * FLOOR_H), p)) return false
-    const k = layer.posts.findIndex((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.6)
+    const k = layer.posts.findIndex((q) => this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -q.floor * FLOOR_H), p) !== null
+      && Math.hypot(q.x - p.x, q.z - p.z) < 0.6)
     if (k < 0 || siege.post(this.selected) === k) return false
     siege.assign(this.selected, k)
     this.flashMarker(layer.posts[k].x, layer.posts[k].floor * FLOOR_H, layer.posts[k].z)
@@ -2489,8 +2514,6 @@ export class World {
   onMap: (() => void) | null = null
   /** 有人到了店里：弹出交易界面 */
   onShop: ((v: ShopView) => void) | null = null
-  /** 店里挑东西时游戏停着，结完账恢复原来的速度 */
-  private shopSpeed = 1
   /** 交易界面开着的是哪一趟（读档回来时还在店里的，要重新弹出来） */
   private shopOpenFor = -1
 
@@ -2545,8 +2568,7 @@ export class World {
     const v = this.shopView(t)
     if (!v || !this.onShop) { this.life.checkout(t.id, this.life.defaultCart(t)); return }
     this.shopOpenFor = t.id
-    if (this.life.speed > 0) this.shopSpeed = this.life.speed
-    this.life.speed = 0
+    // 暂停交给界面（跟日记、地图一样：所有面板都关了才恢复原来的速度）
     this.sound.knock()
     this.onShop(v)
     this.pushLifeHud()
@@ -2555,10 +2577,7 @@ export class World {
   /** 交易界面点了结账（或者"不买了"）：成功就恢复时间 */
   checkout(tripId: number, cart: Cart, sell: SellCart = {}): string {
     const r = this.life.checkout(tripId, cart, sell)
-    if (r === 'ok') {
-      this.life.speed = this.shopSpeed || 1
-      this.pushLifeHud()
-    }
+    if (r === 'ok') this.pushLifeHud()
     return r
   }
 
@@ -2567,6 +2586,12 @@ export class World {
     const ok = this.life.startTrip(id, members, van)
     if (ok) this.pushLifeHud()
     return ok
+  }
+
+  /** 最新一条日记的标识（日记本上的红点用） */
+  latestLogKey(): string {
+    const l = this.life.log[this.life.log.length - 1]
+    return l ? `${l.day}-${l.hour}-${l.key}` : ''
   }
 
   diaryLog(): LogEntry[] {

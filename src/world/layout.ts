@@ -76,11 +76,11 @@ function run(floor: Floor, axis: 'x' | 'z', fixed: number, from: number, to: num
 }
 
 // 房间（见 docs 平面图）：
-// 一楼  西：厨房（北，z -3..1.5，后门通江边）/ 爸妈卧室（南）；中：楼梯间（北，z -3..-0.5）/ 堂屋（南，双开大门）；东：储藏室
+// 一楼  西：厨房（北，z -3..1.5，灶台靠北墙）/ 爸妈卧室（南）；中：楼梯间（北，z -3..-0.5）/ 堂屋（南，双开大门）；东：储藏室
 // 二楼  西：客房二（北）/ 林知夏的房间（南）；中：楼梯口（北，z -3..0.5）/ 小客厅（南，门通阳台）；东：客房一
 export const WALLS: WallSeg[] = [
   // 一楼外墙
-  ...run(0, 'x', -3, 0, 12, false, { 1: 'door', 3: 'window', 6: 'window', 10: 'window' }),
+  ...run(0, 'x', -3, 0, 12, false, { 1: 'window', 3: 'window', 6: 'window', 10: 'window' }),
   ...run(0, 'z', 0, -3, 6, false, { [-2]: 'window', 3: 'window' }),
   ...run(0, 'x', 6, 0, 12, true, { 1: 'window', 2: 'window', 5: 'door', 6: 'door', 9: 'window', 10: 'window' }),
   ...run(0, 'z', 12, -3, 6, true, { [-2]: 'window', 2: 'window' }),

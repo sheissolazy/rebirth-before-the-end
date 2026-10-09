@@ -570,6 +570,47 @@ describe('好几拨人同时出门 + 店里挑东西', () => {
   })
 })
 
+describe('读档以后的出门（审查发现的问题）', () => {
+  it('读档恢复的那一趟和后来出门的不会重号，到店还能结账；存档时正走去店里的，读档后照样到店', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 8 }
+    life.speed = 3
+    const [, mom, dad] = life.actors
+    life.onShop = () => {}
+    expect(life.startTrip('supermarket', [mom])).toBe(true)
+    const snap = JSON.parse(JSON.stringify(snapshot(life)))
+    const { life: again } = simulate('paradise', 0)
+    restore(again, snap)
+    expect(again.trips[0].shopAt).toBeDefined()
+    again.onShop = () => {}
+    const dad2 = again.actors.find((a) => a.name === dad.name)!
+    expect(again.startTrip('pharmacy', [dad2])).toBe(true)
+    const ids = again.trips.map((t) => t.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const dt = 0.1
+    for (let i = 0; i < 20000 && !again.trips.every((t) => t.phase === 'shop'); i++) {
+      again.tick(dt, (a) => again.isHomeBody(a))
+      for (const a of again.actors) { a.follow(dt * again.speed, 2.2); a.updateSettle(dt * again.speed) }
+    }
+    for (const t of again.trips) expect(again.checkout(t.id, {})).toBe('ok')
+  })
+
+  it('一拨人买了弩还在路上，另一拨不能再买一把；上班一次只能去一个人', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 8 }
+    const [hero, mom] = life.actors
+    life.onShop = () => {}
+    life.startTrip('hardware', [mom])
+    const t = life.trips[0]
+    t.phase = 'shop'
+    expect(life.checkout(t.id, { crossbow: 1 })).toBe('ok')
+    const bow = { id: 'crossbow', give: { crossbow: true } } as never
+    expect(life.owns(bow)).toBe(true)
+    expect(life.startTrip('office', [hero])).toBe(true)
+    expect(life.tripCheck('office')).toBe('busy')
+  })
+})
+
 describe('卖东西', () => {
   it('末日后去军区：三份吃的换一颗晶核，再拿晶核买子弹；家里没那么多就卖不了', () => {
     const { life } = simulate('paradise', 0)
