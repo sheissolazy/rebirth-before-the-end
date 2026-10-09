@@ -286,6 +286,7 @@ describe('出门', () => {
     life.startTrip('supermarket', [mom, dad], true)
     let greeted = false
     let waved = false
+    let helped = false
     let said = ''
     let back = ''
     const dt = 0.1
@@ -296,11 +297,15 @@ describe('出门', () => {
       for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
       if (hero.task?.kind === 'greet') greeted = true
       if (hero.pose === 'wave') waved = true
+      if (hero.carrying && hero.task?.kind === 'help') helped = true
       if (hero.line) said = hero.line.text
       if (mom.line) back = mom.line.text
     }
     expect(greeted).toBe(true)
     expect(waved).toBe(true)
+    // 挥完手接过一个箱子帮着搬进屋，放下以后手里就空了
+    expect(helped).toBe(true)
+    expect(hero.carrying).toBe(false)
     expect(said).toBeTruthy()
     expect(back).toBe('我们回来啦～')
     expect(life.trip).toBeNull()

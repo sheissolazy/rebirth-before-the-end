@@ -25,7 +25,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help'
 
 interface Task {
   kind: TaskKind
@@ -918,6 +918,8 @@ export class Household {
     for (const a of this.actors) {
       a.calm = calm
       if (a.line && (a.line.hours -= hours) <= 0) a.line = null
+      // 帮忙搬的箱子放下了（或者被别的事打断了）
+      if (a.carrying && a.task?.kind !== 'help' && !this.onTrip(a)) a.carrying = false
       a.chatting = social(a) && this.actors.some((b) => b !== a && social(b) && b.floor === a.floor
         && Math.hypot(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z) < 2.4)
       if (a.chatting) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + hours * 5) }
@@ -1614,6 +1616,7 @@ export class Household {
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
+    if (t.kind === 'help') return 'idle'
     if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
@@ -1725,7 +1728,18 @@ export class Household {
       const n = Math.floor(this.rand() * 3)
       a.line = { text: t_(`world.greet.${prologue ? 'calm' : 'doom'}${n}` as UiKey), hours: 0.22 }
     }
-    if (t.wave !== undefined && t.wave > 0) t.wave = Math.max(0, t.wave - hours)
+    if (t.wave !== undefined && t.wave > 0) {
+      t.wave = Math.max(0, t.wave - hours)
+      // 挥完手：接过一个箱子，帮着一起搬进客厅
+      if (t.wave === 0 && trip?.phase === 'back') {
+        t.hours = 0
+        const k = this.actors.indexOf(a)
+        t.then = () => {
+          a.carrying = true
+          return { kind: 'help', spot: { kind: 'stroll', ...STORE[(k + 2) % STORE.length], floor: 0, face: 0, pose: 'idle' }, phase: 'go', hours: 0.02, manual: false }
+        }
+      }
+    }
     a.pose = t.wave !== undefined && t.wave > 0 ? 'wave' : 'idle'
     if (near) a.face(near.pos.x - a.pos.x, near.pos.z - a.pos.z, 0.05)
   }
