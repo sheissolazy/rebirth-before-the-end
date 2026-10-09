@@ -1212,3 +1212,14 @@ describe('弩', () => {
     expect(b.actors[2].weapon).toBe('crossbow')
   })
 })
+
+describe('弩的传承', () => {
+  it('拿弩的人去世了，弩交给家里别的人', () => {
+    const { life } = simulate('paradise', 0)
+    life.crossbow = true
+    life.equipCrossbow()
+    expect(life.actors[2].weapon).toBe('crossbow')
+    life.die(life.actors[2], 'crisis')
+    expect(life.actors[1].weapon).toBe('crossbow')
+  })
+})

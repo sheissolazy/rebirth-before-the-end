@@ -1350,7 +1350,7 @@ export class World {
     }
     for (const w of this.weapons) w.visible = fighting
     // 弩：挂在拿弩的人手上（打仗时才拿出来），他原来的武器收起来
-    const archer = this.life.crossbow ? this.actors.find((a) => a.weapon === 'crossbow' && a.driver) : undefined
+    const archer = this.life.crossbow ? this.actors.find((a) => a.weapon === 'crossbow' && a.driver && !a.dead) : undefined
     if (archer) {
       if (!this.bow) { this.bow = crossbowMesh(); this.weapons.push(this.bow) }
       if (this.bow.userData.owner !== archer) {

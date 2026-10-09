@@ -976,6 +976,8 @@ export class Household {
     a.lost = true
     a.away = true
     this.note(`world.log.died.${cause}`, { who: a.name })
+    // 弩传给家里别的人
+    if (a.weapon === 'crossbow') this.equipCrossbow()
     for (const b of this.actors) if (!b.dead) b.needs = { ...b.needs, mood: Math.max(0, b.needs.mood - 25) }
   }
 
