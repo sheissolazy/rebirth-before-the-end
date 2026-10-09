@@ -260,6 +260,8 @@ export const PERK_DEFS = [
   { id: 'medkit', cost: 1 },
   { id: 'space', cost: 3 },
   { id: 'jiangye', cost: 2 },
+  // 设计文档：带一件装备到下一世
+  { id: 'bow', cost: 3 },
 ] as const
 export type PerkId = (typeof PERK_DEFS)[number]['id']
 
@@ -316,6 +318,7 @@ export function applyPerks(life: Household): PerkId[] {
     else if (id === 'medkit') life.medkits += 2
     else if (id === 'space') life.spaceCap += 4
     else if (id === 'jiangye') life.affection.jiangye = Math.min(100, (life.affection.jiangye ?? 0) + 20)
+    else if (id === 'bow') { life.crossbow = true; life.equipCrossbow() }
   }
   // 不在这里清掉，等第一次存档成功（见 saveWorld）
   life.perksApplied = have.length > 0

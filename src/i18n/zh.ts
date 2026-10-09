@@ -128,6 +128,7 @@ export const zh = {
   'world.perk.medkit': '两个急救包',
   'world.perk.space': '空间异能多 4 格',
   'world.perk.jiangye': '江野好感 +20',
+  'world.perk.bow': '带上上一世那把弩',
   'world.log.perks': '带着上一世的记忆醒来，这一次准备了：{list}',
   'world.report.died': '{who}没能撑过这一晚',
   'world.log.heroDied': '林知夏倒下了。这一世结束了',
