@@ -1338,6 +1338,10 @@ export class World {
       this.viewFloor = 0
       this.pan.set(0, 0, 0)
     } else {
+      // 女主从外面回来：家里离得最近的人招呼一声
+      const greeter = this.actors.filter((a) => a !== this.heroine && !this.life.isOut(a) && a.pose !== 'sleep')
+        .sort((a, b) => Math.hypot(a.pos.x - this.heroine.pos.x, a.pos.z - this.heroine.pos.z) - Math.hypot(b.pos.x - this.heroine.pos.x, b.pos.z - this.heroine.pos.z))[0]
+      if (greeter && !this.life.onTrip(this.heroine) && !(this.life.siege && !this.life.siege.done)) this.life.say(greeter, 'home')
       // 回到家里时，跟在后面的人也一起进门
       const h = this.heroine.pos
       this.actors.filter((a) => a !== this.heroine && !this.life.isOut(a)

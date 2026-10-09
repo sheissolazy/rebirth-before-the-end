@@ -100,6 +100,27 @@ function siegeNight(count: number, crisis: boolean, ammo = 24) {
   return { life, events, started }
 }
 
+describe('家里人会说话', () => {
+  it('一天里：饭做好了有人喊开饭，晚上躺下有人说晚安，早上起来有人打招呼', () => {
+    const { life } = simulate('paradise', 0)
+    life.speed = 3
+    const said = new Set<string>()
+    const dt = 0.1
+    for (let i = 0; i < (1.2 * DAY_SECONDS) / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) {
+        a.follow(dt * life.speed, 2.2)
+        a.updateSettle(dt * life.speed)
+        if (a.line) said.add(a.line.text)
+      }
+    }
+    const all = [...said].join('|')
+    expect(all).toMatch(/开饭啦|吃饭咯|趁热吃/)
+    expect(all).toMatch(/晚安|早点睡|明天见/)
+    expect(all).toMatch(/早呀|睡得真香|天气不错/)
+  })
+})
+
 describe('丧尸夜', () => {
   it('末日前没有丧尸，平时两三只，月底危机夜一大群', () => {
     expect(Household.nightCount({ day: 1, hour: 21 }).count).toBe(0)

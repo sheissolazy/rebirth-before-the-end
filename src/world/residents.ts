@@ -6,7 +6,7 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
+  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
@@ -1771,6 +1771,8 @@ export class Household {
       if (a.settling) return
       t.phase = 'use'
       a.pose = t.spot?.pose ?? 'idle'
+      // 晚上躺下：说声晚安
+      if (t.kind === 'sleep' && (this.clock.hour >= 20 || this.clock.hour < 2) && this.rand() < 0.6) this.say(a, 'night')
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
@@ -1811,8 +1813,19 @@ export class Household {
     return false
   }
 
+  /** 头顶冒一句话（同一种话：末日前后各有几句，随机挑一句） */
+  say(a: Actor, kind: 'dinner' | 'night' | 'morning' | 'home', hours = 0.22): void {
+    const doom = this.clock.day >= PROLOGUE_DAYS
+    const n = Math.floor(this.rand() * 3)
+    a.line = { text: t_(`world.say.${kind}.${doom ? 'doom' : 'calm'}${n}` as UiKey), hours }
+  }
+
   private finish(a: Actor): void {
     const t = a.task!
+    const others = this.actors.some((b) => b !== a && !this.isOut(b) && !b.dead)
+    // 饭做好了喊一声；早上醒了打个招呼
+    if (t.kind === 'cook' && isMealTime(this.clock.hour) && others) this.say(a, 'dinner')
+    if (t.kind === 'sleep' && this.clock.hour >= 5 && this.clock.hour < 11 && others && this.rand() < 0.7) this.say(a, 'morning')
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
