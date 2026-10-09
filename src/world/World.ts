@@ -4,12 +4,13 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, WALLS, WORLD, YARD,
+  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
 import { decorateHouse, parchmentMap } from './decor'
+import { VanView, buildVan, vanPose } from './van'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
@@ -64,6 +65,7 @@ export interface Hud {
   hour: number
   money: number
   medkits: number
+  fuel: number
   prologue: boolean
   report: NightReport | null
   /** 空间异能里放了多少、最多放多少 */
@@ -159,7 +161,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -209,6 +211,11 @@ export class World {
   private readonly weapons: THREE.Object3D[] = []
   private readonly groanT = new WeakMap<object, number>()
   private nightness = 0
+  /** 家里的旧面包车 */
+  private van = new VanView(buildVan())
+  /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
+  private gateDoors: { pivot: THREE.Object3D; sign: number }[] = []
+  private gateAngle = 0
   private readonly rain = new Rain()
   private readonly glass: THREE.Material[] = []
   private fogBase = 0.013
@@ -355,6 +362,7 @@ export class World {
 
     this.buildGround()
     this.buildStreet()
+    this.scene.add(this.van.parts.root)
     this.spawnActors()
     this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts, this.birds.g)
     // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
@@ -576,12 +584,46 @@ export class World {
       const gates: THREE.Object3D[] = []
       this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
+      this.hingeGate(gates)
       this.setHud({ loading: false, intro: this.introT >= 0 })
       // 丧尸、访客、住进来的人的模型不挡开场：别墅出来以后在后台加载，好了再预热着色器
       if (this.style === 'paradise') void this.siegeView.loadModels().then(() => this.afterExtraModels(), () => this.afterExtraModels())
       else this.afterExtraModels()
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
+    }
+  }
+
+  /** 铁门模型里左右两扇门各套一个门轴，好让它们往街那边推开 */
+  private hingeGate(gates: THREE.Object3D[]): void {
+    this.gateDoors = []
+    for (const g of gates) {
+      // 卡通画风：两块 1 米宽的门板，门轴在外侧（x=3 / x=5）
+      if (g.userData.gate && g.parent) {
+        const left = g.position.x < GATE.x
+        const pivot = new THREE.Group()
+        pivot.position.set(GATE.x + (left ? -1 : 1), 0, g.position.z)
+        g.parent.add(pivot)
+        pivot.attach(g)
+        this.gateDoors.push({ pivot, sign: left ? -1 : 1 })
+        continue
+      }
+      const find = (n: string) => { let f: THREE.Object3D | undefined; g.traverse((o) => { if (o.name === n) f = o }); return f }
+      for (const side of ['left', 'right'] as const) {
+        const door = find(`large_iron_gate_${side}_door`) as THREE.Mesh | undefined
+        if (!door?.parent) continue
+        door.geometry.computeBoundingBox()
+        const bb = door.geometry.boundingBox!
+        const hinge = new THREE.Vector3(side === 'left' ? bb.min.x : bb.max.x, 0, (bb.min.z + bb.max.z) / 2)
+        const pivot = new THREE.Group()
+        pivot.position.copy(door.localToWorld(hinge.clone()))
+        door.parent.worldToLocal(pivot.position)
+        door.parent.add(pivot)
+        pivot.attach(door)
+        if (side === 'right') { const bolt = find('large_iron_gate_bolt'); if (bolt) pivot.attach(bolt) }
+        // 往外（+z，街那边）推开：左扇顺时针、右扇逆时针
+        this.gateDoors.push({ pivot, sign: side === 'left' ? -1 : 1 })
+      }
     }
   }
 
@@ -1291,6 +1333,17 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    const vp = vanPose(this.life.vanMove, this.life.vanAway, this.life.absHour)
+    this.van.update(Math.min(sim, 0.1), vp, this.nightness)
+    // 发动机声：离家越远越小（开出去上了街、开回来刚进街口时听得见）
+    const vanFar = Math.hypot(vp.x - VAN_PARK.x, vp.z - VAN_PARK.z)
+    // 铁门：车要过就全开，家里人走到门口开一半，过去了再关上（打丧尸时不开）
+    const vanAtGate = !!this.life.vanMove && vp.visible && Math.hypot(vp.x - GATE.x, vp.z - GATE.z) < 6.5
+    const walker = !fighting && this.actors.some((a) => !a.away && a.floor === 0 && Math.abs(a.pos.x - GATE.x) < 1.3 && Math.abs(a.pos.z - GATE.z) < 1.5)
+    const gateWant = vanAtGate ? 1.5 : walker ? 1.0 : 0
+    this.gateAngle += (gateWant - this.gateAngle) * Math.min(1, dt * (gateWant > this.gateAngle ? 4 : 2))
+    for (const d of this.gateDoors) d.pivot.rotation.y = d.sign * this.gateAngle
+    this.sound.engine(this.life.vanMove && vp.visible && this.life.speed > 0 ? Math.max(0, 1 - vanFar / 34) : 0, Math.min(1, Math.abs(vp.speed) / 2))
     // 鸟：白天、不下雨时，一群鸟从西边慢慢飞到东边，循环
     const dayCalm = this.nightness < 0.3 && this.life.rain < 0.05
     this.birds.g.visible = dayCalm
@@ -1743,8 +1796,13 @@ export class World {
   onDiary: (() => void) | null = null
   onMap: (() => void) | null = null
 
-  tripCheck(id: string): ReturnType<Household['tripCheck']> {
-    return this.life.tripCheck(id)
+  tripCheck(id: string, van = false): ReturnType<Household['tripCheck']> {
+    return this.life.tripCheck(id, van)
+  }
+
+  /** 地图上"开面包车去"要用：还剩几桶油、车在不在家 */
+  vanInfo(): { fuel: number; home: boolean } {
+    return { fuel: this.life.fuel, home: !this.life.vanAway && !this.life.vanMove }
   }
 
   /** 在家、能出门的人 */
@@ -1752,9 +1810,9 @@ export class World {
     return this.actors.filter((a) => !this.life.isOut(a) && !a.guest).map((a) => ({ name: a.name, health: a.health }))
   }
 
-  startTrip(id: string, names: string[]): boolean {
+  startTrip(id: string, names: string[], van = false): boolean {
     const members = this.actors.filter((a) => names.includes(a.name))
-    const ok = this.life.startTrip(id, members)
+    const ok = this.life.startTrip(id, members, van)
     if (ok) this.pushLifeHud()
     return ok
   }
@@ -1903,6 +1961,7 @@ export class World {
       { key: 'world.goal.medkit', done: l.medkits >= 2 },
       { key: 'world.goal.gate', done: l.gateBonus > 0 },
       { key: 'world.goal.ammo', done: l.ammo.n >= 30 },
+      { key: 'world.goal.fuel', done: l.fuel >= 6 },
       { key: 'world.goal.jiangye', done: l.warnedJiangye },
     ]
   }
@@ -2011,6 +2070,7 @@ export class World {
       hour: c.hour,
       money: this.life.money,
       medkits: this.life.medkits,
+      fuel: this.life.fuel,
       prologue: c.day < PROLOGUE_DAYS,
       report: this.life.report,
       visit: this.visitHud(),

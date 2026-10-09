@@ -168,7 +168,8 @@ describe('出门', () => {
     expect(life.startTrip('supermarket', [hero, mom])).toBe(true)
     expect(life.money).toBe(18000 - 1200)
     const food0 = life.stock.food
-    const sawAway = run(life, 4.5)
+    // 3 小时 + 从街口扛着箱子走回客厅
+    const sawAway = run(life, 5.5)
     expect(sawAway).toBe(true)
     expect(life.trip).toBeNull()
     expect(life.stock.food).toBeGreaterThan(food0 + 5)
@@ -190,12 +191,86 @@ describe('出门', () => {
     expect(life.tripCheck('river')).toBe('ok')
   })
 
+  it('开面包车去超市：上车、车开走、回来倒进车位，烧一桶油，更快、多装一半', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 17 }
+    life.speed = 3
+    const [hero, mom] = life.actors
+    // 走路去天黑前回不来，开车来得及
+    expect(life.tripCheck('supermarket')).toBe('late')
+    expect(life.tripCheck('supermarket', true)).toBe('ok')
+    life.clock = { day: 0, hour: 9 }
+    expect(life.fuel).toBe(3)
+    expect(life.startTrip('supermarket', [hero, mom], true)).toBe(true)
+    expect(life.fuel).toBe(2)
+    expect(life.trip!.back - life.absHour).toBe(2)
+    const food0 = life.stock.food
+    // 走到车门边上车，车开出去
+    let sawOut = false
+    let sawAwayVan = false
+    let sawIn = false
+    const dt = 0.1
+    for (let i = 0; i < (3.5 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      if (life.vanMove?.dir === 'out') sawOut = true
+      if (life.vanAway && hero.away) sawAwayVan = true
+      if (life.vanMove?.dir === 'in') { sawIn = true; expect(hero.away).toBe(true) }
+    }
+    expect(sawOut && sawAwayVan && sawIn).toBe(true)
+    expect(life.trip).toBeNull()
+    expect(life.vanAway).toBe(false)
+    expect(life.vanMove).toBeNull()
+    // 两个人 ×1.5、开车再 ×1.5：5 → 11（在家的爸爸这几个小时也吃了点）
+    expect(life.log.find((l) => l.key === 'world.trip.supermarket')?.vars?.food).toBe(11)
+    expect(life.stock.food).toBeGreaterThan(food0 + 9)
+  })
+
+  it('没油、车不在家、去上班都不能开车；加油站末日前花钱买油，末日后不要钱', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 8 }
+    expect(life.tripCheck('office', true)).toBe('fuel')
+    life.fuel = 0
+    expect(life.tripCheck('supermarket', true)).toBe('fuel')
+    expect(life.tripCheck('gasstation')).toBe('ok')
+    life.speed = 3
+    life.startTrip('gasstation', [life.actors[2]])
+    expect(life.money).toBe(18000 - 600)
+    run(life, 4)
+    expect(life.fuel).toBe(2)
+    expect(life.log.some((l) => l.key === 'world.trip.gasBuy')).toBe(true)
+    life.clock = { day: PROLOGUE_DAYS, hour: 9 }
+    const money = life.money
+    life.startTrip('gasstation', [life.actors[2]], true)
+    expect(life.money).toBe(money)
+    expect(life.fuel).toBe(1)
+  })
+
+  it('开车出去时存档：读档后车也不在家，到点开回来', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 9 }
+    life.speed = 3
+    life.startTrip('pharmacy', [life.actors[2]], true)
+    run(life, 1.1)
+    expect(life.vanAway).toBe(true)
+    const snap = JSON.parse(JSON.stringify(snapshot(life)))
+    const { life: again } = simulate('paradise', 0)
+    restore(again, snap)
+    expect(again.vanAway).toBe(true)
+    expect(again.fuel).toBe(2)
+    again.speed = 3
+    run(again, 3)
+    expect(again.trip).toBeNull()
+    expect(again.vanAway).toBe(false)
+    expect(again.medkits).toBeGreaterThanOrEqual(3)
+  })
+
   it('五金店加固铁门：耐久上限变高', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 1, hour: 8 }
     life.speed = 3
     life.startTrip('hardware', [life.actors[2]])
-    run(life, 5)
+    run(life, 6)
     expect(life.maxOf('gate')).toBe(240)
     expect(life.barriers.gate).toBe(240)
   })
@@ -507,7 +582,7 @@ describe('顾沉 / 军区', () => {
     life.speed = 3
     life.clock = { day: 1, hour: 8 }
     expect(life.startTrip('armygate', [life.actors[0]])).toBe(true)
-    run(life, 4.5)
+    run(life, 5.5)
     expect(life.guchenMet).toBe(true)
     expect(life.affection.guchen).toBe(8)
     life.clock = { day: PROLOGUE_DAYS + 1, hour: 8 }
@@ -516,7 +591,7 @@ describe('顾沉 / 军区', () => {
     life.cores = 6
     const ammo = life.ammo.n
     expect(life.startTrip('armygate', [life.actors[2]])).toBe(true)
-    run(life, 4.5)
+    run(life, 5.5)
     expect(life.cores).toBe(1)
     expect(life.ammo.n).toBe(ammo + 18)
   })

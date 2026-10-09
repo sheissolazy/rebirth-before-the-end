@@ -1,6 +1,6 @@
 // 走路用的格子地图和寻路（纯逻辑，可单测）。
 import {
-  FLOOR_H, FURNITURE, HOUSE, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STAIR_PATH, WALLS, WORLD, fenceSegments,
+  FLOOR_H, FURNITURE, HOUSE, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STAIR_PATH, VAN_PARK, VAN_SIZE, WALLS, WORLD, fenceSegments,
   type Floor, type Placement, type Rect, type StairPoint,
 } from './layout'
 
@@ -168,6 +168,8 @@ export function buildNav(extra: Placement[] = []): NavGrid {
     if (p.kind === 'tree') nav.blockRect(p.x - 0.3, p.z - 0.3, p.x + 0.3, p.z + 0.3)
     else nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
   }
+  // 面包车的车位（车开走了也绕着走，省得车回来时压到人）
+  nav.blockRect(VAN_PARK.x - VAN_SIZE.hl, VAN_PARK.z - VAN_SIZE.hw, VAN_PARK.x + VAN_SIZE.hl, VAN_PARK.z + VAN_SIZE.hw)
   return nav
 }
 

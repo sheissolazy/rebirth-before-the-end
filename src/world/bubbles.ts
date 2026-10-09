@@ -49,6 +49,7 @@ export function thoughtOf(a: Actor, fighting: boolean): string | null {
   if (k === 'repair' && using) return '🔨'
   if (k === 'garden' && using) return '🌱'
   if (k === 'tidy' && using) return '🧹'
+  if (k === 'wash' && using) return '🧽'
   const n = a.needs
   if (n.mood < 18) return '🌧️'
   if (n.thirst < 25) return '🥤'

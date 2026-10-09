@@ -91,7 +91,7 @@ export default function WorldView() {
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
   const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
   const [diaryPeople, setDiaryPeople] = useState<ReturnType<World['diaryPeople']>>([])
-  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[] }>({ checks: {}, members: [] })
+  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; van: { fuel: number; home: boolean } }>({ checks: {}, vanChecks: {}, members: [], van: { fuel: 0, home: true } })
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }
@@ -101,7 +101,14 @@ export default function WorldView() {
   const setMapRef = useRef<(open: boolean) => void>(() => {})
   const setMap = (open: boolean) => {
     const w = world.current
-    if (w && open) setMapData({ checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])), members: w.homeMembers() })
+    if (w && open) {
+      setMapData({
+        checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])),
+        vanChecks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id, true)])),
+        members: w.homeMembers(),
+        van: w.vanInfo(),
+      })
+    }
     setMapState(open)
   }
   useEffect(() => { setMapRef.current = setMap })
@@ -208,7 +215,7 @@ export default function WorldView() {
             🍚💧 {t('world.stock', { food: hud.food.toFixed(1), water: hud.water.toFixed(1) })}
           </div>
           <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
-            🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })}
+            🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })} · ⛽ {t('world.fuel', { n: hud.fuel })}
           </div>
           <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
             💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}
@@ -545,9 +552,9 @@ export default function WorldView() {
       )}
 
       {map && (
-        <MapPanel prologue={hud.prologue} check={(id) => mapData.checks[id] ?? 'busy'}
-          members={mapData.members}
-          onGo={(id, names) => { if (world.current?.startTrip(id, names)) setMap(false) }}
+        <MapPanel prologue={hud.prologue} check={(id, van) => (van ? mapData.vanChecks : mapData.checks)[id] ?? 'busy'}
+          members={mapData.members} van={mapData.van}
+          onGo={(id, names, van) => { if (world.current?.startTrip(id, names, van)) setMap(false) }}
           onClose={() => setMap(false)} />
       )}
 

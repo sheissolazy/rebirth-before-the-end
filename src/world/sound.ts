@@ -368,6 +368,40 @@ export class Sound {
     }
   }
 
+  private eng: { a: OscillatorNode; b: OscillatorNode; lp: BiquadFilterNode; gain: GainNode } | null = null
+
+  /** 每帧：面包车发动机。level 0 = 熄火 / 听不见，1 = 就在院子里；rev 0~1 = 油门 */
+  engine(level: number, rev = 0): void {
+    const ctx = this.ready
+    if (!ctx) return
+    if (!this.eng) {
+      if (level <= 0) return
+      // 两个低频锯齿/方波叠在一起、低通掉高频：老面包车那种突突突
+      const a = ctx.createOscillator()
+      a.type = 'sawtooth'
+      a.frequency.value = 36
+      const b = ctx.createOscillator()
+      b.type = 'square'
+      b.frequency.value = 18.5
+      const lp = ctx.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.value = 240
+      const gain = ctx.createGain()
+      gain.gain.value = 0
+      a.connect(lp)
+      b.connect(lp)
+      lp.connect(gain).connect(this.master!)
+      a.start()
+      b.start()
+      this.eng = { a, b, lp, gain }
+    }
+    const t = ctx.currentTime
+    this.eng.gain.gain.setTargetAtTime(level * 0.07, t, 0.25)
+    this.eng.a.frequency.setTargetAtTime(36 + rev * 34, t, 0.3)
+    this.eng.b.frequency.setTargetAtTime(18.5 + rev * 16, t, 0.3)
+    this.eng.lp.frequency.setTargetAtTime(240 + rev * 260, t, 0.3)
+  }
+
   /** 每帧：环境声。night 0~1；calm = 没在打仗；rain 0~1 */
   ambience(night: number, calm: boolean, rain = 0): void {
     const ctx = this.ready

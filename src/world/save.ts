@@ -39,7 +39,7 @@ export interface WorldSave {
   nightDone: number
   log: LogEntry[]
   actors: ActorSave[]
-  trip: { id: string; members: string[]; back: number } | null
+  trip: { id: string; members: string[]; back: number; van?: boolean } | null
   seen?: Record<string, number>
   helpedNeighbor?: boolean
   raidTonight?: boolean
@@ -48,6 +48,7 @@ export interface WorldSave {
   space?: Stock
   spaceCap?: number
   molotovs?: number
+  fuel?: number
   affection?: Record<string, number>
   warnedJiangye?: boolean
   heroAxe?: boolean
@@ -96,7 +97,7 @@ export function snapshot(life: Household): WorldSave {
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood,
     })),
-    trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back } : null,
+    trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back, van: life.trip.van } : null,
     seen: { ...life.seen },
     helpedNeighbor: life.helpedNeighbor,
     raidTonight: life.raidTonight,
@@ -105,6 +106,7 @@ export function snapshot(life: Household): WorldSave {
     space: { ...life.space },
     spaceCap: life.spaceCap,
     molotovs: life.molotovs,
+    fuel: life.fuel,
     affection: { ...life.affection },
     warnedJiangye: life.warnedJiangye,
     heroAxe: life.actors[0]?.sidearm === 'axe',
@@ -152,6 +154,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.space = { ...(s.space ?? { food: 0, water: 0 }) }
   life.spaceCap = s.spaceCap ?? 6
   life.molotovs = s.molotovs ?? 2
+  life.fuel = s.fuel ?? 3
   life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, ...(s.affection ?? {}) }
   life.xielinNotes = s.xielinNotes ?? 0
   if (s.garden) life.garden = { ...s.garden }
@@ -204,7 +207,9 @@ export function restore(life: Household, s: WorldSave): void {
     const members = life.actors.filter((a) => s.trip!.members.includes(a.name))
     if (def && members.length) {
       for (const m of members) m.away = true
-      life.trip = { def, members, phase: 'away', back: s.trip.back }
+      life.trip = { def, members, phase: 'away', back: s.trip.back, van: s.trip.van }
+      // 开车出去的：车也不在家（回来时从街口开进来）
+      life.vanAway = !!s.trip.van
     }
   }
   // 弩：等每个人的生死都恢复好了再交到手上（不然会交给已经去世的爸爸）

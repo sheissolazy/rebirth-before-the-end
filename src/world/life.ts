@@ -114,6 +114,8 @@ export function chooseWant(n: Needs, c: Clock, stock: Stock, roll: number): Want
   }
   if (n.thirst < 40 && water) return 'drink'
   if (food && (n.hunger < 40 || (isMealTime(c.hour) && n.hunger < 85))) return 'eat'
+  // 饭点刚过、又没赶上那顿的人：补吃一口，别饿着肚子干活
+  if (food && n.hunger < 55 && isMealTime(c.hour - 1)) return 'eat'
   if (n.mood < 55) return roll < 0.5 ? 'relax' : 'stroll'
   if (roll < 0.25) return 'stroll'
   if (roll < 0.45) return 'relax'

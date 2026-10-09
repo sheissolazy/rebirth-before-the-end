@@ -40,6 +40,18 @@ export const STREET: Rect = { x0: -24, z0: 15, x1: 32, z1: 21 }
 export const WORLD: Rect = { x0: -24, z0: -8, x1: 32, z1: 30 }
 export const HOUSE_CENTER = { x: 4, z: 3 }
 
+/** 家里那辆旧面包车停在院子西南角（车头朝东、朝着铁门那边），rot 是 rotation.y */
+export const VAN_PARK = { x: 0.3, z: 11.9, rot: Math.PI / 2 }
+/** 车挡住的地方（半长、半宽） */
+export const VAN_SIZE = { hl: 1.98, hw: 0.82 }
+/** 上下车站的地方：车北边（左手边）的车门外 */
+export const VAN_DOORS = [{ x: 1.35, z: 10.65 }, { x: 0.35, z: 10.65 }, { x: -0.6, z: 10.65 }, { x: 2.3, z: 10.4 }]
+/** 车正在开出去 / 开回来：从哪个游戏时刻（day*24+hour）开始 */
+export interface VanMove { dir: 'out' | 'in'; t0: number }
+/** 开出去 / 开回来各用多少游戏小时（画面和 Household 用同一个数，快进、读档都对得上） */
+export const VAN_OUT_H = 0.5
+export const VAN_IN_H = 0.8
+
 function run(floor: Floor, axis: 'x' | 'z', fixed: number, from: number, to: number,
   near: boolean, special: Record<number, WallKind> = {}): WallSeg[] {
   const segs: WallSeg[] = []
