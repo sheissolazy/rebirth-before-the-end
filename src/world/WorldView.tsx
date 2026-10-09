@@ -326,7 +326,16 @@ export default function WorldView() {
         </div>
       </details>
 
-      {hud.search && !hud.siege && (
+      {(hud.fishing.near || hud.fishing.active) && !hud.siege && (
+        <div className="absolute bottom-44 left-1/2 -translate-x-1/2">
+          <button onClick={() => world.current?.searchHere()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold shadow-lg ${hud.fishing.active ? 'bg-sky-700 text-white' : 'bg-sky-400 text-zinc-900'}`}>
+            {t(hud.fishing.active ? 'world.fish.doing' : 'world.fish.go', { n: hud.fishing.caught })}
+          </button>
+        </div>
+      )}
+
+      {hud.search && !hud.siege && !hud.fishing.near && (
         <div className="absolute bottom-44 left-1/2 -translate-x-1/2">
           {hud.search.state === 'doing' ? (
             <div className="w-56 rounded-full bg-zinc-900/80 px-4 py-2 text-center text-sm text-white shadow">

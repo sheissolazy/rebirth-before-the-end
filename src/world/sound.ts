@@ -272,6 +272,15 @@ export class Sound {
     lfo.stop(t + 4.6)
   }
 
+  /** 水花 */
+  splash(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    this.noiseBurst(t, 'bandpass', 1400, 0.8, 0.3, 0.35, 500)
+    this.tone(t + 0.02, 'sine', 900, 400, 0.05, 0.15)
+  }
+
   /** 一层防线倒了 */
   crash(): void {
     const ctx = this.ready

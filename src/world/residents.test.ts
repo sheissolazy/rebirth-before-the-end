@@ -585,3 +585,18 @@ describe('江野来帮忙守夜', () => {
     expect(life.actors.some((a) => a.name === '江野')).toBe(false)
   })
 })
+
+describe('钓鱼', () => {
+  it('在江边钓一会儿能钓到鱼（每条半份吃的）；一动就收竿', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 6 }
+    const food = life.stock.food
+    expect(life.startFishing()).toBe(true)
+    expect(life.actors[0].pose).toBe('fish')
+    for (let i = 0; i < 1200; i++) life.tick(0.05, () => false)
+    expect(life.fishCaught).toBeGreaterThan(0)
+    expect(life.stock.food).toBeGreaterThan(food - 1)
+    life.stopFishing()
+    expect(life.fishing).toBeNull()
+  })
+})

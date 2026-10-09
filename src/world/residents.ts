@@ -18,7 +18,7 @@ import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { VISITORS, Visitor, type VisitorCtx, type VisitorDef } from './visitors'
-import { SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
+import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { lt, t, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
@@ -278,6 +278,9 @@ export class Household {
   search: { spot: ScavengeSpot; left: number } | null = null
   /** 每个地方哪天搜过 */
   searched: Record<string, number> = {}
+  /** 女主在江边钓鱼：还要等多久下一条咬钩 */
+  fishing: { left: number } | null = null
+  fishCaught = 0
   spaceCap = 6
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
@@ -321,6 +324,7 @@ export class Household {
     this.rainTick(hours)
     this.gardenGrow(hours)
     this.searchTick(hours)
+    this.fishingTick(hours)
     this.chatTick(hours)
     this.visitorTick()
     for (const a of this.actors) {
@@ -442,6 +446,52 @@ export class Household {
     const night = isNight(this.clock.hour)
     if (this.rand() < s.spot.danger * (night ? 2 : 1)) this.ambush(s.spot)
   }
+
+  /** 开始钓鱼（要站在江边钓鱼点附近） */
+  startFishing(): boolean {
+    if (this.fishing || this.search || (this.siege && !this.siege.done)) return false
+    const hero = this.actors[0]
+    hero.path = []
+    hero.pose = 'fish'
+    hero.root.rotation.y = THREE.MathUtils.degToRad(FISHING.face)
+    this.fishing = { left: this.biteWait() }
+    return true
+  }
+
+  stopFishing(): void {
+    if (!this.fishing) return
+    this.fishing = null
+    this.actors[0].pose = 'idle'
+  }
+
+  /** 等多久才咬钩（游戏小时）；清早和傍晚鱼最欢 */
+  private biteWait(): number {
+    const h = this.clock.hour
+    const good = (h > 5 && h < 8) || (h > 17 && h < 20)
+    return (good ? 0.15 : 0.3) + this.rand() * (good ? 0.25 : 0.5)
+  }
+
+  /** 每条鱼算半份吃的；末日后夜里钓鱼，水边可能爬上来丧尸 */
+  private fishingTick(hours: number): void {
+    const f = this.fishing
+    if (!f) return
+    f.left -= hours
+    if (f.left > 0) return
+    f.left = this.biteWait()
+    if (this.rand() < 0.65) {
+      this.stock = { ...this.stock, food: this.stock.food + 0.5 }
+      this.fishCaught++
+      this.onFish?.(true)
+      if (this.fishCaught === 1 || this.fishCaught % 4 === 0) this.note('world.log.fish', { n: this.fishCaught })
+    } else this.onFish?.(false)
+    if (this.clock.day >= PROLOGUE_DAYS && isNight(this.clock.hour) && this.rand() < 0.2) {
+      this.stopFishing()
+      this.ambush({ id: 'river', kind: 'barrel', at: FISHING.at, hours: 0, danger: 1 })
+    }
+  }
+
+  /** World 提供：钓到/跑了（画面上浮漂一沉、溅水花） */
+  onFish: ((caught: boolean) => void) | null = null
 
   /** 街上遇袭：一两只丧尸从附近冒出来扑向女主和跟着的人 */
   private ambush(spot: ScavengeSpot): void {

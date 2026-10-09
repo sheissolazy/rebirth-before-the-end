@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export type PoseState = 'idle' | 'walk' | 'sit' | 'sleep' | 'work'
-  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink'
+  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink' | 'fish'
 
 const SIDE = new THREE.Vector3(1, 0, 0)
 const FWD = new THREE.Vector3(0, 0, 1)
@@ -169,6 +169,15 @@ export class PoseDriver {
       this.rotMany('Spine', [[SIDE, 0.12 - lift * 0.05]])
       this.rot('Head', SIDE, 0.12 - lift * 0.1)
       this.model.position.y = -0.42
+    } else if (state === 'fish') {
+      // 钓鱼：两手往前握着竿，偶尔轻轻抖一下
+      const twitch = Math.sin(this.t * 0.7) > 0.95 ? Math.sin(this.t * 9) * 0.06 : 0
+      this.rot('RightArm', SIDE, -0.75 + twitch, rightDown)
+      this.rot('RightForeArm', SIDE, -0.55)
+      this.rot('LeftArm', SIDE, -0.95, leftDown)
+      this.rot('LeftForeArm', SIDE, -0.45)
+      this.rot('Spine', SIDE, 0.08)
+      this.rot('Head', SIDE, 0.15)
     } else if (state === 'drink') {
       // 站着喝水/吃两口：右手送到嘴边，头微微后仰
       const lift = Math.max(0, Math.sin(this.t * 1.3)) ** 2

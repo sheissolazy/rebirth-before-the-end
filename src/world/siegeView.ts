@@ -265,6 +265,29 @@ export class SiegeView {
     })
   }
 
+  /** 水花（钓鱼时鱼咬钩） */
+  splash(at: { x: number; y: number; z: number }): void {
+    const n = 18
+    const pos = new Float32Array(n * 3)
+    const vel: THREE.Vector3[] = []
+    for (let k = 0; k < n; k++) {
+      pos.set([at.x, at.y, at.z], k * 3)
+      vel.push(new THREE.Vector3((Math.random() - 0.5) * 1.6, 1 + Math.random() * 1.8, (Math.random() - 0.5) * 1.6))
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const mat = new THREE.PointsMaterial({ color: '#e6f4ff', size: 0.07, transparent: true })
+    this.add(new THREE.Points(geo, mat), 0.6, (k, dt) => {
+      const p = geo.attributes.position as THREE.BufferAttribute
+      for (let i = 0; i < n; i++) {
+        vel[i].y -= 7 * dt
+        p.setXYZ(i, p.getX(i) + vel[i].x * dt, Math.max(at.y, p.getY(i) + vel[i].y * dt), p.getZ(i) + vel[i].z * dt)
+      }
+      p.needsUpdate = true
+      mat.opacity = 1 - k
+    })
+  }
+
   /** 打死丧尸掉一颗晶核：发着光往上飘，然后飞走 */
   private core(at: Pt): void {
     const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), new THREE.MeshBasicMaterial({ color: '#7ff3ff', transparent: true }))

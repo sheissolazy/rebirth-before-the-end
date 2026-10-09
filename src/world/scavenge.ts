@@ -46,3 +46,10 @@ export function nearestSpot(p: Pt): ScavengeSpot | null {
   }
   return best
 }
+
+/** 屋后江边的钓鱼点（从铁门出去绕过院子西边的围栏就到） */
+export const FISHING = { at: { x: 4, z: -7.6 } as Pt, face: 180 }
+
+export function nearFishing(p: Pt): boolean {
+  return Math.hypot(p.x - FISHING.at.x, p.z - FISHING.at.z) < 2.2
+}

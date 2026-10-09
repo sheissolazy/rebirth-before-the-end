@@ -26,7 +26,7 @@ import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
-import { SCAVENGE, nearestSpot } from './scavenge'
+import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { VISITORS, Visitor } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
@@ -70,6 +70,8 @@ export interface Hud {
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
   garden: { built: boolean; growth: number }
+  /** 江边钓鱼：在钓吗、站在钓鱼点旁边吗、今天钓了几条 */
+  fishing: { active: boolean; near: boolean; caught: number }
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 有人在门口等回话 */
@@ -89,14 +91,14 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -151,6 +153,13 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 钓鱼竿、鱼线、浮漂 */
+  private readonly rod = new THREE.Group()
+  private readonly rodTip = new THREE.Object3D()
+  private readonly fishLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+    new THREE.LineBasicMaterial({ color: '#f4f4f4', transparent: true, opacity: 0.8 }))
+  private readonly bobber = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: '#e0412f', roughness: 0.5 }))
+  private bite = 0
   /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
@@ -219,6 +228,25 @@ export class World {
     this.buildStreet()
     this.spawnActors()
     this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target)
+    // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.016, 2.0, 6), new THREE.MeshStandardMaterial({ color: '#4b3a2a', roughness: 0.6 }))
+    pole.position.y = 1.0
+    this.rodTip.position.y = 2.0
+    this.rod.add(pole, this.rodTip)
+    this.rod.position.set(0.12, 0.95, 0.3)
+    this.rod.rotation.x = 0.95
+    this.rod.visible = false
+    this.heroine.root.add(this.rod)
+    this.fishLine.visible = false
+    this.bobber.visible = false
+    this.fishLine.frustumCulled = false
+    this.scene.add(this.fishLine, this.bobber)
+    this.life.onFish = (caught) => {
+      this.bite = 0.6
+      this.siegeView.splash(this.bobber.position)
+      this.sound.splash()
+      if (caught) this.toast('world.toast.fish', 1.5)
+    }
     this.buildGarden()
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
@@ -872,6 +900,22 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    // 钓鱼：竿、线、浮漂（咬钩时浮漂往下一沉）
+    const fishing = !!this.life.fishing
+    this.rod.visible = fishing
+    this.fishLine.visible = fishing
+    this.bobber.visible = fishing
+    if (fishing) {
+      const hr = this.heroine.root
+      const f = new THREE.Vector3(Math.sin(hr.rotation.y), 0, Math.cos(hr.rotation.y))
+      this.bite = Math.max(0, this.bite - dt)
+      this.bobber.position.set(hr.position.x + f.x * 3.4, -0.12 + Math.sin(this.elapsed * 2.2) * 0.015 - (this.bite > 0 ? 0.08 : 0), hr.position.z + f.z * 3.4)
+      const tip = this.rodTip.getWorldPosition(new THREE.Vector3())
+      const pts = this.fishLine.geometry.attributes.position as THREE.BufferAttribute
+      pts.setXYZ(0, tip.x, tip.y, tip.z)
+      pts.setXYZ(1, this.bobber.position.x, this.bobber.position.y + 0.04, this.bobber.position.z)
+      pts.needsUpdate = true
+    }
     // 手电筒：夜里在屋外，照向女主前方
     const hp = this.heroine.root.position
     const fwd = new THREE.Vector3(Math.sin(this.heroine.root.rotation.y), 0, Math.cos(this.heroine.root.rotation.y))
@@ -1014,6 +1058,7 @@ export class World {
     const step = WALK_SPEED * 1.15 * dt
     const a = this.heroine
     this.life.cancelSearch()
+    this.life.stopFishing()
     // 坐着/躺着/正在干活时按方向键：先站起来
     if (a.task || a.anchor || a.path.length) this.life.cancel(a)
     a.hold = 0.6
@@ -1146,7 +1191,7 @@ export class World {
     const p = new THREE.Vector3()
     if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -floor * FLOOR_H), p)) return
     const who = this.mode === 'home' ? this.selected : this.heroine
-    if (who === this.heroine) this.life.cancelSearch()
+    if (who === this.heroine) { this.life.cancelSearch(); this.life.stopFishing() }
     const path = this.life.commandWalk(who, { x: p.x, z: p.z, floor })
     if (!path) return
     const end = path[path.length - 1] ?? { ...who.pos, y: who.root.position.y }
@@ -1306,8 +1351,18 @@ export class World {
     ]
   }
 
-  /** 屋外按 E 或点按钮：搜身边这个地方 */
+  /** 屋外按 E 或点按钮：江边就钓鱼，别处搜身边这个地方 */
   searchHere(): void {
+    if (this.mode === 'outside' && nearFishing(this.heroine.pos)) {
+      if (this.life.fishing) this.life.stopFishing()
+      else {
+        // 站到钓鱼点上，面朝江
+        this.heroine.root.position.set(FISHING.at.x, 0, FISHING.at.z)
+        this.life.startFishing()
+      }
+      this.pushLifeHud()
+      return
+    }
     const spot = nearestSpot(this.heroine.pos)
     if (spot && this.mode === 'outside') this.life.startSearch(spot)
     this.pushLifeHud()
@@ -1380,6 +1435,7 @@ export class World {
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
+      fishing: { active: !!this.life.fishing, near: this.mode === 'outside' && nearFishing(this.heroine.pos), caught: this.life.fishCaught },
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),
