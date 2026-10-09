@@ -110,6 +110,8 @@ export const zh = {
   'world.over.life': '第 {n} 世',
   'world.doom.title': '末日 · 第一天',
   'world.doom.sub': '收音机里的新闻突然断了。远处，防空警报响了起来。',
+  'world.log.reborn': '林知夏猛地睁开眼——是外婆老宅的天花板。窗外有鸟叫。她回来了，回到末日前四天',
+  'world.log.rebornAgain': '又一次睁开眼，还是外婆老宅的天花板。第 {n} 次了。这一次，她记得更多',
   'world.log.doomday': '凌晨，收音机里的新闻突然断了，远处响起了防空警报。末日来了——和前世一模一样',
   'world.over.title': '你又死了一次',
   'world.over.cause.starve': '饿得太久，再也站不起来了。',

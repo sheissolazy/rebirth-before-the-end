@@ -418,6 +418,8 @@ export class World {
     // 没有存档 = 全新开局：先放一段片头
     if (!loadWorld(this.life)) {
       this.introT = 0
+      // 日记第一条：重生醒来的那一刻
+      this.life.logNote(currentLife() > 1 ? 'world.log.rebornAgain' : 'world.log.reborn', { n: currentLife() })
       // 困难模式是跨存档的设置
       this.life.hard = hardPref()
       this.applyHardAmmo()
