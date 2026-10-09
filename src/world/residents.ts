@@ -55,6 +55,8 @@ export class Actor extends Walker {
   carrying = false
   /** 心情低于抑郁线累计了多少游戏小时 */
   lowMood = 0
+  /** 正和家人一起歇着/吃饭，聊着天 */
+  chatting = false
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
   runaway: { back: number } | null = null
   lost = false
@@ -249,6 +251,7 @@ export class Household {
     this.tripTick()
     this.runawayTick()
     this.rainTick(hours)
+    this.chatTick(hours)
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -265,6 +268,18 @@ export class Household {
         a.hold = Math.max(0, a.hold - hours)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
       }
+    }
+  }
+
+  // --- 一家人聊天 -------------------------------------------------------------
+
+  /** 一起坐着歇、一起吃饭的人会聊起来：心情慢慢变好 */
+  private chatTick(hours: number): void {
+    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat') && !a.away
+    for (const a of this.actors) {
+      a.chatting = social(a) && this.actors.some((b) => b !== a && social(b) && b.floor === a.floor
+        && Math.hypot(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z) < 2.4)
+      if (a.chatting) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + hours * 5) }
     }
   }
 

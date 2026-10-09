@@ -16,7 +16,7 @@ function simulate(style: 'toon' | 'paradise', days: number) {
   life.speed = 3
   const dt = 0.1
   const steps = Math.round((days * DAY_SECONDS) / (dt * life.speed))
-  const stats = actors.map(() => ({ minFood: 100, meals: 0, drinks: 0, sleptUpstairs: 0, minNeed: 100, longestGo: 0, kinds: new Set<string>() }))
+  const stats = actors.map(() => ({ chats: 0, minFood: 100, meals: 0, drinks: 0, sleptUpstairs: 0, minNeed: 100, longestGo: 0, kinds: new Set<string>() }))
   const goSince = actors.map(() => 0)
   const last = actors.map(() => '')
   let t = 0
@@ -29,6 +29,7 @@ function simulate(style: 'toon' | 'paradise', days: number) {
       const s = stats[k]
       const n = a.needs
       s.minFood = Math.min(s.minFood, n.hunger, n.thirst)
+      if (a.chatting) s.chats++
       const lo = Math.min(n.hunger, n.thirst, n.energy)
       if (lo < s.minNeed) { s.minNeed = lo; (s as Record<string, unknown>).at = `${life.clock.day}d${life.clock.hour.toFixed(1)}h ${JSON.stringify(Object.fromEntries(Object.entries(n).map(([q, v]) => [q, Math.round(v)])))} ${key0(a)}` }
       const key = a.task ? `${a.task.kind}:${a.task.phase}` : 'none'
@@ -56,6 +57,7 @@ describe('一家人自己过日子', () => {
       const { life, stats } = simulate(style, 2)
       for (const s of stats) {
         expect(s.meals).toBeGreaterThanOrEqual(5)
+        expect(s.chats).toBeGreaterThan(0) // 饭桌上会聊天
         expect(s.drinks).toBeGreaterThanOrEqual(3)
         expect(s.sleptUpstairs).toBeGreaterThanOrEqual(1)
         expect(s.minFood).toBeGreaterThan(20)

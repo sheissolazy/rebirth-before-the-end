@@ -41,6 +41,7 @@ export function thoughtOf(a: Actor, fighting: boolean): string | null {
   const k = a.task?.kind
   const using = a.task?.phase === 'use'
   if (k === 'sleep' && using) return '💤'
+  if (a.chatting) return '💬'
   if (k === 'cook' && using) return '🍳'
   if (k === 'eat' && using) return '🍚'
   if (k === 'drink' && using) return '💧'
