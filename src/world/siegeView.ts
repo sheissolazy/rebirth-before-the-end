@@ -146,7 +146,12 @@ export class SiegeView {
           if (/eyebrow|eyelash|short|long|hair|bob|ponytail|braid/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; return std }
           std.transparent = false
           if (n.endsWith('.body')) { std.color.set('#9aab8c'); bloody(std, 0.5) }
-          else if (n.endsWith('low-poly')) std.color.set('#e8e2b8')
+          else if (n.endsWith('low-poly')) {
+            // 眼睛：浑浊发黄，夜里微微发光
+            std.color.set('#e8e2b8')
+            std.emissive = new THREE.Color('#d6b04a')
+            std.emissiveIntensity = 0.9
+          }
           else { std.color.set('#8a7f6f'); bloody(std) }
           return std
         }
