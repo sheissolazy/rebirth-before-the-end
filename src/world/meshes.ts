@@ -234,7 +234,15 @@ export function neighborHouse(p: Prop): THREE.Group {
   g.add(gableRoof(p.w, p.d, h, 1.6, '#8a5a44', toon('#8a5a44', { name: 'roof' })))
   // 朝街（-z）那面的门和窗
   g.add(box(0.9, 2.0, 0.08, COLORS.woodDark, [0, 0, -p.d / 2 - 0.02]))
-  for (const x of [-p.w / 3, p.w / 3]) g.add(box(0.9, 0.9, 0.06, '#7fb8c9', [x, 1.2, -p.d / 2 - 0.02]))
+  // 窗户：木窗框 + 深色玻璃 + 十字窗棂 + 窗台（以前是两块亮蓝色的方块，太假）
+  const z0 = -p.d / 2
+  for (const x of [-p.w / 3, p.w / 3]) {
+    g.add(box(1.0, 1.0, 0.05, COLORS.woodDark, [x, 1.15, z0 - 0.02]))
+    g.add(box(0.84, 0.84, 0.07, '#33434c', [x, 1.23, z0 - 0.03], toon('#33434c', { name: 'pane' })))
+    g.add(box(0.05, 0.84, 0.09, COLORS.woodDark, [x, 1.23, z0 - 0.04]))
+    g.add(box(0.84, 0.05, 0.09, COLORS.woodDark, [x, 1.63, z0 - 0.04]))
+    g.add(box(1.1, 0.06, 0.16, COLORS.woodDark, [x, 1.12, z0 - 0.07]))
+  }
   const left = gable(p.d, h, 1.6, p.color ?? COLORS.wall, wallMat)
   left.position.x = -p.w / 2 + 0.1
   const right = gable(p.d, h, 1.6, p.color ?? COLORS.wall, wallMat)
