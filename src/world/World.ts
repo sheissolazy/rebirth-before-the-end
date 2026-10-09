@@ -133,7 +133,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -259,6 +259,8 @@ export class World {
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   private trapMesh: THREE.Group | null = null
   private readonly graves = new Map<string, THREE.Object3D>()
+  /** 今天已经提醒过的（第几天） */
+  private readonly warned = { crisis: -1, dusk: -1 }
   /** 上一帧看到的最后一条日记（undefined = 还没看过，刚读档的旧记录不弹提示） */
   private lastLog: LogEntry | null | undefined = undefined
   /** 送东西的人放在铁门外的箱子 / 纸条 */
@@ -1310,6 +1312,17 @@ export class World {
       this.sprouts.forEach((p, k) => { p.scale.setScalar(sc * (0.9 + (k % 3) * 0.08)); p.rotation.y = Math.sin(this.elapsed * 0.8 + k) * 0.05 })
       this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
       this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
+    }
+    // 末日后：危机夜当天早上提醒一次；每天傍晚提醒丧尸要来了
+    const ck = this.life.clock
+    if (ck.day >= PROLOGUE_DAYS && !this.life.siege && this.introT < 0) {
+      if (ck.hour >= 8 && ck.hour < 9 && this.warned.crisis !== ck.day && isCrisisNight({ day: ck.day, hour: 21 })) {
+        this.warned.crisis = ck.day
+        this.toast('world.toast.crisisDay', 6)
+      } else if (ck.hour >= 19.5 && ck.hour < 20.5 && this.warned.dusk !== ck.day) {
+        this.warned.dusk = ck.day
+        this.toast('world.toast.dusk', 5)
+      }
     }
     // 有人快饿死、有人走了：日记里新出现这种记录就弹提示（只看新的）
     const last = this.life.log.at(-1) ?? null
