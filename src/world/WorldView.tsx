@@ -268,6 +268,8 @@ export default function WorldView() {
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
           {hud.muted ? '🔇' : '🔊'}
         </button>
+        <button onClick={() => world.current?.snapshot()} title={t('world.photo')}
+          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">📷</button>
         <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}

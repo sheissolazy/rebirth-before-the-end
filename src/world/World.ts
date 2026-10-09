@@ -1529,6 +1529,18 @@ export class World {
     this.setHud({ intro: false })
   }
 
+  /** 拍照：用当前镜头重新渲染一帧，存成 PNG（界面是 HTML，不会出现在照片里） */
+  snapshot(): void {
+    this.renderer.render(this.scene, this.camera)
+    const url = this.renderer.domElement.toDataURL('image/png')
+    const a = document.createElement('a')
+    const c = this.life.clock
+    a.href = url
+    a.download = `重生末日之前-第${c.day + 1}天-${String(Math.floor(c.hour)).padStart(2, '0')}点.png`
+    a.click()
+    this.sound.splash()
+  }
+
   toggleMusic(): void {
     this.sound.unlock()
     this.sound.setMusic(!this.sound.music)
