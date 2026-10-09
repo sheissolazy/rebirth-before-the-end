@@ -19,19 +19,22 @@ import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   toon, toonify, tree, villaRoof,
 } from './meshes'
-import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
+import { Actor, Household, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
+import { locations } from '../content/locations'
 import { Rain } from './weather'
 import { applyPerks, awardRebirthPoints, clearWorld, currentLife, dayStartClock, hardPref, loadWorld, nextLife, recordDeath, rewindToDayStart, saveDayStart, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot, type ScavengeSpot } from './scavenge'
 import { ForageView } from './forageView'
 import { HERBS_PER_MEDKIT, type ForageSpot } from './forage'
+import { priceOf, shopFor, type Cart } from './shop'
+import type { ShopView } from './TradePanel'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
@@ -431,6 +434,7 @@ export class World {
     this.forage = new ForageView(this.scene)
     this.buildScavengeHits()
     this.buildWellCoop()
+    this.life.onShop = (t) => this.openShop(t)
     this.life.onForage = (s, y, medkit) => {
       this.sound.pluck()
       if (y.sting) { this.sound.buzz(); this.sound.hurt() }
@@ -1842,6 +1846,9 @@ export class World {
     this.ring.position.set(sp.x, sp.y + 0.03, sp.z)
     this.ring.visible = this.mode === 'home' && this.selected.root.visible && this.selected.pose !== 'sleep'
     this.forage?.sync(this.life.forageDay, this.life.clock.day)
+    // 读档回来时有人正在店里：把交易界面弹出来
+    const inShop = this.life.trips.find((x) => x.phase === 'shop')
+    if (inShop && inShop.id !== this.shopOpenFor && this.onShop && !this.hud.loading) this.openShop(inShop)
     this.updateChickens(dt * (this.life.speed || 0))
     this.arriveScavenge()
     this.forage?.update(dt, !this.life.siege || this.life.siege.done)
@@ -1965,7 +1972,7 @@ export class World {
   /** 现在能不能上车：车在、没出门、没打丧尸、女主在一楼 */
   private canDrive(): boolean {
     const l = this.life
-    return !l.vanAway && !l.vanMove && !l.trip?.van && !l.siege && !l.nightPending && !l.onTrip(this.heroine)
+    return !l.vanAway && !l.vanMove && !l.trips.some((t) => t.van) && !l.siege && !l.nightPending && !l.onTrip(this.heroine)
       && this.heroine.floor === 0 && !this.heroine.away && l.speed > 0
   }
 
@@ -2433,6 +2440,12 @@ export class World {
   /** 界面设置：点了日记本 / 墙上的地图 */
   onDiary: (() => void) | null = null
   onMap: (() => void) | null = null
+  /** 有人到了店里：弹出交易界面 */
+  onShop: ((v: ShopView) => void) | null = null
+  /** 店里挑东西时游戏停着，结完账恢复原来的速度 */
+  private shopSpeed = 1
+  /** 交易界面开着的是哪一趟（读档回来时还在店里的，要重新弹出来） */
+  private shopOpenFor = -1
 
   tripCheck(id: string, van = false): ReturnType<Household['tripCheck']> {
     return this.life.tripCheck(id, van)
@@ -2444,9 +2457,61 @@ export class World {
     return { fuel: l.fuel, home: !l.vanAway && !l.vanMove && !l.vanAt, armored: l.vanArmor, parkedOut: !!l.vanAt && !l.vanAway && !l.vanMove }
   }
 
+  /** 地图上"在外面的人" */
+  awayTrips(): { who: string; where: string; left: number; van: boolean; shopping: boolean }[] {
+    return this.life.trips.map((t) => ({
+      who: t.members.map((m) => m.name).join('、'),
+      where: lt(locations.find((x) => x.id === t.def.id)?.name ?? { zh: t.def.id }),
+      left: Math.max(0, t.back - this.life.absHour), van: !!t.van, shopping: t.phase === 'shop',
+    }))
+  }
+
   /** 在家、能出门的人 */
   homeMembers(): { name: string; health: number }[] {
     return this.actors.filter((a) => !this.life.isOut(a) && !a.guest).map((a) => ({ name: a.name, health: a.health }))
+  }
+
+  /** 交易界面要的数据：店、钱、能带多少、家里的存货 */
+  shopView(t: Trip): ShopView | null {
+    const l = this.life
+    const prologue = l.clock.day < PROLOGUE_DAYS
+    const shop = shopFor(t.def.id, prologue)
+    if (!shop) return null
+    const people = this.actors.filter((a) => !a.dead && !a.lost && !a.runaway).length
+    const av = l.available
+    return {
+      tripId: t.id, shopId: shop.id, day: l.clock.day,
+      name: lt(locations.find((x) => x.id === t.def.id)?.name ?? { zh: t.def.id }),
+      who: t.members.map((m) => m.name).join('、'), van: !!t.van,
+      currency: shop.currency, wallet: shop.currency === 'money' ? l.money : l.cores,
+      capacity: l.tripCapacity(t),
+      items: shop.items.map((it) => ({ ...it, unit: priceOf(it, shop, l.clock.day), owned: l.owns(it) })),
+      home: {
+        food: av.food, water: av.water, medkits: l.medkits, ammo: l.ammo.n, fuel: l.fuel, people,
+        daysToDoom: Math.max(0, PROLOGUE_DAYS - l.clock.day), gateBonus: l.gateBonus, trap: l.trap.hp > 0, crossbow: l.crossbow,
+      },
+    }
+  }
+
+  private openShop(t: Trip): void {
+    const v = this.shopView(t)
+    if (!v || !this.onShop) { this.life.checkout(t.id, this.life.defaultCart(t)); return }
+    this.shopOpenFor = t.id
+    if (this.life.speed > 0) this.shopSpeed = this.life.speed
+    this.life.speed = 0
+    this.sound.knock()
+    this.onShop(v)
+    this.pushLifeHud()
+  }
+
+  /** 交易界面点了结账（或者"不买了"）：成功就恢复时间 */
+  checkout(tripId: number, cart: Cart): string {
+    const r = this.life.checkout(tripId, cart)
+    if (r === 'ok') {
+      this.life.speed = this.shopSpeed || 1
+      this.pushLifeHud()
+    }
+    return r
   }
 
   startTrip(id: string, names: string[], van = false): boolean {

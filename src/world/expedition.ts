@@ -2,6 +2,7 @@
 // 地点名字和图标用文字版的 content/locations.ts；结算先用这里的简化规则，以后接引擎的掉落表。
 import { t, type UiKey } from '../i18n'
 import type { Stock } from './life'
+import { shopFor } from './shop'
 
 export interface TripStock extends Stock {
   molotovs: number
@@ -52,6 +53,8 @@ export function tripHours(t: TripDef, van: boolean): number {
 
 /** 末日后钱就没用了：两边都能去的地方（加油站）末日后不要钱 */
 export function tripCost(t: TripDef, prologue: boolean): number {
+  // 能进店挑东西的地方，钱在店里花（交易界面），出门不先付
+  if (shopFor(t.id, prologue)) return 0
   return t.phase === 'both' && !prologue ? 0 : t.cost
 }
 

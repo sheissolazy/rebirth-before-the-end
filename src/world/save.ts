@@ -1,7 +1,7 @@
 // 2.5D 原型的自动存档：时钟、存货、防线、每个人的需求和位置、日记、出门的人。
 // 打丧尸的时候不存（刷新后从开打前重新来）。
 import { FLOOR_H, type Floor } from './layout'
-import type { Household, LogEntry } from './residents'
+import type { Household, LogEntry, Trip } from './residents'
 import { TRIPS } from './expedition'
 import type { Barriers } from './siege'
 import type { Clock, Needs, Stock } from './life'
@@ -48,6 +48,8 @@ export interface WorldSave {
   log: LogEntry[]
   actors: ActorSave[]
   trip: { id: string; members: string[]; back: number; van?: boolean } | null
+  /** 好几拨人同时在外面（新存档用这个） */
+  trips?: { id: string; members: string[]; back: number; van?: boolean; phase?: 'away' | 'shop'; shopAt?: number; shopped?: boolean; cargo?: Record<string, number | boolean>; spent?: number }[]
   seen?: Record<string, number>
   helpedNeighbor?: boolean
   raidTonight?: boolean
@@ -117,7 +119,8 @@ export function snapshot(life: Household): WorldSave {
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood,
     })),
-    trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back, van: life.trip.van } : null,
+    trip: null,
+    trips: life.trips.map((t) => ({ id: t.def.id, members: t.members.map((m) => m.name), back: t.back, van: t.van, phase: t.phase === 'shop' ? 'shop' as const : 'away' as const, shopAt: t.shopAt, shopped: t.shopped, cargo: t.cargo as Record<string, number | boolean> | undefined, spent: t.spent })),
     seen: { ...life.seen },
     helpedNeighbor: life.helpedNeighbor,
     raidTonight: life.raidTonight,
@@ -240,15 +243,20 @@ export function restore(life: Household, s: WorldSave): void {
     a.runaway = as.runaway
     a.lowMood = as.lowMood
   }
-  if (s.trip) {
-    const def = TRIPS.find((t) => t.id === s.trip!.id)
-    const members = life.actors.filter((a) => s.trip!.members.includes(a.name))
-    if (def && members.length) {
-      for (const m of members) m.away = true
-      life.trip = { def, members, phase: 'away', back: s.trip.back, van: s.trip.van }
-      // 开车出去的：车也不在家（回来时从街口开进来）
-      life.vanAway = !!s.trip.van
-    }
+  // 在外面的几拨人（老存档只有一拨）
+  life.trips = []
+  for (const st of s.trips ?? (s.trip ? [s.trip] : [])) {
+    const def = TRIPS.find((t) => t.id === st.id)
+    const members = life.actors.filter((a) => st.members.includes(a.name))
+    if (!def || !members.length) continue
+    for (const m of members) m.away = true
+    const x = st as NonNullable<WorldSave['trips']>[number]
+    life.trips.push({
+      id: life.trips.length + 1, def, members, phase: x.phase ?? 'away', back: st.back, van: st.van,
+      shopAt: x.shopAt, shopped: x.shopped, cargo: x.cargo as Trip['cargo'], spent: x.spent,
+    })
+    // 开车出去的：车也不在家（回来时从街口开进来）
+    if (st.van) life.vanAway = true
   }
   // 弩：等每个人的生死都恢复好了再交到手上（不然会交给已经去世的爸爸）
   life.equipCrossbow()

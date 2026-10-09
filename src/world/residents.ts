@@ -21,6 +21,7 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
+import { capacity, cartGives, cartTotal, shopFor, type Cart, type ShopItem } from './shop'
 import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
 import { lt, t, t as t_, type UiKey } from '../i18n'
 
@@ -225,13 +226,21 @@ export interface LogEntry {
 
 /** 出门的一趟 */
 export interface Trip {
+  /** 第几趟（同时可以有好几拨人在外面） */
+  id: number
   def: TripDef
   members: Actor[]
-  phase: 'out' | 'away' | 'back'
+  /** out = 正走出门 / 上车；away = 在路上；shop = 到了店里，等你挑东西（游戏暂停）；back = 回到家门口往屋里搬 */
+  phase: 'out' | 'away' | 'shop' | 'back'
   /** 什么时候回来（绝对游戏小时 = day*24+hour） */
   back: number
   /** 开面包车去的 */
   van?: boolean
+  /** 采购：什么时候到店（绝对游戏小时）；挑完了没有；买的东西（带回家时一次入库）；花了多少 */
+  shopAt?: number
+  shopped?: boolean
+  cargo?: ShopItem['give']
+  spent?: number
 }
 
 /** 住进来的人叫什么 */
@@ -306,7 +315,15 @@ export class Household {
   static readonly PUMP_MAX = 3
   static readonly PUMP_WATER = 0.6
   static readonly EGGS_FOOD = 0.3
-  trip: Trip | null = null
+  /** 在外面的几拨人 */
+  trips: Trip[] = []
+  private tripSeq = 0
+  /** 第一拨在外面的人（老代码和测试用） */
+  get trip(): Trip | null {
+    return this.trips[0] ?? null
+  }
+  /** World 提供：有人到了店里（弹出交易界面，游戏暂停）；没有界面（测试）就按默认清单买 */
+  onShop: ((t: Trip) => void) | null = null
   /** 这场雨木桶接了多少水 */
   private rainWater = 0
   /** 正在门口的访客 */
@@ -1181,7 +1198,11 @@ export class Household {
   }
 
   onTrip(a: Actor): boolean {
-    return !!this.trip?.members.includes(a)
+    return this.trips.some((t) => t.members.includes(a))
+  }
+
+  tripOf(a: Actor): Trip | undefined {
+    return this.trips.find((t) => t.members.includes(a))
   }
 
   /** 这一层防线的耐久上限（铁门可以加固） */
@@ -1230,10 +1251,11 @@ export class Household {
   static readonly ARMY_PRICE = 5
 
   tripCheck(id: string, van = false): ReturnType<typeof canGo> | 'busy' | 'cores' | 'fuel' {
-    if (this.trip || (this.siege && !this.siege.done)) return 'busy'
+    // 有人在外面不耽误别人出门；只有打丧尸的时候不行
+    if (this.siege && !this.siege.done) return 'busy'
     if (van && !this.vanReady(id)) return 'fuel'
     const ok = canGo(TRIPS.find((t) => t.id === id)!, this.clock.day < PROLOGUE_DAYS, this.money, this.clock.hour, van)
-    if (ok === 'ok' && id === 'armygate' && this.clock.day >= PROLOGUE_DAYS && this.cores < Household.ARMY_PRICE) return 'cores'
+    if (ok === 'ok' && id === 'armygate' && this.clock.day >= PROLOGUE_DAYS && this.cores < 1) return 'cores'
     return ok
   }
 
@@ -1319,7 +1341,8 @@ export class Household {
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
   /** 面包车在家、有油，这趟能开车去 */
   vanReady(id: string): boolean {
-    return this.fuel > 0 && !this.vanAway && !this.vanMove && !this.vanAt && vanAllowed(id)
+    // 车已经派给别的一拨人了（哪怕他们还在走去上车）也不行
+    return this.fuel > 0 && !this.vanAway && !this.vanMove && !this.vanAt && !this.trips.some((t) => t.van) && vanAllowed(id)
   }
 
   startTrip(id: string, members: Actor[], van = false): boolean {
@@ -1335,24 +1358,127 @@ export class Household {
       this.cancel(a)
       a.setPath(route(this.navs, a.pos, van ? { ...VAN_DOORS[k % VAN_DOORS.length], floor: 0 } : EXIT) ?? [])
     })
-    this.trip = { def, members, phase: 'out', back: this.absHour + tripHours(def, van), van }
+    this.trips.push({ id: ++this.tripSeq, def, members, phase: 'out', back: this.absHour + tripHours(def, van), van })
     this.note('world.log.tripOut', { who: members.map((m) => m.name).join('、'), where: placeName(id) })
     return true
   }
 
   private tripTick(): void {
-    const t = this.trip
-    if (!t) return
+    for (const t of [...this.trips]) this.tripStep(t)
+  }
+
+  /** 到了店里：有界面就弹出来等你挑；没有界面（测试、自动跑）就按默认清单买 */
+  private arriveShop(t: Trip): void {
+    t.phase = 'shop'
+    if (this.onShop) this.onShop(t)
+    else this.checkout(t.id, this.defaultCart(t))
+  }
+
+  /** 这一趟能带回来几件 */
+  tripCapacity(t: Trip): number {
+    return capacity(t.members.length, !!t.van)
+  }
+
+  /** 没有界面时的默认清单：从上往下，每样买到钱或背包不够为止（留一点钱） */
+  defaultCart(t: Trip): Cart {
+    const shop = shopFor(t.def.id, this.clock.day < PROLOGUE_DAYS)
+    const cart: Cart = {}
+    if (!shop) return cart
+    const wallet = shop.currency === 'money' ? this.money * 0.6 : this.cores
+    const cap = this.tripCapacity(t)
+    for (let round = 0; round < 20; round++) {
+      let added = false
+      for (const it of shop.items) {
+        if (it.once || (cart[it.id] ?? 0) >= it.stock) continue
+        const next = { ...cart, [it.id]: (cart[it.id] ?? 0) + 1 }
+        const tot = cartTotal(shop, next, this.clock.day)
+        if (tot.cost <= wallet && tot.weight <= cap) { cart[it.id] = next[it.id]; added = true }
+      }
+      if (!added) break
+    }
+    return cart
+  }
+
+  /** 在店里结账：钱（或晶核）马上扣，东西跟着人带回家。cart 为空 = 什么也不买，直接回家 */
+  checkout(tripId: number, cart: Cart): 'ok' | 'money' | 'heavy' | 'stock' | 'no' {
+    const t = this.trips.find((x) => x.id === tripId)
+    if (!t || t.phase !== 'shop') return 'no'
+    const shop = shopFor(t.def.id, this.clock.day < PROLOGUE_DAYS)
+    const tot = shop ? cartTotal(shop, cart, this.clock.day) : { cost: 0, weight: 0 }
+    if (shop) {
+      const wallet = shop.currency === 'money' ? this.money : this.cores
+      if (tot.cost > wallet) return 'money'
+      if (tot.weight > this.tripCapacity(t)) return 'heavy'
+      for (const it of shop.items) {
+        const n = cart[it.id] ?? 0
+        if (n > it.stock || (it.once && n > 0 && this.owns(it))) return 'stock'
+      }
+      if (shop.currency === 'money') this.money -= tot.cost
+      else this.cores -= tot.cost
+      t.cargo = cartGives(shop, cart)
+    }
+    t.spent = tot.cost
+    t.shopped = true
+    t.phase = 'away'
+    t.back = Math.max(t.back, this.absHour + 0.25)
+    return 'ok'
+  }
+
+  /** "只能买一次"的东西家里已经有了 */
+  owns(it: ShopItem): boolean {
+    return (!!it.give.crossbow && this.crossbow) || (!!it.give.helmet && this.helmet)
+  }
+
+  /** 买回来的东西入库 */
+  private unloadCargo(t: Trip): string[] {
+    const g = t.cargo ?? {}
+    const what: string[] = []
+    const add = (k: 'food' | 'water' | 'ammo' | 'medkits' | 'molotovs' | 'fuel' | 'cores', n: number | undefined) => {
+      if (!n) return
+      if (k === 'food' || k === 'water') this.stock = { ...this.stock, [k]: this.stock[k] + n }
+      else if (k === 'ammo') this.ammo.n += n
+      else this[k] += n
+      what.push(t_(`world.unit.${k}` as UiKey, { n }))
+    }
+    add('food', g.food)
+    add('water', g.water)
+    add('ammo', g.ammo)
+    add('medkits', g.medkits)
+    add('molotovs', g.molotovs)
+    add('fuel', g.fuel)
+    if (g.gate) {
+      this.gateBonus = Math.min(120, this.gateBonus + g.gate)
+      this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + g.gate)
+      what.push(t_('world.unit.gate', { n: g.gate }))
+    }
+    if (g.trap) { this.trap.hp = Math.max(this.trap.hp, g.trap); what.push(t_('world.unit.trap')) }
+    if (g.bamboo) { this.bamboo += g.bamboo; what.push(t_('world.unit.bamboo', { n: g.bamboo })) }
+    if (g.crossbow && !this.crossbow) {
+      this.crossbow = true
+      this.equipCrossbow()
+      what.push(t_('world.unit.crossbow'))
+      this.note('world.log.crossbow', { who: this.actors.find((a) => a.weapon === 'crossbow')?.name ?? '爸爸' })
+    }
+    if (g.helmet && !this.helmet) { this.helmet = true; this.actors[0].helmet = true; what.push(t_('world.unit.helmet')) }
+    return what
+  }
+
+  private tripStep(t: Trip): void {
     if (t.phase === 'out' && t.members.every((a) => !a.path.length)) {
       // 都上车了（或者走出街口了）
       for (const a of t.members) a.away = true
       t.phase = 'away'
+      // 采购：路上走一半的时间到店
+      // （按出发时定好的来回时间：去程一半到店，在店里挑东西时游戏是停着的，所以回家的时间不变）
+      if (shopFor(t.def.id, this.clock.day < PROLOGUE_DAYS) && !t.shopped) t.shopAt = Math.max(this.absHour, t.back - tripHours(t.def, !!t.van) / 2)
       if (t.van) {
         this.vanMove = { dir: 'out', t0: this.absHour }
         if (this.clock.day >= PROLOGUE_DAYS) this.noiseDay = this.clock.day
       }
-    } else if (t.phase === 'away' && this.vanMove?.dir === 'out') {
+    } else if (t.phase === 'away' && t.van && this.vanMove?.dir === 'out') {
       if (this.absHour >= this.vanMove.t0 + VAN_OUT_H) { this.vanMove = null; this.vanAway = true }
+    } else if (t.phase === 'away' && t.shopAt !== undefined && !t.shopped && this.absHour >= t.shopAt) {
+      this.arriveShop(t)
     } else if (t.phase === 'away' && this.absHour >= t.back) {
       // 开车回来：先等车倒进车位停稳，人再下车
       if (t.van) {
@@ -1372,11 +1498,28 @@ export class Household {
         // 扛着箱子一直走进客厅，放到墙角那几个储物箱边上
         a.setPath(route(this.navs, a.pos, { ...STORE[k % STORE.length], floor: 0 }) ?? route(this.navs, a.pos, HOME_IN) ?? [])
       })
+    } else if (t.phase === 'back' && t.members.every((a) => !a.path.length) && t.shopped) {
+      // 采购回来：买的东西入库
+      const hadBow = this.crossbow
+      const what = this.unloadCargo(t)
+      const who = t.members.map((m) => m.name).join('、')
+      if (t.def.id === 'armygate') {
+        this.affection.guchen = Math.min(100, (this.affection.guchen ?? 0) + 2)
+        // 末日前去示警过：顾沉认出你，多塞一盒子弹
+        if (this.guchenMet) { this.ammo.n += 6; this.note('world.army.friendBonus', { who }) }
+      }
+      // 改装面包车的材料：末日前第二次去五金店（第一次多半买了弩）
+      if (t.def.id === 'hardware' && hadBow && !this.vanKit && !this.vanArmor) { this.vanKit = true; this.note('world.log.vanKit', { where: placeName(t.def.id) }) }
+      this.tripScene(t.def.id)
+      const cur = shopFor(t.def.id, t.def.phase === 'prologue')?.currency === 'cores' ? 'cores' : 'money'
+      this.note(what.length ? 'world.trip.bought' : 'world.trip.boughtNothing', { who, where: placeName(t.def.id), what: what.join('、'), cost: t_(`world.unit.${cur}` as UiKey, { n: t.spent ?? 0 }) })
+      t.members.forEach((a) => { a.carrying = false; a.hold = 0.3 })
+      this.trips = this.trips.filter((x) => x !== t)
     } else if (t.phase === 'back' && t.members.every((a) => !a.path.length) && t.def.id === 'armygate') {
       this.tripScene('armygate')
       this.settleArmy(t)
       t.members.forEach((a) => { a.carrying = false; a.hold = 0.3 })
-      this.trip = null
+      this.trips = this.trips.filter((x) => x !== t)
     } else if (t.phase === 'back' && t.members.every((a) => !a.path.length)) {
       const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
       const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand(), !!t.van, this.clock.day < PROLOGUE_DAYS, !!t.van && this.vanArmor)
@@ -1420,7 +1563,7 @@ export class Household {
       })
       this.tripScene(t.def.id)
       this.note(r.key, { ...r.vars, who: t.members.map((m) => m.name).join('、'), where: placeName(t.def.id) })
-      this.trip = null
+      this.trips = this.trips.filter((x) => x !== t)
     }
   }
 
@@ -1941,7 +2084,7 @@ export class Household {
 
   /** 迎接的人：看见回来的人走近了就挥挥手、喊一声，挥一会儿就站着等他们进屋 */
   private greetTick(a: Actor, t: Task, hours: number): void {
-    const trip = this.trip
+    const trip = this.trips.find((x) => x.phase === 'back') ?? null
     const near = trip?.phase === 'back' ? trip.members.find((m) => !m.away && Math.hypot(m.pos.x - a.pos.x, m.pos.z - a.pos.z) < 7) : undefined
     if (near && t.wave === undefined && t.waitT === undefined) {
       // 回来的人先说"我们回来啦"，迎的人一个接一个地喊
@@ -2000,7 +2143,7 @@ export class Household {
   /** 改装面包车：蹲在车边焊钢板、装铁栏，干一个多小时 */
   private modVanTask(): Task | null {
     if (this.vanAway || this.vanMove) return null
-    if ((this.trip?.van && this.trip.phase === 'out') || this.vanAt) return null
+    if (this.trips.some((x) => x.van && x.phase === 'out') || this.vanAt) return null
     // 一个人改就够了
     if (this.actors.some((o) => o.task?.kind === 'modvan')) return null
     // 站在车头前面装防撞杠（离上车的门远一点，不挡人上车）
@@ -2010,7 +2153,7 @@ export class Household {
 
   /** 擦车：站到车北边，面朝车 */
   private washTask(): Task | null {
-    if (this.vanAway || this.vanMove || this.vanAt || (this.trip?.van && this.trip.phase === 'out')) return null
+    if (this.vanAway || this.vanMove || this.vanAt || this.trips.some((x) => x.van && x.phase === 'out')) return null
     // 擦车头或者车尾（车门那边留给上下车的人）；那一头有人在擦 / 在改装就去另一头，两头都有人就算了
     const busyEnd = (fx: number) => this.actors.some((o) => (o.task?.kind === 'wash' || o.task?.kind === 'modvan') && o.task.spot && Math.abs(o.task.spot.x - fx) < 0.5)
     const fx = VAN_PARK.x + 2.45
@@ -2132,12 +2275,12 @@ export class Household {
     }
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了、不改了
-    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || this.vanAt || (this.trip?.van && this.trip.phase === 'out'))) return true
+    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || this.vanAt || this.trips.some((x) => x.van && x.phase === 'out'))) return true
     if (t.kind === 'modvan' && this.vanArmor) return true
     // 晾到一半下雨了：不晾了
     if (t.kind === 'hang' && this.rain > 0.1) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
-    if (t.kind === 'greet' && !this.trip) return true
+    if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
       // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
       if (isMealTime(this.clock.hour) && n.hunger < 75 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
@@ -2303,7 +2446,7 @@ export class Household {
       health: a.health,
       trait: a.trait ? lt(survivorTraits.find((x) => x.id === a.trait)?.name ?? { zh: '' }) : undefined,
       gone: a.dead ? 'dead' : a.lost ? 'lost' : a.runaway ? 'runaway' : this.lent?.name === a.name ? 'lent' : undefined,
-      trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
+      trip: (() => { const tr = this.tripOf(a); return tr ? { id: tr.def.id, left: Math.max(0, tr.back - this.absHour) } : undefined })(),
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
       going: !!a.task && a.task.phase === 'go' && a.task.kind !== 'walk',

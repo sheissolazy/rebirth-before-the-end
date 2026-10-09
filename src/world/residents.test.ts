@@ -308,18 +308,25 @@ describe('出门', () => {
     life.speed = 3
     const [hero, mom] = life.actors
     expect(life.tripCheck('supermarket')).toBe('ok')
+    // 到了店里弹交易界面：这里替玩家挑两袋米、三箱水
+    let shopped = 0
+    life.onShop = (t) => { shopped++; expect(life.checkout(t.id, { rice: 2, water: 3 })).toBe('ok') }
     expect(life.startTrip('supermarket', [hero, mom])).toBe(true)
-    expect(life.money).toBe(18000 - 1200)
+    // 出门不先付钱，钱在店里花
+    expect(life.money).toBe(18000)
     const food0 = life.stock.food
+    const water0 = life.stock.water
     // 3 小时 + 从街口扛着箱子走回客厅
     const sawAway = run(life, 5.5)
     expect(sawAway).toBe(true)
+    expect(shopped).toBe(1)
     expect(life.trip).toBeNull()
     expect(life.stock.food).toBeGreaterThan(food0 + 5)
+    expect(life.stock.water).toBeGreaterThan(water0 + 4)
     expect(hero.away || mom.away).toBe(false)
-    expect(life.log.some((l) => l.key === 'world.trip.supermarket')).toBe(true)
-    // 钱只在出发时扣一次
-    expect(life.money).toBe(18000 - 1200)
+    expect(life.log.some((l) => l.key === 'world.trip.bought')).toBe(true)
+    // 两袋米 150、三箱水 60
+    expect(life.money).toBe(18000 - 480)
     // 文字版超市事件里的一段见闻
     const scene = life.log.find((l) => l.key === 'world.log.scene')
     expect(scene?.vars?.title).toBeTruthy()
@@ -348,6 +355,9 @@ describe('出门', () => {
     expect(life.fuel).toBe(2)
     expect(life.trip!.back - life.absHour).toBe(2)
     const food0 = life.stock.food
+    // 两个人加面包车能装 36 件：开车去能多买
+    expect(life.tripCapacity(life.trip!)).toBe(36)
+    life.onShop = (t) => { expect(life.checkout(t.id, { rice: 4, cans: 4, water: 6 })).toBe('ok') }
     // 走到车门边上车，车开出去
     let sawOut = false
     let sawAwayVan = false
@@ -364,9 +374,9 @@ describe('出门', () => {
     expect(life.trip).toBeNull()
     expect(life.vanAway).toBe(false)
     expect(life.vanMove).toBeNull()
-    // 两个人 ×1.5、开车再 ×1.5：5 → 11（在家的爸爸这几个小时也吃了点）
-    expect(life.log.find((l) => l.key === 'world.trip.supermarket')?.vars?.food).toBe(11)
-    expect(life.stock.food).toBeGreaterThan(food0 + 9)
+    // 4 袋米 + 4 箱罐头 = 20 份吃的（在家的爸爸这几个小时也吃了点）
+    expect(life.log.some((l) => l.key === 'world.trip.bought')).toBe(true)
+    expect(life.stock.food).toBeGreaterThan(food0 + 18)
   })
 
   it('车开回来时，在家闲着的人出来迎：走到院子里，看见人下车就挥手喊一声，卸完货就散', () => {
@@ -468,16 +478,19 @@ describe('出门', () => {
     expect(life.tripCheck('supermarket', true)).toBe('fuel')
     expect(life.tripCheck('gasstation')).toBe('ok')
     life.speed = 3
+    // 走路去：一个人只背得动 3 桶（6 件）
+    life.onShop = (t) => { expect(life.checkout(t.id, { fuel: 4 })).toBe('heavy'); expect(life.checkout(t.id, { fuel: 3 })).toBe('ok') }
     life.startTrip('gasstation', [life.actors[2]])
-    expect(life.money).toBe(18000 - 600)
     run(life, 4)
-    expect(life.fuel).toBe(2)
-    expect(life.log.some((l) => l.key === 'world.trip.gasBuy')).toBe(true)
+    expect(life.fuel).toBe(3)
+    expect(life.money).toBe(18000 - 450)
+    life.onShop = null
     life.clock = { day: PROLOGUE_DAYS, hour: 9 }
     const money = life.money
+    // 末日后加油站没人卖了：去抢剩下的，不要钱
     life.startTrip('gasstation', [life.actors[2]], true)
     expect(life.money).toBe(money)
-    expect(life.fuel).toBe(1)
+    expect(life.fuel).toBe(2)
   })
 
   it('开车出去时存档：读档后车也不在家，到点开回来', () => {
@@ -503,10 +516,52 @@ describe('出门', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 1, hour: 8 }
     life.speed = 3
+    life.onShop = (t) => { expect(life.checkout(t.id, { plate: 2 })).toBe('ok') }
     life.startTrip('hardware', [life.actors[2]])
     run(life, 6)
     expect(life.maxOf('gate')).toBe(240)
     expect(life.barriers.gate).toBe(240)
+  })
+})
+
+describe('好几拨人同时出门 + 店里挑东西', () => {
+  it('妈妈走路去超市的同时，爸爸开车去药店；车只有一辆，第三拨不能再开车；钱不够买不了', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 8 }
+    life.speed = 3
+    const [hero, mom, dad] = life.actors
+    const shops: string[] = []
+    life.onShop = (t) => {
+      shops.push(t.def.id)
+      if (t.def.id === 'pharmacy') {
+        // 钱不够：一次买 30 个急救包
+        life.money = 1000
+        expect(life.checkout(t.id, { medkit: 4 })).toBe('money')
+        life.money = 18000
+        expect(life.checkout(t.id, { medkit: 2 })).toBe('ok')
+      } else expect(life.checkout(t.id, { water: 2 })).toBe('ok')
+    }
+    expect(life.startTrip('supermarket', [mom])).toBe(true)
+    // 有人在外面不耽误别人出门
+    expect(life.tripCheck('pharmacy', true)).toBe('ok')
+    expect(life.startTrip('pharmacy', [dad], true)).toBe(true)
+    expect(life.trips.length).toBe(2)
+    // 车被开走了：第三拨只能走路
+    expect(life.tripCheck('hardware', true)).toBe('fuel')
+    expect(life.tripCheck('hardware')).toBe('ok')
+    // 同一个人不能同时出两趟门
+    expect(life.startTrip('hardware', [mom])).toBe(false)
+    const kits = life.medkits
+    const dt = 0.1
+    for (let i = 0; i < 20000 && life.trips.length; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+    expect(life.trips.length).toBe(0)
+    expect(shops.sort()).toEqual(['pharmacy', 'supermarket'])
+    expect(life.medkits).toBe(kits + 2)
+    expect(hero.away || mom.away || dad.away).toBe(false)
+    expect(life.log.filter((l) => l.key === 'world.trip.bought').length).toBe(2)
   })
 })
 
@@ -994,13 +1049,15 @@ describe('顾沉 / 军区', () => {
     expect(life.guchenMet).toBe(true)
     expect(life.affection.guchen).toBe(8)
     life.clock = { day: PROLOGUE_DAYS + 1, hour: 8 }
-    life.cores = 2
+    life.cores = 0
     expect(life.tripCheck('armygate')).toBe('cores')
     life.cores = 6
     const ammo = life.ammo.n
+    // 军区收晶核：两盒子弹 4 颗；见过顾沉的话兵多塞一盒
+    life.onShop = (t) => { expect(life.checkout(t.id, { army_ammo: 2 })).toBe('ok') }
     expect(life.startTrip('armygate', [life.actors[2]])).toBe(true)
     run(life, 5.5)
-    expect(life.cores).toBe(1)
+    expect(life.cores).toBe(2)
     expect(life.ammo.n).toBe(ammo + 18)
   })
 })
@@ -1668,6 +1725,7 @@ describe('弩', () => {
     life.clock = { day: 0, hour: 9 }
     life.speed = 3
     const mom = life.actors[1]
+    life.onShop = (t) => { expect(life.checkout(t.id, { crossbow: 1 })).toBe('ok') }
     expect(life.startTrip('hardware', [mom])).toBe(true)
     const dt = 0.1
     for (let i = 0; i < 20000 && life.trip; i++) {

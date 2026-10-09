@@ -6,7 +6,8 @@ import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel } from './life'
 import type { PersonHud } from './residents'
 import { DiaryPanel } from './DiaryPanel'
-import { MapPanel, type MapMember } from './MapPanel'
+import { MapPanel, type AwayTrip, type MapMember } from './MapPanel'
+import { TradePanel, type ShopView } from './TradePanel'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
@@ -164,7 +165,9 @@ export default function WorldView() {
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
   const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
   const [diaryPeople, setDiaryPeople] = useState<ReturnType<World['diaryPeople']>>([])
-  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; van: { fuel: number; home: boolean; armored: boolean; parkedOut: boolean } }>({ checks: {}, vanChecks: {}, members: [], van: { fuel: 0, home: true, armored: false, parkedOut: false } })
+  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; away: AwayTrip[]; van: { fuel: number; home: boolean; armored: boolean; parkedOut: boolean } }>({ checks: {}, vanChecks: {}, members: [], away: [], van: { fuel: 0, home: true, armored: false, parkedOut: false } })
+  /** 有人到了店里：交易界面 */
+  const [shop, setShop] = useState<ShopView | null>(null)
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }
@@ -179,6 +182,7 @@ export default function WorldView() {
         checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])),
         vanChecks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id, true)])),
         members: w.homeMembers(),
+        away: w.awayTrips(),
         van: w.vanInfo(),
       })
     }
@@ -198,6 +202,7 @@ export default function WorldView() {
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
       w.onFurnitureMenu = (m) => setFurn(m)
+      w.onShop = (v) => { setMap(false); setShop(v) }
       world.current = w
     } catch (e) {
       // 不支持 WebGL 等情况：下一拍再显示错误
@@ -740,9 +745,17 @@ export default function WorldView() {
 
       {map && (
         <MapPanel prologue={hud.prologue} check={(id, van) => (van ? mapData.vanChecks : mapData.checks)[id] ?? 'busy'}
-          members={mapData.members} van={mapData.van}
+          members={mapData.members} van={mapData.van} away={mapData.away}
           onGo={(id, names, van) => { if (world.current?.startTrip(id, names, van)) setMap(false) }}
           onClose={() => setMap(false)} />
+      )}
+
+      {shop && (
+        <TradePanel key={shop.tripId} view={shop} onCheckout={(cart) => {
+          const r = world.current?.checkout(shop.tripId, cart) ?? 'no'
+          if (r === 'ok') setShop(null)
+          return r
+        }} />
       )}
 
       {furn && <FurnitureMenuView menu={furn} onPick={(spot) => world.current?.useFurniture(spot)} onClose={() => setFurn(null)} />}

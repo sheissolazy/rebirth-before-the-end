@@ -3,13 +3,17 @@ import { useState } from 'react'
 import { t, lt, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
 import { TRIPS, VAN, tripCost, tripHours, vanAllowed } from './expedition'
+import { capacity, shopFor } from './shop'
 import { Grain, SERIF } from './ui'
 
 export interface MapMember { name: string; health: number }
+/** 已经在外面的几拨人 */
+export interface AwayTrip { who: string; where: string; left: number; van: boolean; shopping: boolean }
 type Check = 'ok' | 'phase' | 'money' | 'late' | 'busy' | 'cores' | 'fuel'
 
-export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
+export function MapPanel({ prologue, check, members, van, away, onGo, onClose }: {
   prologue: boolean
+  away: AwayTrip[]
   check: (id: string, van: boolean) => Check
   members: MapMember[]
   van: { fuel: number; home: boolean; armored: boolean; parkedOut: boolean }
@@ -25,8 +29,11 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
     || TRIPS.some((x) => x.id === l.id && x.phase === 'both')))
   const trip = TRIPS.find((x) => x.id === pick)
   const loc = locations.find((l) => l.id === pick)
-  const canDrive = !!trip && vanAllowed(trip.id) && van.fuel > 0 && van.home
+  const canDrive = !!trip && vanAllowed(trip.id) && van.fuel > 0 && van.home && check(trip.id, true) !== 'fuel'
   const byVan = canDrive && drive
+  const shop = trip ? shopFor(trip.id, prologue) : null
+  // 能开的车（现在只有一辆面包车）
+  const cars = van.fuel > 0 && van.home && !away.some((a) => a.van) ? 1 : 0
   const status: Check | null = trip ? check(trip.id, byVan) : null
   const toggle = (n: string) => setWho((w) => (w.includes(n) ? w.filter((x) => x !== n) : [...w, n]))
   return (
@@ -66,34 +73,45 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
             <div className="text-xl font-bold tracking-wide text-[#3a2a1a]" style={{ fontFamily: SERIF }}>{t('world.map.title')}</div>
             <button onClick={onClose} className="rounded-full px-2 text-lg text-zinc-500 hover:bg-black/5">✕</button>
           </div>
+          {away.length > 0 && (
+            <div className="mt-2 rounded-sm bg-[#3a2a1a]/90 px-2 py-1.5 text-[11px] leading-snug text-[#f4ecdc]">
+              <div className="mb-0.5 font-semibold text-[#e8c98a]">{t('world.map.away')}</div>
+              {away.map((a, k) => (
+                <div key={k}>{a.van ? '🚐' : '🚶'} {a.who} → {a.where} · {a.shopping ? t('world.map.inShop') : t('world.map.backIn', { h: a.left.toFixed(1) })}</div>
+              ))}
+            </div>
+          )}
           {!trip || !loc ? (
             <p className="mt-3 text-sm leading-relaxed text-zinc-600">{t('world.map.pick')}</p>
           ) : (
             <div className="mt-2 flex flex-1 flex-col">
               <div className="text-base font-bold text-[#3a2a1a]" style={{ fontFamily: SERIF }}>{loc.icon} {lt(loc.name)}</div>
               <div className="mt-1 text-xs text-zinc-600">{lt(loc.desc)}</div>
-              <div className="mt-2 rounded-lg bg-white/60 p-2 text-sm leading-relaxed">{t(`world.tripInfo.${trip.id}` as UiKey)}</div>
+              <div className="mt-2 rounded-lg bg-white/60 p-2 text-sm leading-relaxed">
+                {shop ? t('world.map.shopInfo', { n: capacity(Math.max(1, who.length), byVan) }) : t(`world.tripInfo.${trip.id}` as UiKey)}
+              </div>
               <ul className="mt-2 space-y-0.5 text-xs text-zinc-700">
                 <li>⏱ {t('world.map.hours', { h: tripHours(trip, byVan) })}</li>
-                <li>💰 {tripCost(trip, prologue) ? t('world.map.cost', { n: tripCost(trip, prologue) }) : t('world.map.free')}</li>
+                <li>💰 {shop ? t(shop.currency === 'money' ? 'world.map.payInShop' : 'world.map.payCores') : tripCost(trip, prologue) ? t('world.map.cost', { n: tripCost(trip, prologue) }) : t('world.map.free')}</li>
                 <li>🧟 {trip.danger && !prologue
                   ? t('world.map.danger', { n: Math.round(Math.min(0.9, trip.danger * (byVan ? (van.armored ? VAN.armorDanger : VAN.danger) : 1)) * 100) })
                   : t('world.map.safe')}</li>
               </ul>
-              {vanAllowed(trip.id) && (
-                canDrive ? (
-                  <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg bg-white/60 p-2 text-xs leading-snug">
-                    <input type="checkbox" className="mt-0.5" checked={drive} onChange={(e) => setDrive(e.target.checked)} />
-                    <span>
-                      <span className="font-semibold">{t('world.map.van')}</span>
-                      <span className="block text-zinc-600">{t('world.map.vanInfo', { n: van.fuel })}</span>
-                      {!prologue && <span className="block text-zinc-500">{t(van.armored ? 'world.map.vanArmored' : 'world.map.vanNoise')}</span>}
-                    </span>
-                  </label>
-                ) : (
-                  <div className="mt-2 rounded-lg bg-white/40 p-2 text-xs text-zinc-500">{t(van.parkedOut ? 'world.map.vanParked' : van.home ? 'world.map.vanNoFuel' : 'world.map.vanAway')}</div>
-                )
-              )}
+              {/* 怎么去：走路，或者开车（看家里有几辆车能开） */}
+              <div className="mt-3 text-xs font-semibold text-zinc-700">{t('world.map.how', { n: cars })}</div>
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                <button onClick={() => setDrive(false)}
+                  className={`rounded-sm px-2 py-1.5 text-left text-xs ring-1 transition ${!byVan ? 'bg-[#3a2a1a] text-[#f4ecdc] ring-[#3a2a1a]' : 'bg-white/50 text-[#3a2a1a] ring-[#b9a77f] hover:bg-white/80'}`}>
+                  <div className="font-semibold">🚶 {t('world.map.walk')}</div>
+                  <div className="opacity-75">{t('world.map.hours', { h: tripHours(trip, false) })}</div>
+                </button>
+                <button onClick={() => canDrive && setDrive(true)} disabled={!canDrive}
+                  className={`rounded-sm px-2 py-1.5 text-left text-xs ring-1 transition disabled:opacity-45 ${byVan ? 'bg-[#3a2a1a] text-[#f4ecdc] ring-[#3a2a1a]' : 'bg-white/50 text-[#3a2a1a] ring-[#b9a77f] hover:bg-white/80'}`}>
+                  <div className="font-semibold">🚐 {t('world.map.drive')}</div>
+                  <div className="opacity-75">{vanAllowed(trip.id) ? (canDrive ? t('world.map.hours', { h: tripHours(trip, true) }) : t(away.some((a) => a.van) ? 'world.map.vanAway' : van.parkedOut ? 'world.map.vanParked' : 'world.map.vanNoFuel')) : t('world.map.noDrive')}</div>
+                </button>
+              </div>
+              {byVan && <div className="mt-1 text-[11px] text-zinc-600">{t('world.map.vanInfo', { n: van.fuel })}{!prologue ? ` ${t(van.armored ? 'world.map.vanArmored' : 'world.map.vanNoise')}` : ''}</div>}
               <div className="mt-3 text-xs font-semibold text-zinc-700">{t('world.map.who')}</div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {members.map((m) => (
