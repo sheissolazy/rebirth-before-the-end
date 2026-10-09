@@ -967,7 +967,7 @@ export class World {
       visitor.animate(Math.min(sim, 0.1), walking)
     }
     for (const w of this.weapons) w.visible = fighting
-    this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed)
+    this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS)
     const g = this.life.garden
     this.gardenObj.visible = g.built
     if (g.built) {

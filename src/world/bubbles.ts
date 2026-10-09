@@ -1,6 +1,7 @@
 // 头顶的想法泡泡（像模拟人生）：在干什么、或者最缺什么，用一个表情表示。
 import * as THREE from 'three'
 import type { Actor } from './residents'
+import { t, type UiKey } from '../i18n'
 
 const cache = new Map<string, THREE.SpriteMaterial>()
 
@@ -58,10 +59,61 @@ export function thoughtOf(a: Actor, fighting: boolean): string | null {
   return null
 }
 
+/** 一句话的气泡（canvas 画的圆角框） */
+const lineCache = new Map<string, THREE.SpriteMaterial>()
+function lineMaterial(text: string): { mat: THREE.SpriteMaterial; aspect: number } {
+  const font = '28px "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif'
+  const probe = document.createElement('canvas').getContext('2d')!
+  probe.font = font
+  const w = Math.min(560, Math.ceil(probe.measureText(text).width) + 36)
+  const hit = lineCache.get(text)
+  if (hit) return { mat: hit, aspect: w / 60 }
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = 60
+  const g = c.getContext('2d')!
+  g.fillStyle = 'rgba(255,255,255,0.94)'
+  g.beginPath()
+  g.roundRect(2, 2, w - 4, 46, 18)
+  g.fill()
+  g.beginPath()
+  g.moveTo(w / 2 - 8, 46)
+  g.lineTo(w / 2, 58)
+  g.lineTo(w / 2 + 8, 46)
+  g.fill()
+  g.font = font
+  g.fillStyle = '#333'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  g.fillText(text, w / 2, 25)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })
+  lineCache.set(text, mat)
+  return { mat, aspect: w / 60 }
+}
+
+const tr = t
+const CHAT_PROLOGUE = 6
+const CHAT_DOOM = 7
+
 export class Bubbles {
   private readonly sprites = new Map<Actor, THREE.Sprite>()
+  /** 正在说的话：说到什么时候 */
+  private readonly saying = new Map<Actor, { text: string; until: number }>()
+  private nextLine = 4
 
-  update(actors: Actor[], fighting: boolean, show: boolean, t: number): void {
+  update(actors: Actor[], fighting: boolean, show: boolean, t: number, doom = false): void {
+    // 聊天的人隔一会儿说一句（末日前后说的不一样）
+    if (t > this.nextLine) {
+      this.nextLine = t + 5 + Math.random() * 6
+      const talkers = actors.filter((a) => a.chatting && a.root.visible)
+      const who = talkers[Math.floor(Math.random() * talkers.length)]
+      if (who) {
+        const n = Math.floor(Math.random() * (doom ? CHAT_DOOM : CHAT_PROLOGUE))
+        this.saying.set(who, { text: tr(`world.chat.${doom ? 'doom' : 'calm'}${n}` as UiKey), until: t + 3.2 })
+      }
+    }
     for (const a of actors) {
       let s = this.sprites.get(a)
       if (!s) {
@@ -71,16 +123,22 @@ export class Bubbles {
         a.root.add(s)
         this.sprites.set(a, s)
       }
-      const emoji = show && a.root.visible ? thoughtOf(a, fighting) : null
-      s.visible = !!emoji
-      if (!emoji) continue
-      const m = bubbleMaterial(emoji)
+      const say = this.saying.get(a)
+      if (say && (say.until < t || !a.chatting)) this.saying.delete(a)
+      const line = show && a.root.visible && say && say.until >= t ? say.text : null
+      const emoji = line ? null : show && a.root.visible ? thoughtOf(a, fighting) : null
+      s.visible = !!(emoji || line)
+      if (!emoji && !line) continue
+      const lm = line ? lineMaterial(line) : null
+      const m = lm ? lm.mat : bubbleMaterial(emoji!)
       if (s.material !== m) s.material = m
       // 躺着时泡泡挪到身子上方，站着在头顶；轻轻上下飘
       const lying = a.pose === 'sleep' || a.pose === 'down'
       s.position.set(0, (lying ? 1.0 : 2.15) + Math.sin(t * 2 + a.name.length) * 0.04, lying ? -0.6 : 0)
-      // 抵消人物整体缩放
-      s.scale.setScalar(0.62 / (a.root.scale.x || 1))
+      // 抵消人物整体缩放；一句话的气泡是长条
+      const k = 1 / (a.root.scale.x || 1)
+      if (lm) s.scale.set(0.42 * lm.aspect * k, 0.42 * k, 1)
+      else s.scale.setScalar(0.62 * k)
     }
   }
 }
