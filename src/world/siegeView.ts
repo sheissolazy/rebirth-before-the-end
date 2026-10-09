@@ -126,10 +126,9 @@ export class SiegeView {
   }
 
   /** 真人画风：加载两个 MakeHuman 丧尸，皮肤调灰绿、衣服弄脏、加血迹 */
-  async loadModels(): Promise<void> {
+  async loadModels(toon = peopleStyle() === 'toon'): Promise<void> {
     const loader = new GLTFLoader()
     // Q 版：来访的人、丧尸也用 Blender 捏的 Q 版（文件名后面加 _toon），跟一家人一个画风
-    const toon = peopleStyle() === 'toon'
     const file = (n: string) => (toon ? `${n}_toon` : n)
     const [gl, npcs] = await Promise.all([
       Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${file(n)}.glb`))),

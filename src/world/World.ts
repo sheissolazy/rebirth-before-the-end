@@ -547,7 +547,8 @@ export class World {
       const [gltf, paradise, people] = await Promise.all([
         new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
         this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
-        this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map((n) => loadPerson(peopleStyle() === 'toon' ? `${n}_toon` : n))) : Promise.resolve(null),
+        // 卡通画风一律用 Blender 捏的 Q 版人物；世外桃源画风按"人物"按钮选真人或 Q 版
+        Promise.all(['heroine', 'mom', 'dad'].map((n) => loadPerson(this.toonPeople ? `${n}_toon` : n))),
       ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
@@ -604,8 +605,7 @@ export class World {
       this.hingeGate(gates)
       this.setHud({ loading: false, intro: this.introT >= 0 })
       // 丧尸、访客、住进来的人的模型不挡开场：别墅出来以后在后台加载，好了再预热着色器
-      if (this.style === 'paradise') void this.siegeView.loadModels().then(() => this.afterExtraModels(), () => this.afterExtraModels())
-      else this.afterExtraModels()
+      void this.siegeView.loadModels(this.toonPeople).then(() => this.afterExtraModels(), () => this.afterExtraModels())
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
     }
@@ -2014,6 +2014,11 @@ export class World {
   }
 
   /** 原型调试：一家人换成 Q 版 / 真人（重新加载页面） */
+  /** 人物用不用 Q 版：卡通画风总是用，世外桃源画风看设置 */
+  private get toonPeople(): boolean {
+    return this.style === 'toon' || peopleStyle() === 'toon'
+  }
+
   togglePeople(): void {
     const next = peopleStyle() === 'toon' ? 'real' : 'toon'
     setPeopleStyle(next)
