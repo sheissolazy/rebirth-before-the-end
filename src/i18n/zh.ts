@@ -255,6 +255,8 @@ export const zh = {
   'world.report.crisis': '月底危机夜战报',
   'world.report.normal': '今夜战报',
   'world.report.kills': '打倒 {n} 只丧尸',
+  'world.report.trapKills': '🪤 其中钉板扎死 {n} 只',
+  'world.report.fireKills': '🔥 烧死 {n} 只',
   'world.report.ammo': '用掉 {n} 发子弹',
   'world.report.cores': '捡到 {n} 颗晶核',
   'world.report.damaged': '{what}掉了 {n} 点耐久',

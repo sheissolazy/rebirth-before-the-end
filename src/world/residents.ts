@@ -175,6 +175,9 @@ export interface NightReport {
   hurt: { name: string; lost: number }[]
   /** 这一晚没能撑过去的人 */
   died: string[]
+  /** 钉板扎死、燃烧瓶烧死的 */
+  trapKills: number
+  fireKills: number
   food: number
   water: number
 }
@@ -244,7 +247,7 @@ export class Household {
   nightDone = -1
   /** 最近一晚的战报（界面看完就清掉） */
   report: NightReport | null = null
-  private before: { ammo: number; cores: number; barriers: Barriers; health: number[]; food: number; water: number; crisis: boolean } | null = null
+  private before: { ammo: number; cores: number; barriers: Barriers; health: number[]; food: number; water: number; crisis: boolean; trapKills: number; fireKills: number } | null = null
   /** 序章存款（元）、急救包、加固铁门多出来的耐久 */
   money = 18000
   medkits = 0
@@ -1255,7 +1258,7 @@ export class Household {
     if (this.speed > 1) this.speed = 1
     this.before = {
       ammo: this.ammo.n, cores: this.cores, barriers: { ...this.barriers }, health: this.actors.map((a) => a.health),
-      food: this.stock.food, water: this.stock.water, crisis,
+      food: this.stock.food, water: this.stock.water, crisis, trapKills: 0, fireKills: 0,
     }
     this.siege = new Siege({
       count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
@@ -1293,6 +1296,8 @@ export class Household {
       // 丧尸掉晶核；黑鸦的人身上能搜出子弹
       if (e.raider) this.ammo.n += 2
       else this.cores += 1
+      if (this.before && e.by === 'trap') this.before.trapKills++
+      if (this.before && e.by === 'fire') this.before.fireKills++
     }
     if (e.kind === 'end') {
       // 打完了：还站着的人放下武器（屋外的女主没人管她的姿势，不然会一直端着枪）
@@ -1331,6 +1336,7 @@ export class Household {
         layers: LAYERS.map((l) => ({ id: l.id, lost: Math.max(0, b.barriers[l.id] - this.barriers[l.id]), broken: e.broken.includes(l.id) }))
           .filter((l) => l.lost > 0),
         hurt: this.actors.map((a, k) => ({ name: a.name, lost: Math.round(b.health[k] - a.health) })).filter((h) => h.lost > 0 && !this.actors.find((x) => x.name === h.name)?.dead),
+        trapKills: b.trapKills, fireKills: b.fireKills,
         died: this.actors.filter((a) => a.dead && a.health === 0 && b.health[this.actors.indexOf(a)] > 0).map((a) => a.name),
         food: Math.max(0, b.food - this.stock.food), water: Math.max(0, b.water - this.stock.water),
       }

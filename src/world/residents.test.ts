@@ -853,6 +853,7 @@ describe('生死', () => {
     expect(dead[0]).not.toBe(life.actors[0])
     expect(life.over).toBeNull()
     expect(life.report?.died).toEqual([dead[0].name])
+    expect(life.report?.trapKills).toBe(0)
   })
 })
 

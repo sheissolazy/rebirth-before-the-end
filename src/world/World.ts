@@ -101,6 +101,8 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 const TMP_FWD = new THREE.Vector3()
+/** 坟的位置：房子西边的草地（家里视角看得见，不挡路） */
+const GRAVES = [{ x: -2.0, z: 2.0 }, { x: -2.0, z: 3.6 }, { x: -3.1, z: 2.8 }, { x: -3.1, z: 4.4 }]
 
 /** 谢临：衣服换成黑色（复制材质，不影响别人） */
 function darkCoat(model: THREE.Object3D): void {
@@ -243,6 +245,7 @@ export class World {
   /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   private trapMesh: THREE.Group | null = null
+  private readonly graves = new Map<string, THREE.Object3D>()
   /** 上一帧看到的最后一条日记（undefined = 还没看过，刚读档的旧记录不弹提示） */
   private lastLog: LogEntry | null | undefined = undefined
   /** 送东西的人放在铁门外的箱子 / 纸条 */
@@ -533,6 +536,19 @@ export class World {
     this.gardenObj.add(this.ripeMark)
     this.gardenObj.visible = false
     this.scene.add(this.gardenObj)
+  }
+
+  /** 一座小坟：土堆 + 石碑 */
+  private makeGrave(): THREE.Group {
+    const g = new THREE.Group()
+    const soil = new THREE.Mesh(new THREE.SphereGeometry(0.45, 14, 8), new THREE.MeshStandardMaterial({ color: '#5b4632', roughness: 1 }))
+    soil.scale.set(1, 0.32, 1.45)
+    soil.receiveShadow = true
+    const stone = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.56, 0.08), new THREE.MeshStandardMaterial({ color: '#9a9893', roughness: 0.75 }))
+    stone.position.set(0, 0.28, -0.72)
+    stone.castShadow = true
+    g.add(soil, stone)
+    return g
   }
 
   /** 铁门外的钉板（几块钉满钉子的木板）和一卷螺旋铁丝网 */
@@ -1280,6 +1296,16 @@ export class World {
         else if (last.key.startsWith('world.log.died.')) { this.toast('world.toast.died', 5); this.sound.eerie() }
       }
       this.lastLog = last
+    }
+    // 走了的家人：院子西边多一个小土堆和一块石碑
+    for (const a of this.actors) {
+      if (!a.dead || a === this.heroine || this.graves.has(a.name) || this.hud.loading) continue
+      const at = GRAVES[this.graves.size % GRAVES.length]
+      const g = this.makeGrave()
+      g.position.set(at.x, 0, at.z)
+      g.rotation.y = YAW // 石碑正面朝着家里视角的镜头
+      this.graves.set(a.name, g)
+      this.scene.add(g)
     }
     // 钉板：铺了才出现，踩烂了就收起来
     if (this.life.trap.hp > 0 && !this.trapMesh && !this.hud.loading) {
