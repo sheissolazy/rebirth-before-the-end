@@ -6,7 +6,9 @@ import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel, type NeedKey } from './life'
 import type { PersonHud } from './residents'
 import { DiaryPanel } from './DiaryPanel'
-import { MapPanel } from './MapPanel'
+import { MapPanel, type MapMember } from './MapPanel'
+import { TRIPS } from './expedition'
+import type { LogEntry } from './residents'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
 const WELCOME_KEY = 'rbte-proto-welcome-v2'
@@ -77,14 +79,19 @@ export default function WorldView() {
   }
   // 翻日记时游戏暂停，合上再接着走
   const resume = useRef(1)
+  // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
+  const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
+  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[] }>({ checks: {}, members: [] })
   const setDiary = (open: boolean) => {
     const w = world.current
+    if (w && open) setDiaryLog(w.diaryLog())
     if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
     if (w && !open && w.speed === 0) w.setSpeed(resume.current)
     setDiaryState(open)
   }
   const setMap = (open: boolean) => {
     const w = world.current
+    if (w && open) setMapData({ checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])), members: w.homeMembers() })
     if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
     if (w && !open && w.speed === 0) w.setSpeed(resume.current)
     setMapState(open)
@@ -272,14 +279,14 @@ export default function WorldView() {
       )}
 
       {map && (
-        <MapPanel prologue={hud.prologue} check={(id) => world.current?.tripCheck(id) ?? 'busy'}
-          members={world.current?.homeMembers() ?? []}
+        <MapPanel prologue={hud.prologue} check={(id) => mapData.checks[id] ?? 'busy'}
+          members={mapData.members}
           onGo={(id, names) => { if (world.current?.startTrip(id, names)) setMap(false) }}
           onClose={() => setMap(false)} />
       )}
 
       {diary && (
-        <DiaryPanel day={hud.day} hour={hud.hour} log={world.current?.diaryLog() ?? []} onClose={() => setDiary(false)} />
+        <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} onClose={() => setDiary(false)} />
       )}
 
       {hud.loading && (
