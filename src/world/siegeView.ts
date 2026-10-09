@@ -7,6 +7,7 @@ import type { Pt } from './nav'
 import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
 import type { Household } from './residents'
 import { loadPerson } from './people'
+import { crowbar } from './meshes'
 
 interface Fx { obj: THREE.Object3D; t: number; life: number; update: (k: number, dt: number) => void }
 
@@ -189,6 +190,8 @@ export class SiegeView {
     const t = raider ? this.npcs.get('stranger') : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
     const z = new Zombie(at, t ? cloneSkinned(t) : undefined)
     z.root.scale.setScalar(0.94 + ((this.spawned * 13) % 10) / 80)
+    // 黑鸦的人手里拎着钢管
+    if (raider) z.driver?.attach(crowbar(), 'RightHand')
     this.scene.add(z.root)
     return z
   }
