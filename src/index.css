@@ -11,3 +11,6 @@ body { margin: 0; min-height: 100vh; }
 /* 2.5D 片头：标题慢慢浮现 */
 @keyframes intro-fade { 0% { opacity: 0; transform: translateY(8px) } 25% { opacity: 1; transform: none } 85% { opacity: 1 } 100% { opacity: 0 } }
 .intro-title { animation: intro-fade 7s ease-in-out forwards; }
+/* 女主死了：黑屏上慢慢浮出来 */
+@keyframes over-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.over-card { animation: over-in 2.4s ease-out both; }

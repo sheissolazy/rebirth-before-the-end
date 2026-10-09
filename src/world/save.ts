@@ -21,6 +21,7 @@ interface ActorSave {
   health: number
   away: boolean
   lost: boolean
+  dead?: boolean
   runaway: { back: number } | null
   lowMood: number
 }
@@ -61,6 +62,7 @@ export interface WorldSave {
   visitDay?: number
   searched?: Record<string, number>
   fishCaught?: number
+  over?: { day: number; hour: number; cause: string } | null
   trap?: number
   fewerTonight?: boolean
   wall?: boolean
@@ -81,7 +83,7 @@ export function snapshot(life: Household): WorldSave {
     log: [...life.log],
     actors: life.actors.filter((a) => !a.guest).map((a) => ({
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
-      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, runaway: a.runaway, lowMood: a.lowMood,
+      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood,
     })),
     trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back } : null,
     seen: { ...life.seen },
@@ -105,6 +107,7 @@ export function snapshot(life: Household): WorldSave {
     visitDay: life.visitDay,
     searched: { ...life.searched },
     fishCaught: life.fishCaught,
+    over: life.over,
     trap: life.trap.hp,
     fewerTonight: life.fewerTonight,
     wall: life.wall,
@@ -139,6 +142,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.visitDay = s.visitDay ?? -1
   life.searched = { ...(s.searched ?? {}) }
   life.fishCaught = s.fishCaught ?? 0
+  life.over = s.over ?? null
+  if (life.over) { life.actors[0].pose = 'down'; life.speed = 0 }
   life.trap.hp = s.trap ?? 0
   life.fewerTonight = !!s.fewerTonight
   life.wall = !!s.wall
@@ -163,6 +168,7 @@ export function restore(life: Household, s: WorldSave): void {
     a.health = as.health
     a.away = as.away || as.lost || !!as.runaway
     a.lost = as.lost
+    a.dead = !!as.dead
     a.runaway = as.runaway
     a.lowMood = as.lowMood
   }
@@ -196,4 +202,17 @@ export function loadWorld(life: Household): boolean {
 
 export function clearWorld(): void {
   try { localStorage.removeItem(KEY) } catch { /* 没关系 */ }
+}
+
+const LIVES = `${PREFIX}-lives`
+
+/** 现在是第几世（女主每死一次 +1；清档重来不算） */
+export function currentLife(): number {
+  try { return Math.max(1, Number(localStorage.getItem(LIVES)) || 1) } catch { return 1 }
+}
+
+/** 女主死了：进入下一世（删掉这一世的存档） */
+export function nextLife(): void {
+  try { localStorage.setItem(LIVES, String(currentLife() + 1)) } catch { /* 没关系 */ }
+  clearWorld()
 }

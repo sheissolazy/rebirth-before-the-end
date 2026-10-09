@@ -202,9 +202,10 @@ describe('出门', () => {
 })
 
 describe('需求归零的后果', () => {
-  it('家里断粮断水：饿着渴着掉健康，熬久了有人抑郁离家出走（女主不会走）', () => {
+  it('家里断粮断水：饿着渴着掉健康，（有急救包吊着命）熬久了有人抑郁离家出走（女主不会走）', () => {
     const { life } = simulate('paradise', 0)
     life.stock = { food: 0, water: 0 }
+    life.medkits = 40
     life.clock = { day: 0, hour: 8 }
     life.speed = 3
     for (const a of life.actors) a.needs = { hunger: 10, thirst: 10, energy: 60, mood: 30 }
@@ -806,5 +807,51 @@ describe('铁门外的钉板', () => {
     expect(slowedSeen).toBe(true)
     expect(life.trap.hp).toBe(0)
     expect(life.log.some((l) => l.key === 'world.log.trapGone')).toBe(true)
+  })
+})
+
+describe('生死', () => {
+  it('家人饿到底会死（本世永久），全家心情大跌；女主饿死这一世就结束，时间停住', () => {
+    const { life } = simulate('paradise', 0)
+    life.medkits = 0
+    const mom = life.actors[1]
+    mom.needs = { ...mom.needs, hunger: 0, thirst: 0 }
+    mom.health = 3
+    const moodBefore = life.actors[2].needs.mood
+    for (let i = 0; i < 400 && !mom.dead; i++) { mom.needs = { ...mom.needs, hunger: 0, thirst: 0 }; life.tick(0.05, () => false) }
+    expect(mom.dead).toBe(true)
+    expect(mom.lost).toBe(true)
+    expect(life.residents).toBe(2)
+    expect(life.actors[2].needs.mood).toBeLessThan(moodBefore - 15)
+    expect(life.log.some((l) => l.key === 'world.log.died.thirst')).toBe(true)
+    const hero = life.actors[0]
+    hero.health = 2
+    for (let i = 0; i < 400 && !life.over; i++) { hero.needs = { ...hero.needs, hunger: 0, thirst: 0 }; life.tick(0.05, () => false) }
+    expect(life.over?.cause).toBe('thirst')
+    expect(hero.pose).toBe('down')
+    const clock = { ...life.clock }
+    life.speed = 1
+    life.tick(0.05, () => false)
+    expect(life.clock).toEqual(clock)
+    // 存档往返：这一世结束的状态还在
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.over?.cause).toBe('thirst')
+    expect(b.actors[1].dead).toBe(true)
+  })
+
+  it('月底危机夜没守住：倒下的家人里有一个死了，战报写着', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 21.1 }
+    life.startSiege(3, true)
+    const s = life.siege as unknown as { knockDown: (a: Actor) => void }
+    for (const a of life.actors) { a.health = 0; s.knockDown(a) }
+    for (let i = 0; i < 200 && life.siege && !life.report; i++) life.tick(0.05, () => false)
+    const dead = life.actors.filter((a) => a.dead)
+    expect(dead.length).toBe(1)
+    expect(dead[0]).not.toBe(life.actors[0])
+    expect(life.over).toBeNull()
+    expect(life.report?.died).toEqual([dead[0].name])
   })
 })

@@ -364,6 +364,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
+          <button onClick={() => world.current?.debugDie()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.die')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>
       </details>
@@ -437,6 +438,7 @@ export default function WorldView() {
                 <li key={l.id}>🚪 {t(l.broken ? 'world.report.broken' : 'world.report.damaged', { what: t(`world.layer.${l.id}` as UiKey), n: Math.round(l.lost) })}</li>
               ))}
               {hud.report.hurt.map((h) => <li key={h.name}>🩹 {t('world.report.hurt', { who: h.name, n: h.lost })}</li>)}
+              {hud.report.died.map((n) => <li key={n} className="font-bold text-red-700">🕯 {t('world.report.died', { who: n })}</li>)}
               {(hud.report.food > 0.05 || hud.report.water > 0.05) && (
                 <li>📦 {t('world.report.loss', { food: hud.report.food.toFixed(1), water: hud.report.water.toFixed(1) })}</li>
               )}
@@ -448,12 +450,27 @@ export default function WorldView() {
         </div>
       )}
 
+      {hud.over && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4">
+          <div className="over-card max-w-md text-center font-serif text-white">
+            <div className="text-sm tracking-[0.4em] text-white/60">{t('world.over.life', { n: hud.life })}</div>
+            <div className="mt-3 text-4xl font-bold tracking-[0.2em]">{t('world.over.title')}</div>
+            <p className="mt-5 text-base leading-relaxed text-white/85">{t(`world.over.cause.${hud.over.cause}` as UiKey)}</p>
+            <p className="mt-2 text-sm text-white/60">{t('world.over.when', { when: hud.over.when, days: hud.over.days })}</p>
+            <p className="mt-6 text-sm leading-relaxed text-white/70">{t('world.over.again')}</p>
+            <button onClick={() => world.current?.rebirth()}
+              className="mt-6 rounded-xl bg-amber-500 px-6 py-2.5 text-base font-bold text-zinc-900 shadow-lg hover:bg-amber-400">
+              {t('world.over.button', { n: hud.life + 1 })}
+            </button>
+          </div>
+        </div>
+      )}
       {hud.intro && (
         <div className="absolute inset-0 z-30 flex cursor-pointer flex-col justify-between" onClick={() => world.current?.endIntro()}>
           <div className="h-[9vh] bg-black" />
           <div className="intro-title text-center font-serif text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
             <div className="text-4xl font-bold tracking-[0.3em]">{t('app.title')}</div>
-            <div className="mt-3 text-base tracking-widest opacity-90">{t('world.intro.sub')}</div>
+            <div className="mt-3 text-base tracking-widest opacity-90">{hud.life > 1 ? t('world.intro.subLife', { n: hud.life }) : t('world.intro.sub')}</div>
           </div>
           <div className="flex h-[9vh] items-center justify-end bg-black px-6 text-xs text-white/60">{t('world.intro.skip')}</div>
         </div>

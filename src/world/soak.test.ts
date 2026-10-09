@@ -42,7 +42,7 @@ describe('长跑', () => {
       let sieges = 0
       let trips = 0
       let visits = 0
-      for (let i = 0; i < steps && life.clock.day < days; i++) {
+      for (let i = 0; i < steps && life.clock.day < days && !life.over; i++) {
         // 打完丧尸会自动切回 1 倍速，玩家再调回 3 倍
         if (!life.siege && life.speed !== 3) life.speed = 3
         // 玩家的随机操作
@@ -89,9 +89,10 @@ describe('长跑', () => {
           expect(v).toBeGreaterThanOrEqual(-1e-6)
         }
       }
-      expect(life.clock.day).toBeGreaterThanOrEqual(days)
+      // 乱玩的话女主可能饿死：这一世结束也算正常收尾
+      if (!life.over) expect(life.clock.day).toBeGreaterThanOrEqual(days)
       expect(Number.isFinite(life.trap.hp)).toBe(true)
-      console.log(`seed ${seed}: day ${life.clock.day}, sieges ${sieges}, trips ${trips}, visits ${visits}, couriers ${couriers}, residents ${life.residents}, food ${life.stock.food.toFixed(1)}, trap ${life.trap.hp.toFixed(0)}, log ${life.log.length}`)
+      console.log(`seed ${seed}: day ${life.clock.day}, sieges ${sieges}, trips ${trips}, visits ${visits}, couriers ${couriers}, over ${life.over?.cause ?? '-'}, dead ${life.actors.filter((a) => a.dead).length}, residents ${life.residents}, food ${life.stock.food.toFixed(1)}, trap ${life.trap.hp.toFixed(0)}, log ${life.log.length}`)
     }, 60000)
   }
 })

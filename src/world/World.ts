@@ -24,7 +24,7 @@ import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
-import { clearWorld, loadWorld, saveWorld } from './save'
+import { clearWorld, currentLife, loadWorld, nextLife, saveWorld } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -68,6 +68,10 @@ export interface Hud {
   molotovs: number
   /** 院墙砌了没有 */
   wall: boolean
+  /** 第几世 */
+  life: number
+  /** 女主死了：这一世结束 */
+  over: { when: string; cause: string; days: number } | null
   /** 钉板耐久（0 = 没有） */
   trap: number
   /** 末日前要做的事（做完打勾） */
@@ -114,14 +118,14 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -239,6 +243,8 @@ export class World {
   /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   private trapMesh: THREE.Group | null = null
+  /** 上一帧看到的最后一条日记（undefined = 还没看过，刚读档的旧记录不弹提示） */
+  private lastLog: LogEntry | null | undefined = undefined
   /** 送东西的人放在铁门外的箱子 / 纸条 */
   private dropped: THREE.Object3D | null = null
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
@@ -1255,6 +1261,15 @@ export class World {
       this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
       this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
     }
+    // 有人快饿死、有人走了：日记里新出现这种记录就弹提示（只看新的）
+    const last = this.life.log.at(-1) ?? null
+    if (last !== this.lastLog) {
+      if (this.lastLog !== undefined && last) {
+        if (last.key === 'world.log.dying') this.toast('world.toast.dying', 5)
+        else if (last.key.startsWith('world.log.died.')) { this.toast('world.toast.died', 5); this.sound.eerie() }
+      }
+      this.lastLog = last
+    }
     // 钉板：铺了才出现，踩烂了就收起来
     if (this.life.trap.hp > 0 && !this.trapMesh && !this.hud.loading) {
       this.trapMesh = this.makeTrap()
@@ -1386,6 +1401,7 @@ export class World {
     const el = this.renderer.domElement
     this.on(el, 'pointerdown', ((e: PointerEvent) => {
       this.sound.unlock()
+      if (this.life.over) return
       el.setPointerCapture(e.pointerId)
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (this.pointers.size === 1) this.press = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false }
@@ -1414,6 +1430,7 @@ export class World {
     this.on(el, 'wheel', ((e: WheelEvent) => { e.preventDefault(); this.zoomBy(1 + e.deltaY * 0.0012) }) as EventListener)
     this.on(window, 'keydown', ((e: KeyboardEvent) => {
       this.sound.unlock()
+      if (this.life.over) return
       const k = e.key.toLowerCase()
       if (k === 'e' && !e.repeat) this.searchHere()
       this.keys.add(k)
@@ -1616,6 +1633,12 @@ export class World {
     this.pushLifeHud()
   }
 
+  /** 原型调试：看看"你又死了一次"那一屏 */
+  debugDie(): void {
+    this.life.die(this.actors[0], 'crisis')
+    this.pushLifeHud()
+  }
+
   /** 原型调试：顾沉 / 谢临马上送东西来 */
   debugCourier(who: 'guchen' | 'xielin'): void {
     if (this.life.clock.day < PROLOGUE_DAYS) this.life.clock = { day: PROLOGUE_DAYS, hour: 9 }
@@ -1724,6 +1747,7 @@ export class World {
   }
 
   setSpeed(n: number): void {
+    if (this.life.over) return
     this.life.speed = n
     this.pushLifeHud()
   }
@@ -1736,6 +1760,12 @@ export class World {
     const c = this.life.clock
     this.setHud({
       time: calendarLabel(c),
+      life: currentLife(),
+      over: this.life.over ? {
+        when: calendarLabel({ day: this.life.over.day, hour: this.life.over.hour }),
+        cause: this.life.over.cause,
+        days: Math.max(0, this.life.over.day - PROLOGUE_DAYS + 1),
+      } : null,
       night: isNight(c.hour),
       rain: this.life.rain,
       crisis: isCrisisNight(c),
@@ -1797,6 +1827,13 @@ export class World {
   restart(): void {
     this.disposed = true
     clearWorld()
+    location.reload()
+  }
+
+  /** 女主死了：带着记忆进入下一世（新开局，第几世 +1） */
+  rebirth(): void {
+    this.disposed = true
+    nextLife()
     location.reload()
   }
 

@@ -81,6 +81,8 @@ export class Actor extends Walker {
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
   runaway: { back: number } | null = null
   lost = false
+  /** 死了（本世永久；lost 也会是 true，各处排除 lost 的逻辑都不用改） */
+  dead = false
   /** 玩家下过命令后，这么多游戏小时内不自己找事 */
   hold = 0
   private settle: { from: THREE.Vector3; to: THREE.Vector3; r0: number; r1: number; t: number } | null = null
@@ -171,6 +173,8 @@ export interface NightReport {
   /** 每一层防线掉了多少耐久、有没有被破 */
   layers: { id: LayerId; lost: number; broken: boolean }[]
   hurt: { name: string; lost: number }[]
+  /** 这一晚没能撑过去的人 */
+  died: string[]
   food: number
   water: number
 }
@@ -208,7 +212,7 @@ export interface PersonHud {
   /** 住进来的人的特质名（比如"修车工"） */
   trait?: string
   /** 离家出走 / 不在了 */
-  gone?: 'runaway' | 'lost'
+  gone?: 'runaway' | 'lost' | 'dead'
   /** 出门在外：去哪了、还有几小时回来 */
   trip?: { id: string; left: number }
   health: number
@@ -333,7 +337,7 @@ export class Household {
 
   /** 每帧调用。dt 是现实秒数（已经限过最大值） */
   tick(dt: number, autonomous: (a: Actor) => boolean): void {
-    if (this.speed <= 0) return
+    if (this.speed <= 0 || this.over) return
     this.clock = advance(this.clock, dt, this.speed)
     const hours = (dt * this.speed * 24) / DAY_SECONDS
     this.siegeTick(dt * this.speed)
@@ -361,6 +365,8 @@ export class Household {
       }
       if (fighting || this.onTrip(a) || a.runaway || a.lost) continue
       this.consequences(a, hours)
+      // 刚刚死了或者离家出走了：别再给 TA 派活（不然会一直占着床、占着位置）
+      if (a.lost || a.dead || a.runaway) continue
       if (a.task) this.runTask(a, hours)
       else {
         a.hold = Math.max(0, a.hold - hours)
@@ -777,10 +783,13 @@ export class Household {
 
   private consequences(a: Actor, hours: number): void {
     const n = a.needs
-    // 饿到、渴到底：掉健康
+    // 饿到、渴到底：掉健康；掉到底就死了（本世永久）
     if (n.hunger <= 0 || n.thirst <= 0) {
-      a.health = Math.max(1, a.health - hours * (n.hunger <= 0 && n.thirst <= 0 ? 8 : 4))
+      // 又饿又渴约 25 个游戏小时（1 倍速 5 分钟）会死，只是饿或只是渴要两倍时间；急救包能吊住命
+      a.health = Math.max(0, a.health - hours * (n.hunger <= 0 && n.thirst <= 0 ? 4 : 2))
       this.noteOnce(a, 'starve', n.thirst <= 0 ? 'world.log.thirsty' : 'world.log.starving')
+      if (a.health < 30) this.noteOnce(a, 'dying', 'world.log.dying')
+      if (a.health <= 0) { this.die(a, n.thirst <= 0 ? 'thirst' : 'starve'); return }
     }
     // 累到底：就地倒下睡着
     if (n.energy <= 0 && a.task?.kind !== 'sleep') {
@@ -793,6 +802,33 @@ export class Household {
     // 抑郁：心情低于抑郁线累计一天，就会留张纸条离家出走（女主是玩家自己，不会走）
     a.lowMood = n.mood < DEPRESSED ? a.lowMood + hours : Math.max(0, a.lowMood - hours * 2)
     if (a.lowMood >= 24 && a !== this.actors[0]) this.runAway(a)
+  }
+
+  /** 女主死了：这一世结束（界面弹"再重生一次"） */
+  over: { day: number; hour: number; cause: string } | null = null
+
+  /** 有人死了。女主死了这一世就结束；家人死了本世永久不在，全家心情大跌 */
+  die(a: Actor, cause: 'starve' | 'thirst' | 'crisis'): void {
+    if (a.dead) return
+    this.cancel(a)
+    a.health = 0
+    a.dead = true
+    a.runaway = null
+    a.path = []
+    if (a === this.actors[0]) {
+      // 女主倒在原地（不藏起来），游戏停在这一刻
+      a.pose = 'down'
+      this.over = { day: this.clock.day, hour: this.clock.hour, cause }
+      this.stopFishing()
+      this.cancelSearch()
+      this.note('world.log.heroDied')
+      this.speed = 0
+      return
+    }
+    a.lost = true
+    a.away = true
+    this.note(`world.log.died.${cause}`, { who: a.name })
+    for (const b of this.actors) if (!b.dead) b.needs = { ...b.needs, mood: Math.max(0, b.needs.mood - 25) }
   }
 
   private runAway(a: Actor): void {
@@ -1230,6 +1266,12 @@ export class Household {
         this.stock = { food: this.stock.food - food, water: this.stock.water - water }
         this.note('world.log.lost', { food: food.toFixed(1), water: water.toFixed(1) })
         for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, a.needs.mood - 20) }
+        // 月底危机夜没守住：倒下的家人里有一个没能撑过去；家里只剩女主一个的话，就是她
+        if (this.before?.crisis) {
+          const fallen = this.actors.filter((a) => a !== this.actors[0] && !a.guest && !a.dead && e.downed.includes(a.name))
+          if (fallen.length) this.die(fallen[Math.floor(this.rand() * fallen.length)], 'crisis')
+          else if (e.downed.includes(this.actors[0].name)) this.die(this.actors[0], 'crisis')
+        }
       }
     }
     if (e.kind === 'end' && e.ambush) { this.before = null; this.onSiege?.(e); return }
@@ -1239,7 +1281,8 @@ export class Household {
         won: e.won, crisis: b.crisis, kills: e.kills, ammo: b.ammo - this.ammo.n, cores: this.cores - b.cores,
         layers: LAYERS.map((l) => ({ id: l.id, lost: Math.max(0, b.barriers[l.id] - this.barriers[l.id]), broken: e.broken.includes(l.id) }))
           .filter((l) => l.lost > 0),
-        hurt: this.actors.map((a, k) => ({ name: a.name, lost: Math.round(b.health[k] - a.health) })).filter((h) => h.lost > 0),
+        hurt: this.actors.map((a, k) => ({ name: a.name, lost: Math.round(b.health[k] - a.health) })).filter((h) => h.lost > 0 && !this.actors.find((x) => x.name === h.name)?.dead),
+        died: this.actors.filter((a) => a.dead && a.health === 0 && b.health[this.actors.indexOf(a)] > 0).map((a) => a.name),
         food: Math.max(0, b.food - this.stock.food), water: Math.max(0, b.water - this.stock.water),
       }
       this.before = null
@@ -1526,7 +1569,7 @@ export class Household {
       name: a.name,
       health: a.health,
       trait: a.trait ? lt(survivorTraits.find((x) => x.id === a.trait)?.name ?? { zh: '' }) : undefined,
-      gone: a.lost ? 'lost' : a.runaway ? 'runaway' : undefined,
+      gone: a.dead ? 'dead' : a.lost ? 'lost' : a.runaway ? 'runaway' : undefined,
       trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
