@@ -64,6 +64,7 @@ export const zh = {
   'world.cores': '晶核 {n}',
   'world.diary': '日记',
   'world.diary.title': '重生日记',
+  'world.diary.life': '第 {n} 世 · 重生点 {p}',
   'world.diary.open': '📕 重生日记',
   'world.diary.toDoom': '距离末日还有 {n} 天。外婆的老宅还来得及多囤一点。',
   'world.diary.toCrisis': '{m} 月的危机是「{kind}」，离月底那一晚还有 {n} 小时',

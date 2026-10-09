@@ -3,6 +3,7 @@ import { t, lt, type UiKey } from '../i18n'
 import { memoriesYear1 } from '../content/memories'
 import { DAYS_PER_MONTH, PROLOGUE_DAYS, SUNSET, calendarLabel } from './life'
 import type { LogEntry } from './residents'
+import { currentLife, rebirthPoints } from './save'
 
 export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean }
 
@@ -28,7 +29,10 @@ export function DiaryPanel({ day, hour, log, people, onClose }: {
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xl font-bold tracking-wide">{t('world.diary.title')}</div>
-              <div className="mt-0.5 text-xs text-zinc-500">{calendarLabel({ day, hour })}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                {calendarLabel({ day, hour })}
+                {currentLife() > 1 && <span className="ml-2 text-red-800">{t('world.diary.life', { n: currentLife(), p: rebirthPoints() })}</span>}
+              </div>
             </div>
             <button onClick={onClose} className="rounded-full px-2 text-lg text-zinc-500 hover:bg-black/5">✕</button>
           </div>
