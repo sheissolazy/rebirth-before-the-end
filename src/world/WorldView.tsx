@@ -410,7 +410,7 @@ export default function WorldView() {
 
       {hud.toast && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
-          {t(hud.toast as UiKey)}
+          {t(hud.toast as UiKey, hud.toastVars ?? undefined)}
         </div>
       )}
 

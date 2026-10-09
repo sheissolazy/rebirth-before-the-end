@@ -50,6 +50,8 @@ export interface Hud {
   people: PersonHud[]
   /** 短暂的提示（比如"有人在用"） */
   toast: string
+  /** 提示条里的变量（比如危机夜是哪一种） */
+  toastVars: Record<string, string> | null
   ammo: number
   cores: number
   /** 正在打丧尸：还剩几只、守的是哪一层、这一层的耐久 */
@@ -156,7 +158,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -1376,7 +1378,8 @@ export class World {
       const left = this.life.available
       if (ck.hour >= 8 && ck.hour < SUNSET && this.warned.crisis !== ck.day && isCrisisNight({ day: ck.day, hour: 21 })) {
         this.warned.crisis = ck.day
-        this.toast('world.toast.crisisDay', 6)
+        const kind = Household.crisisKind({ day: ck.day, hour: 21 })
+        this.toast('world.toast.crisisDay', 6, { kind: kind ? t(`crisisKind.${kind}` as UiKey) : '' })
       } else if (ck.hour >= 9 && ck.hour < 10 && this.warned.stock !== ck.day && (left.water < 3 || left.food < 3)) {
         // 早上看一眼存货：快没水 / 没吃的了就提醒（饿死渴死是会死人的）
         this.warned.stock = ck.day
@@ -1711,9 +1714,9 @@ export class World {
     this.marker.visible = true
   }
 
-  private toast(key: ToastKey, seconds = 2): void {
+  private toast(key: ToastKey, seconds = 2, vars?: Record<string, string>): void {
     this.toastTimer = seconds
-    this.setHud({ toast: key })
+    this.setHud({ toast: key, toastVars: vars ?? null })
   }
 
   /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
