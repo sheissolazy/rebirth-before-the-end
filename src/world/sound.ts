@@ -368,6 +368,61 @@ export class Sound {
     }
   }
 
+  /** 喵：一声往上挑再落下的"咪——呜"（锯齿波过两个共振峰） */
+  meow(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    const o = ctx.createOscillator()
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(520, t)
+    o.frequency.linearRampToValueAtTime(820, t + 0.18)
+    o.frequency.linearRampToValueAtTime(600, t + 0.55)
+    const f1 = ctx.createBiquadFilter()
+    f1.type = 'bandpass'
+    f1.Q.value = 6
+    f1.frequency.setValueAtTime(900, t)
+    f1.frequency.linearRampToValueAtTime(1500, t + 0.2)
+    f1.frequency.linearRampToValueAtTime(800, t + 0.55)
+    const g = ctx.createGain()
+    this.env(g, t, 0.22, 0.05, 0.55)
+    o.connect(f1).connect(g).connect(this.master!)
+    o.start(t)
+    o.stop(t + 0.7)
+  }
+
+  /** 呼噜：很低的噪声，一秒二十几下地一鼓一鼓 */
+  purr(): void {
+    const ctx = this.ready
+    if (!ctx || !this.noise) return
+    const t = ctx.currentTime + 0.5
+    const src = ctx.createBufferSource()
+    src.buffer = this.noise
+    src.loop = true
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.value = 160
+    const g = ctx.createGain()
+    g.gain.value = 0
+    const lfo = ctx.createOscillator()
+    lfo.frequency.value = 24
+    const depth = ctx.createGain()
+    depth.gain.value = 0.18
+    lfo.connect(depth).connect(g.gain)
+    src.connect(lp).connect(g).connect(this.master!)
+    const env = ctx.createGain()
+    env.gain.setValueAtTime(0, t)
+    env.gain.linearRampToValueAtTime(1, t + 0.3)
+    env.gain.setValueAtTime(1, t + 1.6)
+    env.gain.linearRampToValueAtTime(0, t + 2.2)
+    g.disconnect()
+    g.connect(env).connect(this.master!)
+    src.start(t)
+    lfo.start(t)
+    src.stop(t + 2.3)
+    lfo.stop(t + 2.3)
+  }
+
   private eng: { a: OscillatorNode; b: OscillatorNode; lp: BiquadFilterNode; gain: GainNode } | null = null
 
   /** 每帧：面包车发动机。level 0 = 熄火 / 听不见，1 = 就在院子里；rev 0~1 = 油门 */

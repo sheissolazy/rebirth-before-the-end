@@ -55,6 +55,7 @@ export const zh = {
   'world.go.relax': '找地方歇会儿',
   'world.go.sit': '去坐一会儿',
   'world.go.stroll': '去院子里走走',
+  'world.toast.cat': '大橘蹭了蹭你的手，呼噜呼噜 💕',
   'world.toast.busy': '用不了：有人在用，或者家里没吃的/喝的了',
   'world.toast.fighting': '打丧尸时：先点一个人，再点地上发光的守位圈（蓝色后排、橙色贴门）就能换位置',
   'world.toast.siege': '丧尸来了！大家各就各位',

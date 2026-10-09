@@ -11,6 +11,7 @@ import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
 import { decorateHouse, parchmentMap } from './decor'
 import { VanView, buildVan, vanPose } from './van'
+import { Cat } from './cat'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
@@ -154,7 +155,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.cat' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -213,6 +214,9 @@ export class World {
   private nightness = 0
   /** 家里的旧面包车 */
   private van = new VanView(buildVan())
+  /** 外婆家的橘猫大橘（模型加载好以后才有） */
+  private cat: Cat | null = null
+  private catHeart = new THREE.Sprite(bubbleMaterial('💕'))
   /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
   private gateDoors: { pivot: THREE.Object3D; sign: number }[] = []
   private gateAngle = 0
@@ -575,6 +579,17 @@ export class World {
       }
       this.addLamps()
       this.collectClickables()
+      // 大橘：不挡开场，后台加载好了再放到客厅地毯上
+      void new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/cat_toon.glb`).then((g) => {
+        if (this.disposed) return
+        this.cat = new Cat(g.scene, { x: 1.3, z: 4.45, floor: 0 })
+        this.catHeart.scale.setScalar(0.32)
+        this.catHeart.position.y = 0.62
+        this.catHeart.renderOrder = 11
+        this.catHeart.visible = false
+        this.cat.root.add(this.catHeart)
+        this.scene.add(this.cat.root)
+      }, (e) => console.warn('cat', e))
       // 窗玻璃：夜里亮起暖光
       const seen = new Set<THREE.Material>()
       this.scene.traverse((o) => {
@@ -1608,6 +1623,20 @@ export class World {
         if (a === this.selected && this.mode === 'home') this.setViewFloor(a.floor)
       }
     }
+    if (this.cat) {
+      const cat = this.cat
+      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: this.life.clock.hour, siege: fighting })
+      cat.root.visible = !(upstairsHidden && cat.root.position.y > FLOOR_H - 0.4)
+      this.catHeart.visible = cat.hearts > 0 && cat.root.visible
+      this.catHeart.position.y = 0.62 + Math.sin(this.elapsed * 3) * 0.03
+      // 猫挨着的人（1.3 米内、同一层）心情慢慢变好
+      if (sim > 0) {
+        for (const a of this.actors) {
+          if (a.away || a.floor !== cat.floor || Math.hypot(a.pos.x - cat.pos.x, a.pos.z - cat.pos.z) > 1.3) continue
+          a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + sim * 0.12) }
+        }
+      }
+    }
     if (sim > 0) this.makeWay()
     const heroOut = this.life.onTrip(this.heroine)
     this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
@@ -1749,6 +1778,19 @@ export class World {
     this.zoom[this.mode] = THREE.MathUtils.clamp(z, this.mode === 'home' ? 0.55 : 0.6, this.mode === 'home' ? 1.5 : 1.8)
   }
 
+  private petCat(): void {
+    const cat = this.cat
+    if (!cat) return
+    cat.poke()
+    this.sound.meow()
+    this.sound.purr()
+    this.toast('world.toast.cat', 2)
+    for (const a of this.actors) {
+      if (a.away || Math.hypot(a.pos.x - cat.pos.x, a.pos.z - cat.pos.z) > 4) continue
+      a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 3) }
+    }
+  }
+
   private panBy(dx: number, dy: number): void {
     const scale = (this.pose.dist * Math.tan(THREE.MathUtils.degToRad(this.pose.fov / 2)) * 2) / this.host.clientHeight
     const right = new THREE.Vector3(Math.cos(YAW), 0, -Math.sin(YAW))
@@ -1763,6 +1805,11 @@ export class World {
     this.raycaster.setFromCamera(ndc, this.camera)
     const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
     if (this.mode === 'home' && this.tapPost()) return
+    // 点大橘：喵一声、呼噜呼噜，身边的人心情好一点
+    if (this.cat?.root.visible && this.raycaster.intersectObject(this.cat.root, true).length) {
+      this.petCat()
+      return
+    }
     if (this.mode === 'home') {
       const hits = this.raycaster.intersectObjects(this.actors.filter((a) => a.root.visible).map((a) => a.root), true)
       if (hits.length) {
