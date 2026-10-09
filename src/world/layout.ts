@@ -119,7 +119,7 @@ export const PROPS: Prop[] = [
   ...[-20, -12, -4, 10, 18, 26].map((x) => ({ kind: 'tree' as const, x, z: 14.2, w: 0.6, d: 0.6, rot: 0 })),
   ...[-18, -6, 6, 20].map((x) => ({ kind: 'tree' as const, x, z: 22, w: 0.6, d: 0.6, rot: 0 })),
   { kind: 'tree', x: -2.5, z: -1.5, w: 0.6, d: 0.6, rot: 0 },
-  { kind: 'tree', x: 10.5, z: 10.5, w: 0.6, d: 0.6, rot: 0 },
+  { kind: 'tree', x: 11, z: -1.5, w: 0.6, d: 0.6, rot: 0 },
   { kind: 'tree', x: -2.5, z: 11, w: 0.6, d: 0.6, rot: 0 },
 ]
 

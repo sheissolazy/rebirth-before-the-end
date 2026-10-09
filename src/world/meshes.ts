@@ -20,14 +20,16 @@ function gradientMap(): THREE.DataTexture {
 const cache = new Map<string, THREE.MeshToonMaterial>()
 
 /** 同一种颜色共用一个材质；`own` 为 true 时返回独立材质（需要单独淡入淡出的屋顶等） */
-export function toon(color: THREE.ColorRepresentation, opts: { own?: boolean; opacity?: number } = {}): THREE.MeshToonMaterial {
+export function toon(color: THREE.ColorRepresentation, opts: { own?: boolean; opacity?: number; name?: string } = {}): THREE.MeshToonMaterial {
   const c = new THREE.Color(color)
-  const key = `${c.getHexString()}|${opts.opacity ?? 1}`
+  const key = `${c.getHexString()}|${opts.opacity ?? 1}|${opts.name ?? ''}`
   if (!opts.own) {
     const hit = cache.get(key)
     if (hit) return hit
   }
   const mat = new THREE.MeshToonMaterial({ color: c, gradientMap: gradientMap() })
+  // 用调色板里的名字给材质命名，世外桃源画风靠名字换贴图
+  mat.name = opts.name ?? colorName(c)
   if (opts.opacity !== undefined && opts.opacity < 1) {
     mat.transparent = true
     mat.opacity = opts.opacity
@@ -44,12 +46,17 @@ export function toonify(root: THREE.Object3D): void {
     const swap = (m: THREE.Material) => {
       const std = m as THREE.MeshStandardMaterial
       const glass = m.name === 'pal_glass'
-      return toon(std.color ?? 0xffffff, glass ? { opacity: 0.55 } : {})
+      return toon(std.color ?? 0xffffff, glass ? { opacity: 0.55, name: m.name } : { name: m.name })
     }
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(swap) : swap(mesh.material)
     mesh.castShadow = true
     mesh.receiveShadow = true
   })
+}
+
+function colorName(c: THREE.Color): string {
+  for (const [k, v] of Object.entries(COLORS)) if (new THREE.Color(v).equals(c)) return k
+  return ''
 }
 
 export function box(w: number, h: number, d: number, color: THREE.ColorRepresentation,
@@ -79,6 +86,7 @@ export const COLORS = {
   road: '#5d6266',
   sidewalk: '#c7c1b4',
   stone: '#b4b8ba',
+  bark: '#5a3d29',
   leaf: '#5e9e47',
   skin: '#f1c7a5',
 }
@@ -201,21 +209,22 @@ export function villaRoof(w: number, d: number, baseY: number): { root: THREE.Gr
 
 export function neighborHouse(p: Prop): THREE.Group {
   const h = 3.4
-  const g = group(box(p.w, h, p.d, p.color ?? COLORS.wall, [0, 0, 0]))
-  g.add(gableRoof(p.w, p.d, h, 1.6, '#8a5a44'))
+  const wallMat = toon(p.color ?? COLORS.wall, { name: 'wallTinted' })
+  const g = group(box(p.w, h, p.d, p.color ?? COLORS.wall, [0, 0, 0], wallMat))
+  g.add(gableRoof(p.w, p.d, h, 1.6, '#8a5a44', toon('#8a5a44', { name: 'roof' })))
   // 朝街（-z）那面的门和窗
   g.add(box(0.9, 2.0, 0.08, COLORS.woodDark, [0, 0, -p.d / 2 - 0.02]))
   for (const x of [-p.w / 3, p.w / 3]) g.add(box(0.9, 0.9, 0.06, '#7fb8c9', [x, 1.2, -p.d / 2 - 0.02]))
-  const left = gable(p.d, h, 1.6, p.color ?? COLORS.wall)
+  const left = gable(p.d, h, 1.6, p.color ?? COLORS.wall, wallMat)
   left.position.x = -p.w / 2 + 0.1
-  const right = gable(p.d, h, 1.6, p.color ?? COLORS.wall)
+  const right = gable(p.d, h, 1.6, p.color ?? COLORS.wall, wallMat)
   right.position.x = p.w / 2 - 0.1
   g.add(left, right)
   return g
 }
 
 export function tree(): THREE.Group {
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.3, 6), toon(COLORS.woodDark))
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.3, 6), toon(COLORS.bark))
   trunk.position.y = 0.65
   const leaves1 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.95, 0), toon(COLORS.leaf))
   leaves1.position.y = 1.9

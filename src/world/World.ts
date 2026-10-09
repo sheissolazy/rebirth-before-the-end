@@ -9,6 +9,9 @@ import {
 } from './layout'
 import { buildNav, type NavGrid, type Pt } from './nav'
 import {
+  ParadiseMaterials, Petals, River, flowers, grassField, hills, leafyTree, loadParadiseKit, sakuraTree, type ArtStyle, type ParadiseKit,
+} from './paradise'
+import {
   COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, person, shelf, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
@@ -100,7 +103,7 @@ export class World {
   private readonly nearWalls: THREE.Object3D[] = []
   private readonly floor2 = new THREE.Group()
   private roof: THREE.Group | null = null
-  private roofMats: THREE.MeshToonMaterial[] = []
+  private roofMats: THREE.Material[] = []
   private readonly marker: THREE.Mesh
   private readonly ring: THREE.Mesh
   private mode: ViewMode = 'home'
@@ -124,10 +127,16 @@ export class World {
   private readonly host: HTMLElement
   private readonly onHud: (h: Hud) => void
   private keysMoving = false
+  private readonly style: ArtStyle
+  private readonly hemi = new THREE.HemisphereLight('#dcefff', '#b59b78', 1.5)
+  private petals: Petals | null = null
+  private river: River | null = null
+  private elapsed = 0
 
-  constructor(host: HTMLElement, onHud: (h: Hud) => void) {
+  constructor(host: HTMLElement, onHud: (h: Hud) => void, style: ArtStyle = 'toon') {
     this.host = host
     this.onHud = onHud
+    this.style = style
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -137,7 +146,7 @@ export class World {
 
     this.scene.background = new THREE.Color(SKY)
     this.scene.fog = new THREE.Fog(SKY, 55, 110)
-    this.scene.add(new THREE.HemisphereLight('#dcefff', '#b59b78', 1.5))
+    this.scene.add(this.hemi)
     const coarse = window.matchMedia('(pointer: coarse)').matches
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048)
@@ -207,13 +216,17 @@ export class World {
       const obj = p.kind === 'house' ? neighborHouse(p) : p.kind === 'tree' ? tree() : p.kind === 'car' ? car(p.color ?? '#888') : barrel()
       obj.position.set(p.x, 0, p.z)
       obj.rotation.y = THREE.MathUtils.degToRad(p.rot)
+      if (p.kind === 'tree') obj.userData.tree = true
       this.scene.add(obj)
     }
   }
 
   private async loadVilla(): Promise<void> {
     try {
-      const gltf = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`)
+      const [gltf, paradise] = await Promise.all([
+        new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
+        this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
+      ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
       for (const child of gltf.scene.children) {
@@ -221,6 +234,7 @@ export class World {
         kit.set(child.name, child)
       }
       this.assembleVilla(kit)
+      if (paradise) this.applyParadise(paradise)
       this.setHud({ loading: false })
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
@@ -276,6 +290,56 @@ export class World {
     obj.position.set(p.x, y, p.z)
     obj.rotation.y = p.piece === 'wall_map' ? 0 : THREE.MathUtils.degToRad(p.rot)
     return obj
+  }
+
+  /** 世外桃源画风：换成 Poly Haven 材质，开天空光照和雾，再种草、种樱花、加远山和江 */
+  private applyParadise(kit: ParadiseKit): void {
+    const mats = new ParadiseMaterials(kit)
+    if (this.roof) mats.apply(this.roof, true)
+    mats.apply(this.scene, false, this.roof ?? undefined)
+    if (this.roof) {
+      const own = new Set<THREE.Material>()
+      this.roof.traverse((o) => {
+        const m = (o as THREE.Mesh).material
+        if (m) for (const x of Array.isArray(m) ? m : [m]) own.add(x)
+      })
+      this.roofMats = [...own]
+    }
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.05
+    this.scene.environment = kit.env
+    this.scene.environmentIntensity = 0.75
+    this.scene.background = new THREE.Color('#cfe1e8')
+    this.scene.fog = new THREE.FogExp2('#dfe6dd', 0.013)
+    this.hemi.intensity = 0.55
+    this.sun.color.set('#ffe2b8')
+    this.sun.intensity = 2.8
+    const coarse = window.matchMedia('(pointer: coarse)').matches
+    this.scene.add(grassField(coarse ? 3000 : 6000), flowers(coarse ? 220 : 420))
+    // 卡通树换成真树皮的绿树
+    const treeBark = mats.textured('bark') ?? new THREE.MeshStandardMaterial({ color: '#5a3d29' })
+    const oldTrees: THREE.Object3D[] = []
+    this.scene.traverse((o) => { if (o.userData.tree) oldTrees.push(o) })
+    oldTrees.forEach((o, k) => {
+      const t = leafyTree(treeBark, 20 + k, 0.9 + (k % 3) * 0.15)
+      t.position.copy(o.position)
+      o.parent?.add(t)
+      o.removeFromParent()
+    })
+    // 樱花种在屋后和两侧，不挡家里视角
+    const bark = mats.textured('sakuraBark') ?? treeBark
+    const trees: [number, number, number, number][] = [[-2.5, -1.6, 1, 1.05], [6, -2, 2, 0.95], [-2.8, 9.8, 3, 1.1], [-9, 12.5, 4, 1.15], [17, -5, 5, 1.05], [-15, -3, 6, 1]]
+    for (const [x, z, seed, sc] of trees) {
+      const t = sakuraTree(bark, seed, sc)
+      t.position.set(x, 0, z)
+      this.scene.add(t)
+    }
+    this.petals = new Petals(new THREE.Vector3(-2.8, 0, 9.8), 3.5)
+    this.scene.add(this.petals.points)
+    const hillMat = mats.textured('grassDark') ?? new THREE.MeshStandardMaterial({ color: '#6f9a55' })
+    this.scene.add(hills(hillMat))
+    this.river = new River()
+    this.scene.add(this.river.mesh)
   }
 
   private spawnActors(): void {
@@ -382,6 +446,9 @@ export class World {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
     const dt = Math.min(this.clock.getDelta(), 0.05)
+    this.elapsed += dt
+    this.petals?.update(dt, this.elapsed)
+    this.river?.update(this.elapsed)
     this.updateHeroineKeys(dt)
     this.updateFollowers(dt)
     for (const a of this.actors) {

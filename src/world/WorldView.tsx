@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { t } from '../i18n'
 import { World, type Hud } from './World'
+import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 
 export default function WorldView() {
   const host = useRef<HTMLDivElement>(null)
   const world = useRef<World | null>(null)
   const [hud, setHud] = useState<Hud>({ loading: true, mode: 'home', floor: 0, selected: '林知夏' })
+  const [style, setStyle] = useState<ArtStyle>(loadStyle)
 
   useEffect(() => {
     let w: World | null = null
     try {
-      w = new World(host.current!, setHud)
+      w = new World(host.current!, setHud, style)
       world.current = w
     } catch (e) {
       // 手机不支持 WebGL 等情况：下一拍再显示错误
@@ -20,7 +22,14 @@ export default function WorldView() {
       w?.dispose()
       world.current = null
     }
-  }, [])
+  }, [style])
+
+  const toggleStyle = () => {
+    const next: ArtStyle = style === 'toon' ? 'paradise' : 'toon'
+    saveStyle(next)
+    setHud((h) => ({ ...h, loading: true }))
+    setStyle(next)
+  }
 
   const home = hud.mode === 'home'
   return (
@@ -49,16 +58,23 @@ export default function WorldView() {
         </div>
       )}
 
-      <a href="#text" className="absolute right-3 top-3 rounded-full bg-zinc-900/70 px-3 py-1 text-xs text-white shadow">
-        {t('world.textVersion')}
-      </a>
+      <div className="absolute right-3 top-3 flex items-center gap-2">
+        <button onClick={toggleStyle} className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
+          {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
+        </button>
+        <a href="#text" className="rounded-full bg-zinc-900/70 px-3 py-1 text-xs text-white shadow">
+          {t('world.textVersion')}
+        </a>
+      </div>
 
       <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[90%] -translate-x-1/2 rounded-xl bg-zinc-900/65 px-4 py-2 text-center text-xs text-white">
         {home && hud.floor === 1 ? t('world.floor2Hint') : t(home ? 'world.help.home' : 'world.help.outside')}
       </div>
 
       {hud.loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-sky-200/80 text-sm">{t('world.loading')}</div>
+        <div className="absolute inset-0 flex items-center justify-center bg-sky-200/80 text-sm">
+          {t(style === 'paradise' ? 'world.loadingParadise' : 'world.loading')}
+        </div>
       )}
       {hud.error && (
         <div className="absolute inset-x-6 top-16 rounded-lg bg-red-600 p-3 text-sm text-white">{hud.error}</div>
