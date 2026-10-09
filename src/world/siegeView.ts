@@ -6,6 +6,7 @@ import { FLOOR_H } from './layout'
 import type { Pt } from './nav'
 import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
 import type { Household } from './residents'
+import { loadPerson } from './people'
 
 interface Fx { obj: THREE.Object3D; t: number; life: number; update: (k: number, dt: number) => void }
 
@@ -52,6 +53,8 @@ const BAR_AT: Record<LayerId, THREE.Vector3> = {
 export class SiegeView {
   private readonly scene: THREE.Scene
   private templates: THREE.Object3D[] = []
+  /** 来敲门的人、黑鸦的人用的正常人模型 */
+  private readonly npcs = new Map<string, THREE.Object3D>()
   private readonly flash = new THREE.PointLight('#ffd58a', 0, 8, 2)
   private flashT = 0
   private readonly fx: Fx[] = []
@@ -89,7 +92,12 @@ export class SiegeView {
   /** 真人画风：加载两个 MakeHuman 丧尸，皮肤调灰绿、衣服弄脏、加血迹 */
   async loadModels(): Promise<void> {
     const loader = new GLTFLoader()
-    const gl = await Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`)))
+    const [gl, npcs] = await Promise.all([
+      Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`))),
+      Promise.all(['neighbor', 'stranger'].map(loadPerson)),
+    ])
+    this.npcs.set('neighbor', npcs[0])
+    this.npcs.set('stranger', npcs[1])
     this.templates = gl.map((g) => {
       g.scene.traverse((o) => {
         const m = o as THREE.Mesh
@@ -129,9 +137,15 @@ export class SiegeView {
     this.spawned = 0
   }
 
-  /** 生成一只丧尸放进场景 */
-  spawn(at: Pt): Zombie {
-    const t = this.templates[this.spawned++ % Math.max(1, this.templates.length)]
+  /** 一个正常人模型（访客、黑鸦的人）；卡通画风没有就返回 undefined */
+  npc(model: string): THREE.Object3D | undefined {
+    const t = this.npcs.get(model)
+    return t ? cloneSkinned(t) : undefined
+  }
+
+  /** 生成一只丧尸（或者一个黑鸦的人）放进场景 */
+  spawn(at: Pt, raider = false): Zombie {
+    const t = raider ? this.npcs.get('stranger') : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
     const z = new Zombie(at, t ? cloneSkinned(t) : undefined)
     z.root.scale.setScalar(0.94 + ((this.spawned * 13) % 10) / 80)
     this.scene.add(z.root)

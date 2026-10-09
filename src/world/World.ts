@@ -24,6 +24,7 @@ import { Sound } from './sound'
 import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
 import { Bubbles } from './bubbles'
+import { VISITORS, Visitor } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -56,6 +57,8 @@ export interface Hud {
   medkits: number
   prologue: boolean
   report: NightReport | null
+  /** 有人在门口等回话 */
+  visit: { id: string; icon: string; choices: { id: string; ok: boolean }[] } | null
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -78,7 +81,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null,
 }
 
 export class World {
@@ -185,7 +188,17 @@ export class World {
     this.spawnActors()
     this.scene.add(this.rain.lines)
     this.siegeView = new SiegeView(this.scene)
-    this.life.spawnZombie = (at) => this.siegeView.spawn(at)
+    this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
+    this.life.spawnVisitor = (def, at) => {
+      const v = new Visitor(def, at, this.siegeView.npc(def.model))
+      this.scene.add(v.root)
+      return v
+    }
+    this.life.onKnock = () => {
+      this.sound.knock()
+      if (this.mode === 'home') this.setViewFloor(0)
+      this.pushLifeHud()
+    }
     this.life.onSiege = (e) => {
       this.siegeView.onEvent(e)
       const vol = (at: { x: number; z: number }) => THREE.MathUtils.clamp(1.25 - Math.hypot(at.x - this.pose.target.x, at.z - this.pose.target.z) / 22, 0.15, 1)
@@ -632,6 +645,9 @@ export class World {
     if (layer) {
       const focus = layer.id === 'gate' ? [4, 12] : layer.id === 'door' ? [3.6, 6.2] : [4.8, 4.6]
       t.set(focus[0], baseY, focus[1])
+    } else if (this.life?.talking) {
+      // 有人在门口说话：镜头看着铁门
+      t.set(4.5, 0.8, 15.5)
     }
     t.add(this.pan)
     return { target: t, elev: HOME_VIEW.elev, dist: HOME_VIEW.dist * this.zoom.home, fov: HOME_VIEW.fov }
@@ -742,11 +758,17 @@ export class World {
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
-      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), 0.95) || walking
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed) || walking
       z.animate(Math.min(sim, 0.1), walking)
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    const visitor = this.life.visitor
+    if (visitor) {
+      let walking = false
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = visitor.follow(Math.min(left, 0.05), 1.7) || walking
+      visitor.animate(Math.min(sim, 0.1), walking)
+    }
     for (const w of this.weapons) w.visible = fighting
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed)
     // 丧尸隔几秒低吼一声；环境声跟着昼夜走
@@ -1054,6 +1076,24 @@ export class World {
     this.setHud({ selected: actor.name })
   }
 
+  private visitHud(): Hud['visit'] {
+    const def = this.life.talking
+    if (!def) return null
+    const ctx = { food: this.life.stock.food } as Parameters<NonNullable<(typeof VISITORS)[number]['choices'][number]['need']>>[0]
+    return { id: def.id, icon: def.icon, choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })) }
+  }
+
+  answerVisitor(choice: string): void {
+    this.life.answerVisitor(choice)
+    this.pushLifeHud()
+  }
+
+  /** 原型调试：马上让某个访客来敲门 */
+  debugVisitor(id: string): void {
+    const def = VISITORS.find((d) => d.id === id)
+    if (def) this.life.startVisit(def)
+  }
+
   clearReport(): void {
     this.life.report = null
     this.pushLifeHud()
@@ -1092,6 +1132,7 @@ export class World {
       medkits: this.life.medkits,
       prologue: c.day < PROLOGUE_DAYS,
       report: this.life.report,
+      visit: this.visitHud(),
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

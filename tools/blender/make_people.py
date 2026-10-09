@@ -43,6 +43,17 @@ PEOPLE = {
         skin='old_asian_female', hair='long01', eyebrows='eyebrow001', eyelashes='eyelashes02',
         clothes=['female_sportsuit01', 'shoes05'],
     ),
+    # 来敲院门的人：隔壁王阿姨、街上的年轻男人（陌生人 / 黑鸦的人）
+    'neighbor': dict(
+        macro=dict(gender=0.0, age=0.85, muscle=0.4, weight=0.62, height=0.38, proportions=0.45, cupsize=0.5, firmness=0.35),
+        skin='old_asian_female', hair='bob01', eyebrows='eyebrow006', eyelashes='eyelashes01',
+        clothes=['female_casualsuit02', 'shoes04'],
+    ),
+    'stranger': dict(
+        macro=dict(gender=1.0, age=0.45, muscle=0.62, weight=0.5, height=0.62, proportions=0.55, cupsize=0.5, firmness=0.5),
+        skin='young_asian_male', hair='short01', eyebrows='eyebrow011', eyelashes='eyelashes02',
+        clothes=['male_casualsuit03', 'shoes06'],
+    ),
 }
 
 

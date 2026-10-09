@@ -13,6 +13,7 @@ import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEve
 import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
 import { rainAt } from './weather'
+import { VISITORS, Visitor, type VisitorCtx, type VisitorDef } from './visitors'
 import { lt } from '../i18n'
 
 export type { Where } from './walker'
@@ -206,7 +207,7 @@ export class Household {
   siege: Siege | null = null
   readonly log: LogEntry[] = []
   /** World 提供：生成一只丧尸（带 3D 模型）、战斗特效 */
-  spawnZombie: ((at: Pt) => Zombie) | null = null
+  spawnZombie: ((at: Pt, raider: boolean) => Zombie) | null = null
   onSiege: ((e: SiegeEvent) => void) | null = null
   /** 哪一天的晚上已经来过丧尸了 */
   nightDone = -1
@@ -220,6 +221,20 @@ export class Household {
   trip: Trip | null = null
   /** 这场雨木桶接了多少水 */
   private rainWater = 0
+  /** 正在门口的访客 */
+  visitor: Visitor | null = null
+  /** 访客到了门口、等玩家回话（界面弹对话框） */
+  talking: VisitorDef | null = null
+  /** 已经来过的访客（id → 哪天） */
+  seen: Record<string, number> = {}
+  helpedNeighbor = false
+  /** 拒绝了黑鸦：今晚他们来抢 */
+  raidTonight = false
+  /** 陌生人透露的线索：下次去那里搜刮翻倍 */
+  tip: string | null = null
+  spawnVisitor: ((def: VisitorDef, at: Pt) => Visitor) | null = null
+  onKnock: (() => void) | null = null
+  private visitCheck = -1
   private readonly spots: Spot[]
   private readonly beds: Spot[]
   private readonly taken = new Map<Spot, Actor>()
@@ -252,6 +267,7 @@ export class Household {
     this.runawayTick()
     this.rainTick(hours)
     this.chatTick(hours)
+    this.visitorTick()
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -269,6 +285,77 @@ export class Household {
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
       }
     }
+  }
+
+  // --- 来敲门的人 -------------------------------------------------------------
+
+  private visitorCtx(): VisitorCtx {
+    const c = this.clock
+    return {
+      day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
+      month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
+      food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor,
+    }
+  }
+
+  private visitorTick(): void {
+    const v = this.visitor
+    if (!v) {
+      // 每个游戏小时掷一次：一天最多来一个
+      const hour = Math.floor(this.absHour)
+      if (hour === this.visitCheck || !this.spawnVisitor || (this.siege && !this.siege.done)) return
+      this.visitCheck = hour
+      if (Object.values(this.seen).includes(this.clock.day)) return
+      const ctx = this.visitorCtx()
+      const def = VISITORS.find((d) => d.when(ctx) && this.rand() < d.chance)
+      if (def) this.startVisit(def)
+      return
+    }
+    if (v.phase === 'walk' && !v.path.length) {
+      v.phase = 'talk'
+      v.face(0, -1, 1)
+      this.talking = v.def
+      this.onKnock?.()
+    } else if (v.phase === 'leave' && !v.path.length) {
+      v.root.removeFromParent()
+      this.visitor = null
+    }
+  }
+
+  /** 让某个访客现在就来（也给原型调试用） */
+  startVisit(def: VisitorDef): void {
+    if (this.visitor || !this.spawnVisitor) return
+    const east = this.rand() < 0.5
+    const at = { x: east ? 30 : -20, z: 18 }
+    const v = this.spawnVisitor(def, at)
+    v.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4 + (this.rand() - 0.5) * 0.6, z: 14.1, floor: 0 }) ?? [])
+    this.visitor = v
+    this.seen[def.id] = this.clock.day
+  }
+
+  /** 玩家在对话框里选了 */
+  answerVisitor(choice: string): void {
+    const v = this.visitor
+    const def = this.talking
+    if (!v || !def) return
+    const all = (d: number) => { for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, Math.min(100, a.needs.mood + d)) } }
+    const food = (d: number) => { this.stock = { ...this.stock, food: Math.max(0, this.stock.food + d) } }
+    if (def.id === 'neighbor_rice') {
+      if (choice === 'give') { food(-1); all(6); this.helpedNeighbor = true } else this.actors[0].needs.mood = Math.max(0, this.actors[0].needs.mood - 3)
+    } else if (def.id === 'neighbor_thanks') {
+      this.stock = { ...this.stock, water: this.stock.water + 3 }
+      this.medkits += 1
+      all(4)
+    } else if (def.id === 'beggar') {
+      if (choice === 'give') { food(-1); all(5); this.tip = 'ruin_market' } else all(-4)
+    } else if (def.id === 'crow_tax') {
+      if (choice === 'pay') food(-3)
+      else this.raidTonight = true
+    }
+    this.note(`world.visit.${def.id}.log.${choice}`)
+    this.talking = null
+    v.phase = 'leave'
+    v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
   }
 
   // --- 一家人聊天 -------------------------------------------------------------
@@ -419,6 +506,13 @@ export class Household {
       const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
       const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand())
       const g = r.gain
+      // 陌生人说的地下室：吃的喝的翻倍
+      if (this.tip === t.def.id) {
+        g.food = (g.food ?? 0) * 2 + 2
+        g.water = (g.water ?? 0) * 2
+        this.tip = null
+        this.note('world.log.tipFound', { where: placeName(t.def.id) })
+      }
       this.money += g.money ?? 0
       this.stock = { food: this.stock.food + (g.food ?? 0), water: this.stock.water + (g.water ?? 0) }
       this.ammo.n += g.ammo ?? 0
@@ -453,7 +547,12 @@ export class Household {
     if (!this.siege && this.spawnZombie && c.hour >= 21 && this.nightDone !== c.day) {
       const { count, crisis } = Household.nightCount(c)
       this.nightDone = c.day
-      if (count > 0) this.startSiege(count, crisis)
+      // 白天拒绝了黑鸦，今晚是他们来抢（丧尸被他们的动静引开了）
+      if (this.raidTonight) {
+        this.raidTonight = false
+        const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
+        this.startSiege(4 + month, false, true)
+      } else if (count > 0) this.startSiege(count, crisis)
     }
     const s = this.siege
     if (!s) return
@@ -468,7 +567,7 @@ export class Household {
   }
 
   /** 原型调试用：马上来一波 */
-  startSiege(count: number, crisis: boolean): void {
+  startSiege(count: number, crisis: boolean, raid = false): void {
     if (!this.spawnZombie || (this.siege && !this.siege.done)) return
     for (const a of this.actors) {
       if (a.away) continue
@@ -481,7 +580,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, crisis,
     }
     this.siege = new Siege({
-      count, crisis, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
+      count, crisis, raid, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id),
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
@@ -494,7 +593,7 @@ export class Household {
   }
 
   private onSiegeEvent(e: SiegeEvent): void {
-    if (e.kind === 'start') this.note(e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
+    if (e.kind === 'start') this.note(e.raid ? 'world.log.raid' : e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
     else if (e.kind === 'broken') {
       this.note(`world.log.broken.${e.layer}`)
       // 大门一破，丧尸冲进一楼把囤货柜打翻了
@@ -506,7 +605,11 @@ export class Household {
       }
     }
     else if (e.kind === 'down') this.note('world.log.down', { who: e.who })
-    else if (e.kind === 'kill') this.cores += 1
+    else if (e.kind === 'kill') {
+      // 丧尸掉晶核；黑鸦的人身上能搜出子弹
+      if (e.raider) this.ammo.n += 2
+      else this.cores += 1
+    }
     else if (e.kind === 'end') {
       this.siege?.revive()
       if (e.won) {

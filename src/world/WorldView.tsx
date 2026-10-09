@@ -116,6 +116,16 @@ export default function WorldView() {
     }
   }, [style])
 
+  // 有人来敲门：先暂停，回完话再接着走
+  const visitId = hud.visit?.id ?? null
+  useEffect(() => {
+    const w = world.current
+    if (!w) return
+    if (visitId && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
+    else if (!visitId && w.speed === 0 && !diary && !map && !welcome) w.setSpeed(resume.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitId])
+
   // 空格暂停，1/2/3 调速
   useEffect(() => {
     let last = 1
@@ -251,6 +261,8 @@ export default function WorldView() {
         <div className="mt-1 flex flex-col gap-1">
           <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
+          <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
+          <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>
       </details>
@@ -258,6 +270,26 @@ export default function WorldView() {
       {hud.toast && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
           {t(hud.toast as UiKey)}
+        </div>
+      )}
+
+      {hud.visit && (
+        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/50 to-transparent pb-6 pt-24">
+          <div className="flex w-[min(640px,92vw)] gap-4 rounded-2xl bg-[#f6efdc] p-4 text-zinc-800 shadow-2xl">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-amber-200/70 text-5xl">{hud.visit.icon}</div>
+            <div className="flex-1">
+              <div className="text-sm font-bold">{t(`world.visit.${hud.visit.id}.name` as UiKey)}</div>
+              <p className="mt-1 text-sm leading-relaxed">{t(`world.visit.${hud.visit.id}.text` as UiKey)}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {hud.visit.choices.map((c) => (
+                  <button key={c.id} disabled={!c.ok} onClick={() => world.current?.answerVisitor(c.id)}
+                    className="rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-amber-50 shadow disabled:opacity-40">
+                    {t(`world.visit.${hud.visit!.id}.choice.${c.id}` as UiKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

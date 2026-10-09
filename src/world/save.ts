@@ -36,6 +36,10 @@ export interface WorldSave {
   log: LogEntry[]
   actors: ActorSave[]
   trip: { id: string; members: string[]; back: number } | null
+  seen?: Record<string, number>
+  helpedNeighbor?: boolean
+  raidTonight?: boolean
+  tip?: string | null
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -56,6 +60,10 @@ export function snapshot(life: Household): WorldSave {
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, runaway: a.runaway, lowMood: a.lowMood,
     })),
     trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back } : null,
+    seen: { ...life.seen },
+    helpedNeighbor: life.helpedNeighbor,
+    raidTonight: life.raidTonight,
+    tip: life.tip,
   }
 }
 
@@ -70,6 +78,10 @@ export function restore(life: Household, s: WorldSave): void {
   life.barriers = { ...s.barriers }
   life.nightDone = s.nightDone
   life.log.splice(0, life.log.length, ...s.log)
+  life.seen = { ...(s.seen ?? {}) }
+  life.helpedNeighbor = !!s.helpedNeighbor
+  life.raidTonight = !!s.raidTonight
+  life.tip = s.tip ?? null
   for (const as of s.actors) {
     const a = life.actors.find((x) => x.name === as.name)
     if (!a) continue

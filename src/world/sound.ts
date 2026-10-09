@@ -152,6 +152,17 @@ export class Sound {
     }
   }
 
+  /** 有人敲铁门：哐、哐、哐 */
+  knock(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    for (let k = 0; k < 3; k++) {
+      this.tone(t + k * 0.28, 'sine', 520, 500, 0.12, 0.25)
+      this.noiseBurst(t + k * 0.28, 'bandpass', 1800, 2, 0.12, 0.05)
+    }
+  }
+
   /** 一层防线倒了 */
   crash(): void {
     const ctx = this.ready

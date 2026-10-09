@@ -56,6 +56,9 @@ const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 
 
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
+  /** 黑鸦的人（不是丧尸）：走得快、皮厚、打不过会跑 */
+  raider = false
+  speed = ZOMBIE.speed
   state: 'walk' | 'bash' | 'wait' | 'hunt' | 'dead' | 'leave' = 'walk'
   /** 砸门的位置编号；-1 = 挤不上去，在后面等 */
   slot = -1
@@ -86,7 +89,10 @@ export class Zombie extends Walker {
   }
 
   animate(dt: number, walking: boolean): void {
-    const state: PoseState = this.state === 'dead' ? 'dead' : walking ? 'zwalk' : this.state === 'bash' || this.state === 'hunt' ? 'zattack' : 'zwalk'
+    const fight = this.state === 'bash' || this.state === 'hunt'
+    const state: PoseState = this.state === 'dead' ? 'dead'
+      : this.raider ? (walking ? 'walk' : fight ? 'melee' : 'idle')
+      : walking ? 'zwalk' : fight ? 'zattack' : 'zwalk'
     if (this.driver) this.driver.update(dt, state)
     else {
       this.inner.rotation.x = state === 'dead' ? Math.PI / 2 : 0.25
@@ -100,9 +106,9 @@ export class Zombie extends Walker {
 export type Role = 'ranged' | 'melee1' | 'melee2'
 
 export type SiegeEvent =
-  | { kind: 'start'; count: number; crisis: boolean }
+  | { kind: 'start'; count: number; crisis: boolean; raid: boolean }
   | { kind: 'broken'; layer: LayerId }
-  | { kind: 'kill'; at: Pt; by: string }
+  | { kind: 'kill'; at: Pt; by: string; raider: boolean }
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
   | { kind: 'bash'; layer: LayerId; at: Pt }
@@ -112,13 +118,15 @@ export type SiegeEvent =
 export interface SiegeOpts {
   count: number
   crisis: boolean
+  /** 黑鸦来抢（不是丧尸） */
+  raid?: boolean
   navs: Record<Floor, NavGrid>
   defenders: Actor[]
   barriers: Barriers
   ammo: { n: number }
   /** 防线耐久上限（铁门可能加固过） */
   maxOf?: (id: LayerId) => number
-  spawn: (at: Pt) => Zombie
+  spawn: (at: Pt, raider: boolean) => Zombie
   emit: (e: SiegeEvent) => void
 }
 
@@ -152,7 +160,7 @@ export class Siege {
       const west = k % 2 === 0
       this.queue.push({ t: (k * spread) / Math.max(1, o.count) + (o.crisis && k >= o.count / 2 ? 6 : 0), at: { x: west ? -13 - (k % 3) : 21 + (k % 3), z: 17 + (k % 4) * 0.8 } })
     }
-    o.emit({ kind: 'start', count: o.count, crisis: o.crisis })
+    o.emit({ kind: 'start', count: o.count, crisis: o.crisis, raid: !!o.raid })
   }
 
   get alive(): number {
@@ -199,7 +207,8 @@ export class Siege {
     this.t += dt
     while (!this.done && this.queue.length && this.queue[0].t <= this.t) {
       const q = this.queue.shift()!
-      const z = this.o.spawn(q.at)
+      const z = this.o.spawn(q.at, !!this.o.raid)
+      if (this.o.raid) { z.raider = true; z.hp = 75; z.speed = 1.35 }
       z.id = this.nextId++
       this.zombies.push(z)
       this.sendZombie(z)
@@ -417,8 +426,10 @@ export class Siege {
       target.path = []
       target.slot = -1
       this.kills++
-      this.o.emit({ kind: 'kill', at: target.pos, by: a.name })
+      this.o.emit({ kind: 'kill', at: target.pos, by: a.name, raider: target.raider })
       this.fillSlots()
+      // 黑鸦的人倒下一大半，剩下的就跑了
+      if (this.o.raid && this.kills >= Math.ceil(this.o.count * 0.6)) this.finish(true)
     }
   }
 

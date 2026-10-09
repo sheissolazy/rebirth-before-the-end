@@ -4,6 +4,7 @@ import { Actor, Household } from './residents'
 import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
 import { Zombie } from './siege'
 import { restore, snapshot } from './save'
+import { VISITORS, Visitor } from './visitors'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -253,5 +254,52 @@ describe('战报', () => {
     expect(life.report?.won).toBe(true)
     expect(life.report?.kills).toBe(3)
     expect(life.report?.ammo).toBeGreaterThan(0)
+  })
+})
+
+describe('来敲门的人', () => {
+  function tickUntil(life: Household, cond: () => boolean, max = 4000) {
+    const dt = 0.05
+    for (let i = 0; i < max && !cond(); i++) {
+      life.tick(dt, () => false)
+      if (life.visitor) life.visitor.follow(dt * life.speed, 1.7)
+      for (const z of life.siege?.zombies ?? []) z.follow(dt * life.speed, z.speed)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('王阿姨走到门口敲门，借她米：少一份吃的，末日后她会回礼', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: 1, hour: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'neighbor_rice')!)
+    tickUntil(life, () => !!life.talking)
+    expect(life.talking?.id).toBe('neighbor_rice')
+    const food = life.stock.food
+    life.answerVisitor('give')
+    expect(life.stock.food).toBeCloseTo(food - 1)
+    expect(life.helpedNeighbor).toBe(true)
+    tickUntil(life, () => !life.visitor)
+    expect(life.visitor).toBeNull()
+  })
+
+  it('拒绝黑鸦：当晚来的是黑鸦的人，打倒一大半剩下的就跑，身上搜出子弹', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.spawnZombie = (at) => new Zombie(at)
+    const kinds: string[] = []
+    life.onSiege = (e) => { if (e.kind === 'start') kinds.push(e.raid ? 'raid' : 'zombies'); if (e.kind === 'end') kinds.push(e.won ? 'won' : 'lost') }
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 12 }
+    life.startVisit(VISITORS.find((v) => v.id === 'crow_tax')!)
+    tickUntil(life, () => !!life.talking)
+    life.answerVisitor('refuse')
+    expect(life.raidTonight).toBe(true)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 20.95 }
+    const ammo0 = life.ammo.n
+    tickUntil(life, () => kinds.includes('won') || kinds.includes('lost'), 30000)
+    expect(kinds[0]).toBe('raid')
+    expect(kinds).toContain('won')
+    expect(life.log.some((l) => l.key === 'world.log.raid')).toBe(true)
+    expect(life.ammo.n).toBeGreaterThan(ammo0 - 20)
   })
 })
