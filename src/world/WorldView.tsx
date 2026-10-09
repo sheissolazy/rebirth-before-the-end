@@ -11,7 +11,7 @@ import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
-const WELCOME_KEY = 'rbte-proto-welcome-v3'
+const WELCOME_KEY = 'rbte-proto-welcome-v4'
 const WELCOME_ITEMS = ['world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
