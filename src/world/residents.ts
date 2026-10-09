@@ -25,7 +25,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet'
 
 interface Task {
   kind: TaskKind
@@ -1578,7 +1578,7 @@ export class Household {
     if (t.kind === 'repair' || t.kind === 'garden') return 'cook'
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company') return 'relax'
-    if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet') return 'idle'
+    if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
     return t.kind
   }
 
@@ -1692,6 +1692,25 @@ export class Household {
     if (near) a.face(near.pos.x - a.pos.x, near.pos.z - a.pos.z, 0.05)
   }
 
+  /** 撸猫：闲着的人走到猫跟前蹲下摸一会儿（World 看到猫趴着、身边有闲人时叫） */
+  petCat(a: Actor, cat: { x: number; z: number; floor: Floor }): boolean {
+    const free = ['idle', 'stroll', 'relax', 'tidy']
+    if (this.isOut(a) || a.dead || a.settling || (this.siege && !this.siege.done)) return false
+    if (a.task ? a.task.manual || !free.includes(a.task.kind) || (a.task.kind === 'relax' && a.task.phase === 'use') : a.path.length > 0) return false
+    // 站在猫旁边 0.5 米（找一个走得到的方向），面朝猫
+    for (const ang of [0, 1.6, -1.6, 3.1]) {
+      const x = cat.x + Math.sin(ang) * 0.62
+      const z = cat.z + Math.cos(ang) * 0.62
+      if (this.navs[cat.floor].isBlockedAt(x, z)) continue
+      const face = THREE.MathUtils.radToDeg(Math.atan2(cat.x - x, cat.z - z))
+      this.release(a)
+      a.task = null
+      this.assign(a, { kind: 'pet', spot: { kind: 'stroll', x, z, floor: cat.floor, face, pose: 'work' }, phase: 'go', hours: 0.12 + this.rand() * 0.1, manual: false })
+      return (a.task as Task | null)?.kind === 'pet'
+    }
+    return false
+  }
+
   /** 擦车：站到车北边，面朝车 */
   private washTask(): Task | null {
     if (this.vanAway || this.vanMove) return null
@@ -1776,6 +1795,7 @@ export class Household {
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
+      if (t.kind === 'pet') a.pose = 'pet'
       if (t.kind === 'cook') this.take('food', MEAL.food)
       if (t.kind === 'drink') this.take('water', DRINK.water)
       return
@@ -1807,7 +1827,7 @@ export class Household {
     if (t.kind === 'wash' && (this.vanAway || this.vanMove)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trip) return true
-    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet')) {
+    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false

@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export type PoseState = 'idle' | 'walk' | 'sit' | 'sleep' | 'work'
-  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink' | 'fish' | 'wave'
+  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink' | 'fish' | 'wave' | 'pet'
 
 const SIDE = new THREE.Vector3(1, 0, 0)
 const FWD = new THREE.Vector3(0, 0, 1)
@@ -387,6 +387,23 @@ export class PoseDriver {
       this.rotMany('Spine', [[SIDE, 0.12 - lift * 0.05]])
       this.rot('Head', SIDE, 0.12 - lift * 0.1)
       this.model.position.y = -0.42 * this.legK
+    } else if (state === 'pet') {
+      // 蹲下摸猫：膝盖弯、身子往前探，右手伸下去来回摸，左手搭在膝盖上
+      const stroke = Math.sin(this.t * 2.6)
+      this.rot('LeftUpLeg', SIDE, -1.2)
+      this.rot('RightUpLeg', SIDE, -1.05)
+      this.rot('LeftLeg', SIDE, 1.6)
+      this.rot('RightLeg', SIDE, 1.5)
+      this.rot('LeftFoot', SIDE, -0.35)
+      this.rot('RightFoot', SIDE, -0.4)
+      this.rot('Spine', SIDE, 0.5)
+      this.rot('Spine1', SIDE, 0.15)
+      this.rotMany('RightArm', [[SIDE, -0.62 + stroke * 0.1], [FWD, -0.05]], rightDown)
+      this.rot('RightForeArm', SIDE, -0.15 - stroke * 0.1)
+      this.rot('LeftArm', SIDE, -0.6, leftDown)
+      this.rot('LeftForeArm', SIDE, -0.7)
+      this.rot('Head', SIDE, 0.25)
+      this.model.position.y = -0.27 * this.legK
     } else if (state === 'wave') {
       // 挥手：右手举过肩、往外张开，小臂左右摆；身子微微踮一下
       const k = Math.sin(this.t * 5.5)

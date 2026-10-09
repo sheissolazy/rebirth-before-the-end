@@ -133,6 +133,11 @@ export class Cat extends Walker {
     this.left = 4 + Math.random() * 6
   }
 
+  /** 有人在摸它：先别走 */
+  stay(seconds: number): void {
+    this.left = Math.max(this.left, seconds)
+  }
+
   /** 点了一下：停下来、朝镜头那边坐着喵一声 */
   poke(): void {
     this.plan = 'poked'

@@ -217,6 +217,8 @@ export class World {
   /** 外婆家的橘猫大橘（模型加载好以后才有） */
   private cat: Cat | null = null
   private catHeart = new THREE.Sprite(bubbleMaterial('💕'))
+  private petT = 20
+  private petting: Actor | null = null
   /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
   private gateDoors: { pivot: THREE.Object3D; sign: number }[] = []
   private gateAngle = 0
@@ -1633,6 +1635,21 @@ export class World {
       cat.root.visible = !(upstairsHidden && cat.root.position.y > FLOOR_H - 0.4)
       this.catHeart.visible = cat.hearts > 0 && cat.root.visible
       this.catHeart.position.y = 0.62 + Math.sin(this.elapsed * 3) * 0.03
+      // 猫趴着 / 坐着的时候，隔一会儿有个闲着的家里人过去蹲下摸摸它
+      this.petT -= sim
+      if (this.petT <= 0 && sim > 0) {
+        this.petT = 25 + Math.random() * 35
+        const resting = !cat.path.length && (cat.pose === 'loaf' || cat.pose === 'sit') && cat.plan !== 'hide' && cat.plan !== 'bed'
+        const near = this.actors.filter((a) => a !== this.heroine || !this.keysMoving)
+          .filter((a) => a.floor === cat.floor && Math.hypot(a.pos.x - cat.pos.x, a.pos.z - cat.pos.z) < 7)
+        const who = near[Math.floor(Math.random() * near.length)]
+        if (resting && who && this.life.petCat(who, cat.pos)) this.petting = who
+      }
+      if (this.petting) {
+        const p = this.petting
+        if (p.task?.kind !== 'pet') this.petting = null
+        else if (p.task.phase === 'use') { cat.hearts = Math.max(cat.hearts, 0.3); cat.stay(3) }
+      }
       // 猫挨着的人（1.3 米内、同一层）心情慢慢变好
       if (sim > 0) {
         for (const a of this.actors) {
