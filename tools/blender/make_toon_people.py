@@ -424,13 +424,21 @@ def main():
     # 头发：融球捏的发型
     hs = st['hair_style']
     # 发顶：往后、往上挪，前沿正好在额头；不用挖洞，脸自然露出来
-    # 板寸：贴着头皮的一层，整个头顶和后脑都盖住，前面发际线高一点
+    hair_el = []
     if hs == 'buzz':
-        hair_el = [('ellipsoid', hc + up * (R * 0.1) - fwd * (R * 0.16), side, R * 1.0, (1.0, 1.0, 1.0))]
+        # 板寸：几块融球都放在脸后面——头顶一块、后脑勺一块、耳朵上方两块——融成一顶贴头的短发，
+        # 发际线自然在额头上方（球心都在后面，前面埋在头里）
+        hair_el = [
+            ('ellipsoid', hc + up * (R * 0.2) - fwd * (R * 0.15), side, R * 0.98, (1.0, 1.0, 1.0)),
+            ('ellipsoid', hc - up * (R * 0.05) - fwd * (R * 0.45), side, R * 0.72, (1.15, 0.8, 1.0)),
+        ]
+        for sx in (-1, 1):
+            hair_el.append(('ellipsoid', hc + side * (sx * R * 0.55) + up * (R * 0.22) - fwd * (R * 0.18), side, R * 0.55, (1.0, 1.0, 1.0)))
     else:
+        # 发顶：往后、往上挪，前沿正好在额头；不用挖洞，脸自然露出来
         hair_el = [('ellipsoid', hc + up * (R * 0.16) - fwd * (R * 0.12), side, R * 1.03, (1.0, 1.02, 0.98))]
-    # 前额那一片：把发顶和刘海连起来，不露头皮
-    hair_el.append(('ellipsoid', hc + fwd * (R * 0.45) + up * (R * 0.72), side, R * 0.55, (1.35, 0.7, 0.55)))
+        # 前额那一片：把发顶和刘海连起来，不露头皮
+        hair_el.append(('ellipsoid', hc + fwd * (R * 0.45) + up * (R * 0.72), side, R * 0.55, (1.35, 0.7, 0.55)))
     # 刘海：几缕贴着额头、斜着垂下来的发束（以前是一圈"发箍"）
     def on_head(sx, uy, lift):
         n = face_axis(sx, uy)
@@ -499,8 +507,8 @@ def main():
         for s in (-1, 1):
             hair_el.append(('ellipsoid', hc + side * (s * R * 0.78) - up * (R * 0.25) - fwd * (R * 0.1), up, R * 0.42, (0.7, 0.95, 1.35)))
         hair_el.append(('ellipsoid', hc - fwd * (R * 0.6) - up * (R * 0.2), up, R * 0.75, (1.3, 0.8, 1.0)))
-    hair_mesh = metaball(f'{name}_hair', hair_el, hair, 0.01)
-    head_parts.append(hair_mesh)
+    if hair_el:
+        head_parts.append(metaball(f'{name}_hair', hair_el, hair, 0.01))
     if st.get('clip'):
         # 女主：右边刘海上一个小星星发夹
         c = hc + face_axis(0.5, 0.52) * (R * 1.17)
