@@ -23,7 +23,7 @@ const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
 const BUILD = 'w-full rounded-sm bg-white/5 px-2 py-1 text-left text-[11px] text-[#efe4d0] ring-1 ring-[#e8c98a]/30 transition hover:bg-white/15 disabled:opacity-40'
 const DBG = `${CHIP} px-3 py-1.5 text-left`
 /** 左上角工具条的按钮 */
-const TOOL = 'rounded-sm bg-[#1d1915]/90 px-2.5 py-1 text-xs font-medium text-[#efe4d0] ring-1 ring-[#e8c98a]/30 shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition hover:bg-[#2a241e] hover:ring-[#e8c98a]/60'
+const TOOL = 'whitespace-nowrap rounded-sm bg-[#1d1915]/90 px-2 py-1 text-xs font-medium text-[#efe4d0] ring-1 ring-[#e8c98a]/30 shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition hover:bg-[#2a241e] hover:ring-[#e8c98a]/60'
 const TOOL_ON = 'bg-[#3a3024] ring-[#e8c98a]/80 text-[#f4ecdc]'
 const BUILD_DONE = 'rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#c9dcb0] ring-1 ring-white/10'
 const MENU_ROW = 'block w-full rounded-sm px-2.5 py-1.5 text-left text-xs text-[#cbbfa8] transition hover:bg-white/10'
@@ -316,7 +316,7 @@ export default function WorldView() {
             <span className="ml-auto text-[10px] text-[#8a7f6d]">{pop === 'stock' ? '▲' : '▼'}</span>
           </button>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {hud.goals && (
             <button onClick={() => togglePop('tasks')} className={`${TOOL} ${pop === 'tasks' ? TOOL_ON : ''}`}>
               {t('world.tool.tasks', { n: hud.goals.filter((g) => g.done).length, all: hud.goals.length })}

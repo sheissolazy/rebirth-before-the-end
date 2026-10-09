@@ -14,20 +14,20 @@ export interface ForageSpot {
 }
 
 export const FORAGE: ForageSpot[] = [
-  { id: 'greens_w', kind: 'greens', name: '荠菜', at: { x: -8, z: -5.5 } },
-  { id: 'greens_e', kind: 'greens', name: '蕨菜', at: { x: 15, z: 11 } },
+  { id: 'greens_w', kind: 'greens', name: '荠菜', at: { x: -9, z: -6 } },
+  { id: 'greens_e', kind: 'greens', name: '蕨菜', at: { x: 19.5, z: 12 } },
   { id: 'flowers_w', kind: 'flowers', name: '野菊花', at: { x: -11, z: 6 } },
-  { id: 'flowers_e', kind: 'flowers', name: '紫云英', at: { x: 17, z: -5.5 } },
-  { id: 'herb_river', kind: 'herb', name: '蒲公英', at: { x: 8.5, z: -6.2 } },
-  { id: 'herb_w', kind: 'herb', name: '荨麻', at: { x: -16, z: -6 } },
+  { id: 'flowers_e', kind: 'flowers', name: '紫云英', at: { x: 21, z: -9 } },
+  { id: 'herb_river', kind: 'herb', name: '蒲公英', at: { x: 8.5, z: -10.2 } },
+  { id: 'herb_w', kind: 'herb', name: '荨麻', at: { x: -16, z: -9 } },
   { id: 'herb_e', kind: 'herb', name: '酢浆草', at: { x: 29, z: 11 } },
   { id: 'mushroom', kind: 'mushroom', name: '平菇', at: { x: -19, z: 2 } },
   { id: 'toadstool', kind: 'toadstool', name: '红伞伞', at: { x: -21, z: 4.5 } },
   { id: 'shoots', kind: 'shoots', name: '竹笋', at: { x: -21, z: 10 } },
   { id: 'bamboo', kind: 'bamboo', name: '竹林', at: { x: 30, z: 1.5 } },
-  { id: 'berries_e', kind: 'berries', name: '覆盆子', at: { x: 28, z: -5 } },
+  { id: 'berries_e', kind: 'berries', name: '覆盆子', at: { x: 28, z: -7 } },
   { id: 'berries_w', kind: 'berries', name: '野桑葚', at: { x: -14, z: 11.5 } },
-  { id: 'honey', kind: 'honey', name: '野蜂窝', at: { x: 14.5, z: -6.6 } },
+  { id: 'honey', kind: 'honey', name: '野蜂窝', at: { x: 13, z: -10.4 } },
 ]
 
 /** 采完以后过几天重新长出来 */

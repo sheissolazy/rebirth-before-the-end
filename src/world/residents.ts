@@ -254,7 +254,7 @@ const placeName = (id: string) => lt(locations.find((l) => l.id === id)?.name ??
 const EXIT: Where = { x: 31, z: 18, floor: 0 }
 const HOME_IN: Where = { x: 4, z: 11, floor: 0 }
 /** 搜刮回来卸货的地方：客厅西北角储物箱旁边 */
-const STORE = [{ x: 1.35, z: 1.2 }, { x: 1.95, z: 1.25 }, { x: 2.4, z: 1.6 }, { x: 1.9, z: 1.85 }]
+const STORE = [{ x: 10.6, z: 4.6 }, { x: 10.0, z: 5.0 }, { x: 10.6, z: 1.0 }, { x: 10.0, z: 3.4 }]
 
 export interface PersonHud {
   name: string

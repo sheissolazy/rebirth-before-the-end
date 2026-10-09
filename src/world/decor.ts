@@ -197,30 +197,33 @@ export function decorateHouse(scene: THREE.Object3D, upper: THREE.Object3D, tabl
   const g = new THREE.Group()
   // 二楼的东西挂在二楼那一组下面：只看一楼时跟着楼板一起藏起来
   const g1 = new THREE.Group()
-  // 地毯：餐桌下一块大的，沙发前一块，二楼两张床之间一块
-  g.add(rug(2.3, 1.7, rugTexture('#a8443a', '#6e2a24', '#e2b25c'), 2.5, 3.0, 0))
-  g.add(rug(1.5, 1.0, rugTexture('#3f6b6a', '#2a4848', '#e7c98a'), 1.3, 4.45, 0))
-  g1.add(rug(1.6, 1.3, rugTexture('#c08b52', '#7a5232', '#f3e3c0'), 2.0, 2.6, 1))
-  // 窗帘：北墙（z=0）和西墙（x=0）的窗户，往屋里挪一点
+  // 地毯：堂屋八仙桌下一块大的、爸妈屋里一块、二楼小客厅沙发前一块、女主房间床边一块
+  g.add(rug(2.6, 2.0, rugTexture('#a8443a', '#6e2a24', '#e2b25c'), 6.0, 2.6, 0))
+  g.add(rug(1.5, 1.0, rugTexture('#3f6b6a', '#2a4848', '#e7c98a'), 1.6, 4.9, 0))
+  g1.add(rug(1.8, 1.3, rugTexture('#c08b52', '#7a5232', '#f3e3c0'), 6.0, 2.4, 1))
+  g1.add(rug(1.3, 1.0, rugTexture('#8a5a7a', '#4e2f45', '#f0d9b5'), 2.2, 4.0, 1))
+  // 窗帘：北墙（z=-3）和西墙（x=0）的窗户，往屋里挪一点
   const add = (o: THREE.Object3D, x: number, y: number, z: number, ry: number) => {
     o.position.set(x, y, z)
     o.rotation.y = ry
     ;(y >= FLOOR_H - 0.01 ? g1 : g).add(o)
   }
-  for (const [x, f, c] of [[1.5, 0, '#e9cfa0'], [6.5, 0, '#e9cfa0'], [1.5, 1, '#d9b7c4'], [6.5, 1, '#d9b7c4']] as const) {
-    add(curtains(c), x, f * FLOOR_H, 0.14, 0)
+  for (const [x, f, c] of [[3.5, 0, '#e9cfa0'], [6.5, 0, '#e9cfa0'], [10.5, 0, '#e9cfa0'], [1.5, 1, '#d9b7c4'], [6.5, 1, '#d9b7c4'], [10.5, 1, '#c9d3b4']] as const) {
+    add(curtains(c), x, f * FLOOR_H, -2.86, 0)
   }
-  add(curtains('#e9cfa0'), 0.14, 0, 2.5, Math.PI / 2)
-  add(curtains('#d9b7c4'), 0.14, FLOOR_H, 2.5, Math.PI / 2)
-  add(curtains('#d9b7c4'), 0.14, FLOOR_H, 4.5, Math.PI / 2)
-  // 墙上的画：一楼北墙两幅、西墙一幅（箱子上面），二楼北墙床头一幅
-  add(painting(0, 0.62, 0.46), 4.75, 1.62, 0.13, 0)
-  add(painting(2, 0.44, 0.6), 5.45, 1.55, 0.13, 0)
-  add(painting(1, 0.7, 0.5), 0.13, 1.55, 0.95, Math.PI / 2)
-  add(painting(2, 0.8, 0.55), 2.0, FLOOR_H + 1.5, 0.13, 0)
+  add(curtains('#e9cfa0'), 0.14, 0, -1.5, Math.PI / 2)
+  add(curtains('#e9cfa0'), 0.14, 0, 3.5, Math.PI / 2)
+  add(curtains('#d9b7c4'), 0.14, FLOOR_H, -1.5, Math.PI / 2)
+  add(curtains('#d9b7c4'), 0.14, FLOOR_H, 3.5, Math.PI / 2)
+  // 墙上的画：堂屋神龛上面一幅中堂、堂屋东墙一幅；爸妈屋里一幅；二楼女主床头一幅、小客厅一幅
+  add(painting(0, 0.62, 0.86), 6.4, 1.72, -0.37, 0)
+  add(painting(2, 0.44, 0.6), 7.87, 1.55, 4.2, -Math.PI / 2)
+  add(painting(1, 0.7, 0.5), 0.13, 1.55, 5.0, Math.PI / 2)
+  add(painting(2, 0.8, 0.55), 0.13, FLOOR_H + 1.5, 2.2, Math.PI / 2)
+  add(painting(0, 0.6, 0.45), 5.0, FLOOR_H + 1.6, 0.63, 0)
   // 桌上的花
   const v = vase()
-  v.position.set(2.5, tableTop, 3.0)
+  v.position.set(6, tableTop, 2.6)
   g.add(v)
   for (const grp of [g, g1]) grp.traverse((m) => { if ((m as THREE.Mesh).isMesh) (m as THREE.Mesh).receiveShadow = true })
   scene.add(g)

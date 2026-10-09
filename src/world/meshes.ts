@@ -215,6 +215,28 @@ function gable(d: number, baseY: number, rise: number, color: THREE.ColorReprese
 }
 
 /** 自家别墅的屋顶（独立材质，能淡出） */
+/** 平顶：一块屋面板、一圈齐腰的女儿墙、角上一个不锈钢水塔（农村自建房的样子） */
+export function flatRoof(w: number, d: number, baseY: number): { root: THREE.Group; mats: THREE.MeshToonMaterial[] } {
+  const slabMat = toon('#b9b2a6', { own: true })
+  const wallMat = toon(COLORS.wall, { own: true })
+  const tankMat = toon('#c9ccd0', { own: true })
+  const root = new THREE.Group()
+  root.add(box(w + 0.2, 0.22, d + 0.2, '#b9b2a6', [0, baseY, 0], slabMat))
+  const t = 0.18
+  const h = 0.7
+  root.add(box(w + 0.2, h, t, COLORS.wall, [0, baseY + 0.22, -d / 2 - 0.1 + t / 2], wallMat))
+  root.add(box(w + 0.2, h, t, COLORS.wall, [0, baseY + 0.22, d / 2 + 0.1 - t / 2], wallMat))
+  root.add(box(t, h, d + 0.2, COLORS.wall, [-w / 2 - 0.1 + t / 2, baseY + 0.22, 0], wallMat))
+  root.add(box(t, h, d + 0.2, COLORS.wall, [w / 2 + 0.1 - t / 2, baseY + 0.22, 0], wallMat))
+  // 水塔：立在西北角的架子上
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.3, 16), tankMat)
+  tank.rotation.z = Math.PI / 2
+  tank.position.set(-w / 2 + 1.4, baseY + 1.05, -d / 2 + 1.0)
+  tank.castShadow = true
+  root.add(tank, box(1.5, 0.35, 0.9, '#6b6f73', [-w / 2 + 1.4, baseY + 0.22, -d / 2 + 1.0], tankMat))
+  return { root, mats: [slabMat, wallMat, tankMat] }
+}
+
 export function villaRoof(w: number, d: number, baseY: number): { root: THREE.Group; mats: THREE.MeshToonMaterial[] } {
   const roofMat = toon(COLORS.roof, { own: true })
   const wallMat = toon(COLORS.wall, { own: true })

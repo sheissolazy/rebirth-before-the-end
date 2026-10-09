@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  COOP, FLOOR_H, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
+  COOP, FLOOR_H, FRONT_DOOR, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
@@ -17,7 +17,7 @@ import {
 } from './paradise'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
-  toon, toonify, tree, villaRoof,
+  flatRoof, toon, toonify, tree,
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
@@ -116,7 +116,7 @@ export interface Hud {
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
 
 const YAW = Math.PI / 4
-const HOME_VIEW = { elev: THREE.MathUtils.degToRad(40), dist: 30, fov: 24 }
+const HOME_VIEW = { elev: THREE.MathUtils.degToRad(40), dist: 38, fov: 24 }
 const OUT_VIEW = { elev: THREE.MathUtils.degToRad(52), dist: 15, fov: 38 }
 const TWEEN_S = 0.9
 const STUB = 0.12
@@ -620,7 +620,7 @@ export class World {
       // 让屋里像个家：地毯、窗帘、画、桌上的花（花瓶放在餐桌桌面上：往下打一条射线找桌面）
       try {
         this.scene.updateMatrixWorld(true)
-        const ray = new THREE.Raycaster(new THREE.Vector3(2.5, 1.4, 3.0), new THREE.Vector3(0, -1, 0), 0, 1.4)
+        const ray = new THREE.Raycaster(new THREE.Vector3(6, 1.4, 2.6), new THREE.Vector3(0, -1, 0), 0, 1.4)
         ray.camera = this.camera // 场景里有精灵（头顶的气泡），没有相机会报错
         const meshes: THREE.Object3D[] = []
         this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && !(o as THREE.InstancedMesh).isInstancedMesh) meshes.push(o) })
@@ -1041,20 +1041,25 @@ export class World {
     // 家具
     for (const p of FURNITURE) floorGroup(p.floor).add(this.furniture(p, kit, place))
     // 大门的门板：外层跟着矮墙一起压低，中间一层是门轴（开门、被砸倒），里面是门板
-    const hinge = new THREE.Group()
-    hinge.add(box(0.9, 2.05, 0.06, COLORS.woodDark, [0.45, 0, 0]))
+    // 堂屋双开门：两扇门板各有自己的门轴（左边那扇往里开时转负角，右边那扇转正角）
     const door = new THREE.Group()
-    door.position.set(3.05, 0, 6.0)
-    door.add(hinge)
+    door.position.set(FRONT_DOOR.x, 0, FRONT_DOOR.z)
+    for (const side of [-1, 1]) {
+      const hinge = new THREE.Group()
+      hinge.position.x = side * 0.95
+      hinge.add(box(0.92, 2.05, 0.06, COLORS.woodDark, [-side * 0.46, 0, 0]))
+      hinge.userData.sign = side
+      door.add(hinge)
+    }
     this.nearWalls.push(door)
     this.frontDoor = door
     this.scene.add(door)
     // 退到楼梯时堆在楼梯口的箱子（平时藏着）
     const pile = new THREE.Group()
     pile.add(
-      box(0.55, 0.55, 0.55, COLORS.wood, [4.55, 0, 4.2]),
-      box(0.55, 0.55, 0.55, COLORS.wood, [4.6, 0, 4.8]),
-      box(0.5, 0.45, 0.5, COLORS.woodDark, [4.58, 0.55, 4.5]),
+      box(0.5, 0.55, 0.45, COLORS.wood, [4.62, 0, -0.75]),
+      box(0.5, 0.55, 0.45, COLORS.wood, [4.62, 0, -0.25]),
+      box(0.45, 0.45, 0.45, COLORS.woodDark, [4.62, 0.55, -0.5]),
     )
     pile.children.forEach((c, k) => { c.rotation.y = k * 0.4 })
     pile.visible = false
@@ -1067,8 +1072,33 @@ export class World {
       else this.fences.push(f)
       this.scene.add(f)
     }
-    // 屋顶
-    const { root, mats } = villaRoof(w, d, FLOOR_H * 2 - 0.2)
+    // 檐廊：地砖、四根柱子；二楼阳台：楼板、地砖、栏杆（柱子和栏杆在家里视角下跟着矮墙压低）
+    for (let i = PORCH.x0; i < PORCH.x1; i++)
+      for (let j = PORCH.z0; j < PORCH.z1; j++) {
+        this.scene.add(place('floor_1x1', i + 0.5, 0, j + 0.5, 0))
+        this.floor2.add(place('floor_1x1', i + 0.5, FLOOR_H, j + 0.5, 0))
+      }
+    slab(PORCH.x0, PORCH.z0, PORCH.x1, PORCH.z1)
+    for (const x of [PORCH.x0 + 0.15, (PORCH.x0 + PORCH.x1) / 2 - 2, (PORCH.x0 + PORCH.x1) / 2 + 2, PORCH.x1 - 0.15]) {
+      const col = box(0.24, FLOOR_H - 0.3, 0.24, COLORS.wall, [x, 0, PORCH.z1 - 0.15])
+      this.nearWalls.push(col)
+      this.scene.add(col)
+    }
+    const rail = new THREE.Group()
+    rail.add(
+      box(PORCH.x1 - PORCH.x0, 0.07, 0.08, COLORS.woodDark, [(PORCH.x0 + PORCH.x1) / 2, 0.98, PORCH.z1 - 0.1]),
+      box(0.08, 0.07, PORCH.z1 - PORCH.z0, COLORS.woodDark, [PORCH.x0 + 0.05, 0.98, (PORCH.z0 + PORCH.z1) / 2]),
+      box(0.08, 0.07, PORCH.z1 - PORCH.z0, COLORS.woodDark, [PORCH.x1 - 0.05, 0.98, (PORCH.z0 + PORCH.z1) / 2]),
+    )
+    for (let x = PORCH.x0 + 0.05; x <= PORCH.x1; x += 0.5) rail.add(box(0.05, 0.98, 0.05, COLORS.woodDark, [x, 0, PORCH.z1 - 0.1]))
+    for (let z = PORCH.z0 + 0.5; z < PORCH.z1; z += 0.5) {
+      rail.add(box(0.05, 0.98, 0.05, COLORS.woodDark, [PORCH.x0 + 0.05, 0, z]), box(0.05, 0.98, 0.05, COLORS.woodDark, [PORCH.x1 - 0.05, 0, z]))
+    }
+    rail.position.y = FLOOR_H
+    this.nearWalls.push(rail)
+    this.floor2.add(rail)
+    // 平顶（女儿墙、水塔）
+    const { root, mats } = flatRoof(w, d, FLOOR_H * 2 - 0.2)
     root.position.set(HOUSE.x0 + w / 2, 0, HOUSE.z0 + d / 2)
     this.roof = root
     this.roofMats = mats
@@ -1132,7 +1162,7 @@ export class World {
       scatter(kit, 'rock_moss_set_02', 30, samplers.riverBank, [0.5, 0.9], 8),
     )
     // 樱花种在屋后和两侧，不挡家里视角；外面的树换成 Poly Haven 的老树
-    const trees: [number, number, number][] = [[-2.4, -1.6, 0.85], [6, -2.2, 0.8], [-2.6, 9.8, 0.9], [-9, 12.5, 1.0], [17, -5, 0.95], [-15, -3, 0.9]]
+    const trees: [number, number, number][] = [[-2.4, -1.6, 0.85], [6, -5.6, 0.8], [-2.6, 9.8, 0.9], [-9, 12.5, 1.0], [17.2, -6.3, 0.95], [-15, -3, 0.9]]
     for (const [x, z, sc] of trees) {
       const t = sakuraTree(kit, sc)
       t.position.set(x, 0, z)
@@ -1278,9 +1308,11 @@ export class World {
       this.lamps.push(l)
       this.scene.add(l)
     }
-    room(2.4, 1.6, 3.2, 5.5, 0) // 客厅吊灯
-    room(6.5, 2.1, 1.6, 3.5, 0) // 厨房
-    room(2.0, FLOOR_H + 2.0, 2.8, 4.5, 1) // 二楼卧室
+    room(6, 1.6, 2.6, 5.5, 0) // 堂屋吊灯
+    room(2.0, 2.1, -1.0, 3.5, 0) // 厨房
+    room(2.0, 2.1, 4.2, 2.5, 0) // 爸妈卧室
+    room(6.0, FLOOR_H + 2.0, 3.0, 3.5, 1) // 二楼小客厅
+    room(2.0, FLOOR_H + 2.0, 3.8, 4.0, 1) // 林知夏的房间
   }
 
   /** 路灯的灯泡：夜里发光；base > 0 的那两盏还真的照亮地面 */
@@ -1361,7 +1393,7 @@ export class World {
     // 打丧尸时镜头对着正在守的那一层
     const layer = this.life?.siege && !this.life.siege.done ? this.life.siege.current : null
     if (layer) {
-      const focus = layer.id === 'gate' ? [4, 12] : layer.id === 'door' ? [3.6, 6.2] : [4.8, 4.6]
+      const focus = layer.id === 'gate' ? [4, 12] : layer.id === 'door' ? [6, 6.8] : [5.4, -0.4]
       t.set(focus[0], baseY, focus[1])
     } else if (this.life?.talking) {
       // 有人在门口说话：镜头看着铁门

@@ -2,7 +2,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { FLOOR_H } from './layout'
+import { FLOOR_H, FRONT_DOOR } from './layout'
 import type { Pt } from './nav'
 import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
 import type { Household } from './residents'
@@ -50,8 +50,8 @@ const NPC_MODELS = ['neighbor', 'stranger', 'jiangye', 'shenyan', 'survivor_f', 
 
 const BAR_AT: Record<LayerId, THREE.Vector3> = {
   gate: new THREE.Vector3(4, 2.7, 13),
-  door: new THREE.Vector3(3.5, 2.9, 6.05),
-  stairs: new THREE.Vector3(4.6, 1.7, 4.5),
+  door: new THREE.Vector3(6, 2.9, 6.05),
+  stairs: new THREE.Vector3(4.75, 1.7, -0.5),
 }
 
 export class SiegeView {
@@ -407,12 +407,13 @@ export class SiegeView {
     }
     if (this.door) {
       // 有人走近就开门；打仗时关着；被砸开就倒下
-      const near = actors.some((a) => a.root.visible && Math.hypot(a.root.position.x - 3.5, a.root.position.z - 6) < 1.3 && a.root.position.y < 1)
+      const near = actors.some((a) => a.root.visible && Math.hypot(a.root.position.x - FRONT_DOOR.x, a.root.position.z - FRONT_DOOR.z) < 1.4 && a.root.position.y < 1)
       const broken = life.barriers.door <= 0
       this.doorOpen += ((near && !fighting ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 8)
-      const leaf = this.door.children[0]
-      if (leaf) {
-        leaf.rotation.y = -this.doorOpen * 1.5
+      // 双开门：两扇门板各绕自己的门轴往里开（sign 是开的方向）
+      for (const leaf of this.door.children) {
+        const sign = (leaf.userData.sign as number | undefined) ?? -1
+        leaf.rotation.y = sign * this.doorOpen * 1.5
         leaf.rotation.x += ((broken ? -1.45 : 0) - leaf.rotation.x) * Math.min(1, dt * 6)
       }
     }

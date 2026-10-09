@@ -25,16 +25,16 @@ export interface CatCtx {
   heroDriving?: boolean
 }
 
-/** 打盹的地方：客厅沙发前的青色地毯、二楼床中间的地毯、院子长椅边晒太阳 */
+/** 打盹的地方：堂屋八仙桌边的地毯、二楼小客厅沙发前、檐廊上晒太阳、爸妈屋里 */
 const NAPS: Where[] = [
-  { x: 1.3, z: 4.45, floor: 0 },
-  { x: 2.0, z: 2.6, floor: 1 },
-  { x: 6.3, z: 9.6, floor: 0 },
-  { x: 3.2, z: 4.2, floor: 0 },
+  { x: 7.3, z: 3.8, floor: 0 },
+  { x: 6.0, z: 2.8, floor: 1 },
+  { x: 8.6, z: 7.0, floor: 0 },
+  { x: 1.7, z: 4.9, floor: 0 },
 ]
-/** 晚上睡、打丧尸时躲：二楼 */
-const BEDSIDE: Where = { x: 2.0, z: 1.45, floor: 1 }
-const HIDE: Where = { x: 2.2, z: 3.0, floor: 1 }
+/** 晚上睡、打丧尸时躲：二楼女主的房间 */
+const BEDSIDE: Where = { x: 1.9, z: 3.3, floor: 1 }
+const HIDE: Where = { x: 2.6, z: 4.2, floor: 1 }
 
 const WALK = 1.05
 const TROT = 2.3

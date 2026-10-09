@@ -6,14 +6,14 @@ const nav = buildNav()
 
 describe('别墅寻路', () => {
   it('墙挡路，门和铁门能过', () => {
-    expect(nav.isBlockedAt(1.5, 0)).toBe(true) // 北墙
-    expect(nav.isBlockedAt(3.5, 6)).toBe(false) // 南墙上的大门
+    expect(nav.isBlockedAt(1.5, -3)).toBe(true) // 北墙
+    expect(nav.isBlockedAt(6, 6)).toBe(false) // 堂屋的双开大门
     expect(nav.isBlockedAt(1.5, YARD.z1)).toBe(true) // 院子围栏
     expect(nav.isBlockedAt(GATE.x, GATE.z)).toBe(false) // 铁门
   })
 
-  it('从客厅能走到街上，而且要经过大门和铁门', () => {
-    const from = { x: 2, z: 4.5 }
+  it('从堂屋能走到街上，而且要经过大门和铁门', () => {
+    const from = { x: 6, z: 4.5 }
     const path = nav.findPath(from, { x: 3.5, z: 18 })
     expect(path).not.toBeNull()
     const pts = [from, ...path!]
@@ -28,15 +28,15 @@ describe('别墅寻路', () => {
       return NaN
     }
     expect(Math.abs(crossX(GATE.z) - GATE.x)).toBeLessThan(1)  // 铁门两米宽
-    expect(Math.abs(crossX(6) - 3.5)).toBeLessThan(0.5)
+    expect(Math.abs(crossX(6) - 6)).toBeLessThan(1) // 大门两米宽
   })
 
-  it('能从客厅走进厨房（隔墙上的门）', () => {
-    expect(nav.findPath({ x: 2, z: 1.5 }, { x: 6.5, z: 1.6 })).not.toBeNull()
+  it('能从堂屋走进厨房、爸妈卧室、储藏室（隔墙上的门）', () => {
+    for (const to of [{ x: 2, z: -0.5 }, { x: 2, z: 4.6 }, { x: 10, z: 3 }]) expect(nav.findPath({ x: 6, z: 4.5 }, to)).not.toBeNull()
   })
 
   it('路径上的每一段都不穿墙', () => {
-    const from = { x: 1.5, z: 4 }
+    const from = { x: 6, z: 4 }
     const path = nav.findPath(from, { x: 20, z: 18 })!
     let prev = from
     for (const p of path) {
@@ -65,7 +65,7 @@ describe('两层楼和"能干什么"的位置', () => {
     const navs = navFloors(style)
     const spots = [...SPOTS, ...BEDS[style], ...(style === 'paradise' ? PARADISE_SPOTS : [])]
     it(`${style}：从客厅能走到每个位置的入口，还能走回来`, () => {
-      const start = { x: 3.5, z: 4.5, floor: 0 as const }
+      const start = { x: 6, z: 4.5, floor: 0 as const }
       for (const s of spots) {
         const goal = { x: s.ax ?? s.x, z: s.az ?? s.z, floor: s.floor }
         expect(navs[s.floor].isBlockedAt(goal.x, goal.z), `${s.kind} @${goal.x},${goal.z} 入口被挡`).toBe(false)
@@ -81,7 +81,7 @@ describe('两层楼和"能干什么"的位置', () => {
 
   it('上楼要经过楼梯，高度一路升到二楼', () => {
     const navs = navFloors('paradise')
-    const path = route(navs, { x: 2, z: 4.5, floor: 0 }, { x: 2.1, z: 1.25, floor: 1 })!
+    const path = route(navs, { x: 6, z: 4.5, floor: 0 }, { x: 2.0, z: 4.6, floor: 1 })!
     const ys = path.map((p) => p.y)
     expect(ys[0]).toBe(0)
     expect(ys[ys.length - 1]).toBeCloseTo(FLOOR_H)
@@ -90,9 +90,12 @@ describe('两层楼和"能干什么"的位置', () => {
 
   it('二楼楼梯口是空的，不能踩', () => {
     const up = navFloors('toon')[1]
-    expect(up.isBlockedAt(6, 4.5)).toBe(true)
+    expect(up.isBlockedAt(6, -1.75)).toBe(true)
     expect(up.isBlockedAt(-1, 3)).toBe(true) // 二楼没有院子
-    expect(up.isBlockedAt(2, 3)).toBe(false)
+    expect(up.isBlockedAt(2.6, 4.6)).toBe(false)
+    // 阳台能站，栏杆外面不行
+    expect(up.isBlockedAt(9, 7)).toBe(false)
+    expect(up.isBlockedAt(9, 8.3)).toBe(true)
   })
 })
 

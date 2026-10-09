@@ -1,5 +1,5 @@
 // 走路用的格子地图和寻路（纯逻辑，可单测）。
-import { FLOOR_H, FURNITURE, HOUSE, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STAIR_PATH, VAN_PARK, VAN_SIZE, WALLS, WORLD, fenceSegments, type Floor, type Placement, type Rect, type StairPoint, WELL, COOP } from './layout'
+import { FLOOR_H, FURNITURE, HOUSE, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STAIR_PATH, VAN_PARK, VAN_SIZE, WALLS, WORLD, fenceSegments, type Floor, type Placement, type Rect, type StairPoint, WELL, COOP, PORCH } from './layout'
 
 export const CELL = 0.5
 
@@ -165,6 +165,8 @@ export function buildNav(extra: Placement[] = []): NavGrid {
     if (p.kind === 'tree') nav.blockRect(p.x - 0.3, p.z - 0.3, p.x + 0.3, p.z + 0.3)
     else nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
   }
+  // 檐廊的柱子
+  for (const x of [PORCH.x0 + 0.15, (PORCH.x0 + PORCH.x1) / 2 - 2, (PORCH.x0 + PORCH.x1) / 2 + 2, PORCH.x1 - 0.15]) nav.blockRect(x - 0.12, PORCH.z1 - 0.27, x + 0.12, PORCH.z1 - 0.03)
   // 压水井、鸡圈
   nav.blockRect(WELL.x - 0.35, WELL.z - 0.35, WELL.x + 0.35, WELL.z + 0.35)
   nav.blockRect(COOP.x0, COOP.z0, COOP.x1, COOP.z1)
@@ -177,7 +179,8 @@ export function buildNav(extra: Placement[] = []): NavGrid {
 export function buildNavUpstairs(extra: Placement[] = [], skip: string[] = []): NavGrid {
   const nav = new NavGrid(WORLD)
   nav.blockRect(WORLD.x0, WORLD.z0, WORLD.x1, HOUSE.z0)
-  nav.blockRect(WORLD.x0, HOUSE.z1, WORLD.x1, WORLD.z1)
+  // 南边多出 2 米的阳台（栏杆那一线挡住）
+  nav.blockRect(WORLD.x0, PORCH.z1 - 0.25, WORLD.x1, WORLD.z1)
   nav.blockRect(WORLD.x0, WORLD.z0, HOUSE.x0, WORLD.z1)
   nav.blockRect(HOUSE.x1, WORLD.z0, WORLD.x1, WORLD.z1)
   for (const s of WALLS) {
