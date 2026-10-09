@@ -1,7 +1,7 @@
 // 丧尸夜：丧尸从街上来，先砸铁门，再砸大门，最后砸楼梯口的箱子。一家人自动守在当前这一层，
 // 外层被破就往里退（设计文档 §1.3 / P3）。纯逻辑 + 少量 three 对象，不依赖渲染，方便跑模拟测试。
 import * as THREE from 'three'
-import type { Floor } from './layout'
+import { PORCH, inRect, type Floor } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
@@ -28,7 +28,8 @@ export const LAYERS: Layer[] = [
   {
     id: 'gate', max: 180, reach: 1.9,
     bash: [f0(3.4, 13.75), f0(4.6, 13.75), f0(4.0, 13.85), f0(3.0, 14.25), f0(5.0, 14.25), f0(4.0, 14.5)],
-    posts: [f0(4, 10.3), f0(3.5, 12.3), f0(4.5, 12.3), f0(2.9, 12.4), f0(5.1, 12.4)],
+    // 拿枪的站二楼阳台（居高临下，打得远）；拿棍子的守在铁门里
+    posts: [f1(4.0, 7.25), f0(3.5, 12.3), f0(4.5, 12.3), f0(2.9, 12.4), f0(5.1, 12.4)],
   },
   {
     // 堂屋双开大门：丧尸挤在檐廊上砸门，家里人在堂屋里守（拿枪的站在八仙桌后面）
@@ -46,6 +47,9 @@ export const LAYERS: Layer[] = [
 
 export type Barriers = Record<LayerId, number>
 export const fullBarriers = (): Barriers => ({ gate: LAYERS[0].max, door: LAYERS[1].max, stairs: LAYERS[2].max })
+
+/** 二楼阳台上开枪多打出去几米 */
+export const BALCONY_REACH = 2.8
 
 /** 武器：射程、冷却（秒）、伤害 */
 const WEAPONS = {
@@ -488,7 +492,9 @@ export class Siege {
       if (a.path.length) { a.pose = 'idle'; return }
     }
     const w = WEAPONS[weapon]
-    const reach = w.range || (layer ? layer.reach : 1.5)
+    // 站在二楼阳台上开枪：居高临下，能打到铁门外
+    const high = !!w.range && a.floor === 1 && inRect(PORCH, a.pos.x, a.pos.z, -0.1)
+    const reach = w.range ? w.range + (high ? BALCONY_REACH : 0) : layer ? layer.reach : 1.5
     let target: Zombie | null = null
     let bd = reach
     for (const z of this.zombies) {

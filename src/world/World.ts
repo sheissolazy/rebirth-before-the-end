@@ -536,7 +536,8 @@ export class World {
       else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
       // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
       // （开打的事件在 Siege 构造时就发了，那时 life.siege 还没赋值，所以看防线耐久）
-      const fightFloor = () => (this.life.barriers.gate > 0 || this.life.barriers.door > 0 ? 0 : 1)
+      // 铁门那一层：拿枪的在二楼阳台上，看二楼（院子在外面，照样看得见）；大门那一层看一楼；楼梯口看二楼
+      const fightFloor = () => (this.life.barriers.gate > 0 ? 1 : this.life.barriers.door > 0 ? 0 : 1)
       if (e.kind === 'start') {
         // 第一次打丧尸：顺便教一下能做什么
         if (!e.ambush && firstTime('siege')) this.toast('world.toast.siegeTip', 7)
@@ -544,6 +545,7 @@ export class World {
         if (this.mode === 'home' && !e.ambush) this.setViewFloor(fightFloor())
       } else if (e.kind === 'broken') {
         this.toast(`world.log.broken.${e.layer}` as ToastKey, 3)
+        if (this.mode === 'home' && e.layer === 'gate') this.setViewFloor(0)
         if (this.mode === 'home' && e.layer === 'door') this.setViewFloor(1)
       }
       else if (e.kind === 'end') this.toast(e.won ? 'world.toast.won' : 'world.toast.lost', 4)
