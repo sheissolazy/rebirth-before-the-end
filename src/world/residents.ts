@@ -252,6 +252,8 @@ export class Household {
   affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0 }
   /** 谢临塞进来的第几张纸条 */
   xielinNotes = 0
+  /** 院子砌了石头院墙：铁门更结实，隔着栏杆被抓伤的事也没了 */
+  wall = false
   /** 第一个尸潮危机夜街尽头那个人（阿寂的伏笔），看过就不再出现 */
   cameoSeen = false
   /** 菜地：开了没有、长到多少（1 = 能收）、哪天浇过水 */
@@ -741,7 +743,26 @@ export class Household {
 
   /** 这一层防线的耐久上限（铁门可以加固） */
   maxOf(id: LayerId): number {
-    return LAYERS.find((l) => l.id === id)!.max + (id === 'gate' ? this.gateBonus : 0)
+    return LAYERS.find((l) => l.id === id)!.max + (id === 'gate' ? this.gateBonus + (this.wall ? 100 : 0) : 0)
+  }
+
+  static readonly WALL_COST = 6000
+  static readonly WALL_CORES = 6
+
+  /** 砌院墙：末日前花钱请人砌，末日后用晶核换砖和水泥 */
+  buildWall(): boolean {
+    if (this.wall || this.siege) return false
+    if (this.clock.day < PROLOGUE_DAYS) {
+      if (this.money < Household.WALL_COST) return false
+      this.money -= Household.WALL_COST
+    } else {
+      if (this.cores < Household.WALL_CORES) return false
+      this.cores -= Household.WALL_CORES
+    }
+    this.wall = true
+    this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 100)
+    this.note('world.log.wall')
+    return true
   }
 
   /** 末日后去军区基地换东西要几颗晶核 */
@@ -1032,7 +1053,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, crisis,
     }
     this.siege = new Siege({
-      count, crisis, raid, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
+      count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id),
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),

@@ -194,6 +194,13 @@ export default function WorldView() {
               {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
             </button>
           </div>
+          {!hud.wall && (
+            <button onClick={() => world.current?.buildYardWall()}
+              disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6}
+              className="mt-1.5 w-fit rounded-md bg-stone-600 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
+              {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
+            </button>
+          )}
           {!hud.garden.built ? (
             <button onClick={() => world.current?.buildGardenPlot()}
               disabled={hud.prologue ? hud.money < 800 : hud.cores < 2}

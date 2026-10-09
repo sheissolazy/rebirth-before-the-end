@@ -659,3 +659,29 @@ describe('审查找到的问题（回归测试）', () => {
     expect(new Set(names).size).toBe(2)
   })
 })
+
+describe('石头院墙', () => {
+  it('砌墙要钱；铁门上限 +100；隔着栏杆不会被抓伤', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    life.money = 5000
+    expect(life.buildWall()).toBe(false)
+    life.money = 7000
+    expect(life.buildWall()).toBe(true)
+    expect(life.money).toBe(1000)
+    expect(life.maxOf('gate')).toBe(280)
+    expect(life.barriers.gate).toBe(280)
+    // 守一晚：贴门的人不会掉血
+    life.spawnZombie = (at) => new Zombie(at)
+    life.ammo.n = 0
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(4, false)
+    const dt = 0.05
+    for (let i = 0; i < 20000 && life.siege && !life.siege.done; i++) {
+      life.tick(dt, () => false)
+      for (const z of life.siege?.zombies ?? []) z.follow(dt, z.speed)
+      for (const a of life.actors) a.follow(dt, 2.2)
+    }
+    expect(life.actors.every((a) => a.health === 100)).toBe(true)
+  })
+})

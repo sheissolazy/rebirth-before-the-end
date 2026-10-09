@@ -125,6 +125,8 @@ export interface SiegeOpts {
   crisis: boolean
   /** 黑鸦来抢（不是丧尸） */
   raid?: boolean
+  /** 砌了院墙：隔着铁门栏杆抓不到人 */
+  solidWall?: boolean
   /** 在街上搜东西时遇到的：不分防线，从这些位置冒出来直接扑人 */
   ambushAt?: Pt[]
   navs: Record<Floor, NavGrid>
@@ -335,7 +337,7 @@ export class Siege {
         // 贴在门边打的人，偶尔会被从栏杆/门缝里伸出来的手抓伤
         const close = this.o.defenders.find((a) => !this.downed.has(a) && this.post(a) !== 0
           && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 1.7)
-        if (close && this.rand() < 0.3) {
+        if (close && this.rand() < (this.o.solidWall && layer.id === 'gate' ? 0 : 0.3)) {
           close.health = Math.max(0, close.health - 5)
           this.o.emit({ kind: 'hit', at: close.pos })
           if (close.health <= 0) this.knockDown(close)

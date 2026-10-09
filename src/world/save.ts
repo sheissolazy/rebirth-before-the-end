@@ -60,6 +60,7 @@ export interface WorldSave {
   visitDay?: number
   searched?: Record<string, number>
   fewerTonight?: boolean
+  wall?: boolean
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -101,6 +102,7 @@ export function snapshot(life: Household): WorldSave {
     visitDay: life.visitDay,
     searched: { ...life.searched },
     fewerTonight: life.fewerTonight,
+    wall: life.wall,
   }
 }
 
@@ -132,6 +134,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.visitDay = s.visitDay ?? -1
   life.searched = { ...(s.searched ?? {}) }
   life.fewerTonight = !!s.fewerTonight
+  life.wall = !!s.wall
   life.guchenMet = !!s.guchenMet
   life.helmet = !!s.helmet
   if (life.helmet && life.actors[0]) life.actors[0].helmet = true

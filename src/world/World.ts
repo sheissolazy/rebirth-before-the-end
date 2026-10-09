@@ -66,6 +66,8 @@ export interface Hud {
   /** 空间异能里放了多少、最多放多少 */
   space: { food: number; water: number; cap: number }
   molotovs: number
+  /** 院墙砌了没有 */
+  wall: boolean
   /** 末日前要做的事（做完打勾） */
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
@@ -93,14 +95,14 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -155,6 +157,10 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 院子的木围栏（砌了院墙就藏起来）、院墙、世外桃源的材质 */
+  private readonly fences: THREE.Object3D[] = []
+  private stoneWall: THREE.Group | null = null
+  private pmats: ParadiseMaterials | null = null
   /** 平静的夜里院子里飞的萤火虫 */
   private readonly flies = (() => {
     const n = 70
@@ -448,6 +454,42 @@ export class World {
     this.scene.add(this.gardenObj)
   }
 
+  /** 砌一圈石头院墙（铁门那两米留着），靠近镜头的南墙、东墙在家里视角下压低 */
+  private raiseStoneWall(): void {
+    const mat = this.pmats?.textured('stone') ?? toon(COLORS.stone)
+    const cap = this.pmats?.textured('trim') ?? toon(COLORS.wall)
+    const H = 1.9
+    const g = new THREE.Group()
+    const seg = (x0: number, z0: number, x1: number, z1: number, near: boolean) => {
+      const len = Math.hypot(x1 - x0, z1 - z0)
+      const along = x1 - x0 !== 0
+      const holder = new THREE.Group()
+      holder.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2)
+      const body = new THREE.Mesh(new THREE.BoxGeometry(along ? len : 0.3, H, along ? 0.3 : len), mat)
+      body.position.y = H / 2
+      const top = new THREE.Mesh(new THREE.BoxGeometry(along ? len + 0.1 : 0.4, 0.1, along ? 0.4 : len + 0.1), cap)
+      top.position.y = H + 0.05
+      for (const m of [body, top]) { boxProjectUV(m.geometry); m.castShadow = true; m.receiveShadow = true }
+      holder.add(body, top)
+      if (near) this.nearWalls.push(holder)
+      g.add(holder)
+    }
+    seg(YARD.x0, YARD.z0, YARD.x1, YARD.z0, false) // 北
+    seg(YARD.x0, YARD.z0, YARD.x0, YARD.z1, false) // 西
+    seg(YARD.x1, YARD.z0, YARD.x1, YARD.z1, true) // 东
+    seg(YARD.x0, YARD.z1, GATE.x - 1, YARD.z1, true) // 南（铁门西边）
+    seg(GATE.x + 1, YARD.z1, YARD.x1, YARD.z1, true) // 南（铁门东边）
+    for (const f of this.fences) f.visible = false
+    this.stoneWall = g
+    this.scene.add(g)
+    this.collectClickables()
+  }
+
+  buildYardWall(): void {
+    if (this.life.buildWall()) this.toast('world.toast.wall', 3)
+    this.pushLifeHud()
+  }
+
   buildGardenPlot(): void {
     if (this.life.buildGarden()) this.toast('world.toast.garden')
     this.pushLifeHud()
@@ -521,6 +563,7 @@ export class World {
     for (const s of fenceSegments()) {
       const f = place(s.gate ? 'gate_1m' : 'fence_1m', s.x, 0, s.z, s.axis === 'z' ? 90 : 0)
       if (s.gate) f.userData.gate = true
+      else this.fences.push(f)
       this.scene.add(f)
     }
     // 屋顶
@@ -552,6 +595,7 @@ export class World {
   /** 世外桃源画风：换成 Poly Haven 材质，开天空光照和雾，再种草、种樱花、加远山和江 */
   private applyParadise(kit: ParadiseKit): void {
     const mats = new ParadiseMaterials(kit)
+    this.pmats = mats
     if (this.roof) mats.apply(this.roof, true)
     mats.apply(this.scene, false, this.roof ?? undefined)
     if (this.roof) {
@@ -1034,6 +1078,7 @@ export class World {
     }
     for (const w of this.weapons) w.visible = fighting
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS)
+    if (this.life.wall && !this.stoneWall && !this.hud.loading) this.raiseStoneWall()
     const g = this.life.garden
     this.gardenObj.visible = g.built
     if (g.built) {
@@ -1510,6 +1555,7 @@ export class World {
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
+      wall: this.life.wall,
       fishing: { active: !!this.life.fishing, near: this.mode === 'outside' && nearFishing(this.heroine.pos), caught: this.life.fishCaught },
       ammo: this.life.ammo.n,
       cores: this.life.cores,
