@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { FORAGE, ripe, type ForageKind, type ForageSpot } from './forage'
+import { variants, type ParadiseKit } from './paradise'
 
 const mat = (color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
   new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...extra })
@@ -83,8 +84,8 @@ function bambooGrove(r: () => number, canes: number, spread: number): THREE.Grou
   }
   const seg = new THREE.CylinderGeometry(0.032, 0.036, 0.5, 6)
   const ring = new THREE.CylinderGeometry(0.042, 0.042, 0.035, 6)
-  const leaf = new THREE.ConeGeometry(0.09, 0.75, 4)
-  leaf.translate(0, 0.375, 0)
+  const leaf = new THREE.ConeGeometry(0.05, 0.42, 3)
+  leaf.translate(0, 0.21, 0)
   for (let i = 0; i < canes; i++) {
     const x = (r() - 0.5) * spread
     const z = (r() - 0.5) * spread * 0.7
@@ -97,12 +98,14 @@ function bambooGrove(r: () => number, canes: number, spread: number): THREE.Grou
       put(ring, nodes, x + lean * (y + 0.25), y + 0.25, z, 0, 0, -lean)
     }
     // 上半截：几簇竹叶，每簇 4 片朝外、往下垂
-    for (let t = 0; t < 6; t++) {
-      const y = h * (0.5 + t * 0.085)
+    // 上半截：很多簇细小的竹叶，各朝各的方向、往下垂（从高处看是一团叶子，不是一根羽毛）
+    for (let t = 0; t < 12; t++) {
+      const y = h * (0.45 + t * 0.045)
       const yaw = r() * Math.PI * 2
-      for (let l = 0; l < 5; l++) {
-        const a = yaw + (l / 5) * Math.PI * 2
-        put(leaf, leaves, x + lean * y, y, z, 1.75 + r() * 0.5, a, 0, 1, 1, 0.22)
+      const reach = 0.08 + r() * 0.22
+      for (let l = 0; l < 4; l++) {
+        const a = yaw + (l / 4) * Math.PI * 2 + (r() - 0.5) * 0.8
+        put(leaf, leaves, x + lean * y + Math.sin(a) * reach, y, z + Math.cos(a) * reach, 1.9 + r() * 0.7, a, 0, 1, 1, 0.3)
       }
     }
   }
@@ -263,6 +266,135 @@ export class ForageView {
       this.items.push({ spot: s, full, empty, glint, hit, ripe: true })
     }
     scene.add(this.root)
+  }
+
+  /** 世外桃源画风：能找到扫描模型的换成 Poly Haven 的真植物（蘑菇、竹子还是自己捏的） */
+  useKit(kit: ParadiseKit): void {
+    const pick: Record<string, { slug: string; n: number; scale: number }> = {
+      greens_w: { slug: 'weed_plant_02', n: 6, scale: 2.0 },
+      greens_e: { slug: 'fern_02', n: 3, scale: 1.7 },
+      flowers_w: { slug: 'flower_gazania', n: 7, scale: 2.2 },
+      flowers_e: { slug: 'periwinkle_plant', n: 6, scale: 2.0 },
+      herb_river: { slug: 'dandelion_01', n: 9, scale: 3.0 },
+      herb_w: { slug: 'nettle_plant', n: 5, scale: 1.9 },
+      herb_e: { slug: 'shrub_sorrel_01', n: 6, scale: 2.0 },
+      berries_e: { slug: 'shrub_04', n: 2, scale: 2.0 },
+      berries_w: { slug: 'shrub_04', n: 2, scale: 2.0 },
+    }
+    // 自己捏的（蘑菇、竹子、竹笋、蜂窝）换成不那么"卡通"的颜色：平滑着色、颜色压暗一点
+    const natural = new Map<THREE.Material, THREE.Material>()
+    const soft = (src: THREE.MeshStandardMaterial, color: string) => {
+      const m = new THREE.MeshStandardMaterial({ color, roughness: 0.92, flatShading: false })
+      natural.set(src, m)
+    }
+    soft(M.leaf, '#56703a')
+    soft(M.leafDark, '#3c5229')
+    soft(M.crown, '#47612f')
+    soft(M.stem, '#62773f')
+    soft(M.white, '#e6dccb')
+    soft(M.cap, '#94653f')
+    soft(M.capRed, '#b0302a')
+    soft(M.shoot, '#7d6034')
+    soft(M.shootTip, '#c4ad78')
+    soft(M.hive, '#b88a43')
+    soft(M.hiveDark, '#7a5824')
+    const naturalize = (g: THREE.Object3D) => g.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (m.isMesh && natural.has(m.material as THREE.Material)) {
+        m.material = natural.get(m.material as THREE.Material)!
+        // 合成过的网格法线是按面算的：重新算一遍才平滑
+        if (m.geometry !== G.berry && m.geometry !== G.dot) { m.geometry = m.geometry.clone(); m.geometry.computeVertexNormals() }
+      }
+    })
+    for (const it of this.items) {
+      if (it.spot.kind === 'mushroom' || it.spot.kind === 'toadstool' || it.spot.kind === 'shoots' || it.spot.kind === 'bamboo') {
+        naturalize(it.full)
+        naturalize(it.empty)
+        // 蘑菇在高处的镜头里太小：再大一圈
+        if (it.spot.kind === 'mushroom' || it.spot.kind === 'toadstool') it.full.scale.setScalar(1.5)
+      }
+    }
+    // 蜂窝挂在一棵真的树上（Poly Haven 的树，绿叶子）
+    const treeSrc = kit.models.get('island_tree_02')
+    const honey = this.items.find((x) => x.spot.kind === 'honey')
+    if (treeSrc && honey) {
+      const tree = treeSrc.clone()
+      const box = new THREE.Box3().setFromObject(tree)
+      const k = 4.6 / Math.max(0.1, box.max.y - box.min.y)
+      tree.scale.setScalar(k)
+      const mk = (withHive: boolean) => {
+        const g = new THREE.Group()
+        g.add(withHive ? tree : tree.clone())
+        if (withHive) {
+          const hive = new THREE.Group()
+          add(hive, G.hive, natural.get(M.hive) ?? M.hive, 0, 0, 0, 1).scale.y = 1.35
+          for (let j = -1; j <= 1; j++) add(hive, G.hive, natural.get(M.hiveDark) ?? M.hiveDark, 0, j * 0.09, 0, 1.02).scale.set(1.02, 0.08, 1.02)
+          hive.position.set(0.18, 1.75, 0.3)
+          g.add(hive)
+        }
+        return g
+      }
+      const parent = honey.full.parent!
+      parent.remove(honey.full, honey.empty)
+      honey.full = mk(true)
+      honey.empty = mk(false)
+      parent.add(honey.full, honey.empty)
+      honey.full.visible = honey.ripe
+      honey.empty.visible = !honey.ripe
+    }
+    for (const it of this.items) {
+      const p = pick[it.spot.id]
+      const src = p && kit.models.get(p.slug)
+      if (!p || !src) continue
+      const vs = variants(src)
+      if (!vs.length) continue
+      const r = seeded(Math.round((it.spot.at.x + 70) * 37 + (it.spot.at.z + 70) * 11))
+      const g = new THREE.Group()
+      for (let i = 0; i < p.n; i++) {
+        const v = vs[Math.floor(r() * vs.length)]
+        const part = new THREE.Group()
+        for (const q of v.parts) {
+          const m = new THREE.Mesh(q.geo, q.mat)
+          m.castShadow = true
+          m.receiveShadow = true
+          part.add(m)
+        }
+        const a = r() * Math.PI * 2
+        const d = i === 0 ? 0 : 0.2 + r() * 0.35
+        part.position.set(Math.cos(a) * d, 0, Math.sin(a) * d)
+        part.rotation.y = r() * Math.PI * 2
+        part.scale.setScalar(p.scale * (0.85 + r() * 0.3))
+        g.add(part)
+      }
+      // 野果丛：叶子上挂一些红的、紫黑的小果子
+      if (it.spot.kind === 'berries') {
+        const box = new THREE.Box3().setFromObject(g)
+        const c = it.spot.id === 'berries_e' ? M.berryRed : M.berryDark
+        for (let i = 0; i < 18; i++) {
+          const a = r() * Math.PI * 2
+          const y = box.min.y + (box.max.y - box.min.y) * (0.35 + r() * 0.55)
+          const rx = (box.max.x - box.min.x) / 2
+          const rz = (box.max.z - box.min.z) / 2
+          const k = 0.75 + r() * 0.25
+          add(g, G.berry, c, (box.min.x + box.max.x) / 2 + Math.cos(a) * rx * k, y, (box.min.z + box.max.z) / 2 + Math.sin(a) * rz * k, 1.3)
+        }
+      }
+      const parent = it.full.parent!
+      // 原来代码捏的放大过 1.4 倍，扫描植物是真实尺寸：外层缩放归一
+      parent.scale.setScalar(1)
+      parent.remove(it.full)
+      it.full = g
+      parent.add(g)
+      g.visible = it.ripe
+      // 采过以后：野果丛只剩叶子，别的只剩地皮
+      const empty = new THREE.Group()
+      if (it.spot.kind === 'berries') for (const ch of g.children) if (!(ch as THREE.Mesh).isMesh || (ch as THREE.Mesh).geometry !== G.berry) empty.add(ch.clone())
+      parent.remove(it.empty)
+      it.empty = empty
+      parent.add(empty)
+      empty.visible = !it.ripe
+      it.hit.scale.setScalar(it.spot.kind === 'honey' ? 1 : 1.3)
+    }
   }
 
   /** 哪些长好了（每帧调用也便宜：只比一下天数） */

@@ -616,7 +616,7 @@ export class World {
         kit.set(child.name, child)
       }
       this.assembleVilla(kit)
-      if (paradise) this.applyParadise(paradise)
+      if (paradise) { this.applyParadise(paradise); this.forage?.useKit(paradise) }
       // 让屋里像个家：地毯、窗帘、画、桌上的花（花瓶放在餐桌桌面上：往下打一条射线找桌面）
       try {
         this.scene.updateMatrixWorld(true)

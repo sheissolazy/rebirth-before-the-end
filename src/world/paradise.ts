@@ -55,6 +55,8 @@ export const PH_MODELS = [
   'island_tree_02', 'grass_bermuda_01', 'shrub_sorrel_01', 'periwinkle_plant', 'dandelion_01', 'flower_empodium', 'fern_02',
   'rock_moss_set_02', 'boulder_01', 'covered_car', 'wine_barrel_01', 'wooden_bucket_01', 'large_iron_gate',
   'painted_wooden_bench', 'street_lamp_01',
+  // 野外能采的：荠菜（野草）、荨麻、野菊（gazania）、野果丛
+  'weed_plant_02', 'nettle_plant', 'flower_gazania', 'shrub_04',
 ] as const
 
 export interface ParadiseKit {
@@ -234,7 +236,7 @@ function rng(seed: number): () => number {
 }
 
 /** 把一个"一排好几种"的模型集拆成一个个品种，每个品种底面中心归零 */
-function variants(src: THREE.Object3D): { parts: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[] }[] }[] {
+export function variants(src: THREE.Object3D): { parts: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[] }[] }[] {
   src.updateMatrixWorld(true)
   const out: { parts: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[] }[] }[] = []
   const nodes = src.children.length === 1 && !(src.children[0] as THREE.Mesh).isMesh ? src.children[0].children : src.children

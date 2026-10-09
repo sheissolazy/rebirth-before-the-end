@@ -15,3 +15,4 @@ Poly Haven 的素材是 CC0，不署名也可以；但它的 API 条款要求用
 | 音效和背景音乐 | `src/world/sound.ts` 用 WebAudio 现场合成（枪声、弩、丧尸低吼（大块头更低沉）、砸门、防空警报、雨声、鸟叫、蛐蛐、和弦背景音乐） | 自己写的，无外部素材 | 全部声音 |
 | 小道具模型 | `src/world/meshes.ts` 代码画的：霰弹枪、撬棍、擀面杖、弩、钉板和螺旋铁丝网、坟和石碑、送东西的箱子 | 自己写的 | 拿在手上的武器、守家道具 |
 | 衣服贴图修改 | `src/world/people.ts` 的 `WARDROBE`：加载时在画布上盖掉 MakeHuman 衣服上的标志、给上衣换颜色、改发色 | 基于 CC0 贴图改的 | 江野、顾沉、礼帽大叔、辫子姑娘、王阿姨、女主、妈妈、谢临 |
+| 野外采集的植物 `public/models/ph/{weed_plant_02,nettle_plant,flower_gazania,shrub_04}.glb` | Poly Haven（polyhaven.com），`tools/blender/slim_polyhaven.py` 减面 | CC0 | 世外桃源画风的荠菜、荨麻、野菊花、野果丛（2026-10-09 加） |

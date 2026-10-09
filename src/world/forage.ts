@@ -15,12 +15,12 @@ export interface ForageSpot {
 
 export const FORAGE: ForageSpot[] = [
   { id: 'greens_w', kind: 'greens', name: '荠菜', at: { x: -8, z: -5.5 } },
-  { id: 'greens_e', kind: 'greens', name: '马齿苋', at: { x: 15, z: 11 } },
+  { id: 'greens_e', kind: 'greens', name: '蕨菜', at: { x: 15, z: 11 } },
   { id: 'flowers_w', kind: 'flowers', name: '野菊花', at: { x: -11, z: 6 } },
   { id: 'flowers_e', kind: 'flowers', name: '紫云英', at: { x: 17, z: -5.5 } },
   { id: 'herb_river', kind: 'herb', name: '蒲公英', at: { x: 8.5, z: -6.2 } },
-  { id: 'herb_w', kind: 'herb', name: '艾草', at: { x: -16, z: -6 } },
-  { id: 'herb_e', kind: 'herb', name: '车前草', at: { x: 29, z: 11 } },
+  { id: 'herb_w', kind: 'herb', name: '荨麻', at: { x: -16, z: -6 } },
+  { id: 'herb_e', kind: 'herb', name: '酢浆草', at: { x: 29, z: 11 } },
   { id: 'mushroom', kind: 'mushroom', name: '平菇', at: { x: -19, z: 2 } },
   { id: 'toadstool', kind: 'toadstool', name: '红伞伞', at: { x: -21, z: 4.5 } },
   { id: 'shoots', kind: 'shoots', name: '竹笋', at: { x: -21, z: 10 } },
