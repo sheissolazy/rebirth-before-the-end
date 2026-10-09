@@ -57,7 +57,7 @@ const WEAPONS = {
 const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 1.15 }
 
 /** 铁门外铺的钉板和铁丝网：踩进去走得慢、一直掉血；每有一只丧尸在上面待一秒就磨损一点 */
-export const TRAP = { x0: 2.2, x1: 5.8, z0: 13.6, z1: 16.0, dps: 2, wear: 1, slow: 0.55 }
+export const TRAP = { x0: 2.2, x1: 5.8, z0: 13.6, z1: 16.0, dps: 2, wear: 0.6, slow: 0.55 }
 export const inTrap = (p: Pt) => p.x > TRAP.x0 && p.x < TRAP.x1 && p.z > TRAP.z0 && p.z < TRAP.z1
 
 export class Zombie extends Walker {
