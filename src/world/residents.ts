@@ -65,7 +65,7 @@ export class Actor extends Walker {
   /** 正和家人一起歇着/吃饭，聊着天 */
   chatting = false
   /** 打丧尸用什么 */
-  weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' = 'pin'
+  weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' | 'crossbow' = 'pin'
   /** 戴着顾沉的头盔：被咬伤害减半 */
   helmet = false
   /** 枪没子弹时换的近战武器（江野送的斧子比菜刀好用） */
@@ -444,6 +444,18 @@ export class Household {
 
   /** 困难模式（给设计者对比用：丧尸多一半、更狠、大块头更多、开局子弹减半） */
   hard = false
+
+  /** 从五金店带回来的弩（给爸爸；爸爸不在就给家里别的人） */
+  crossbow = false
+
+  /** 把弩交给爸爸（不在了就交给家里最健康的人，女主自己用霰弹枪） */
+  equipCrossbow(): void {
+    if (!this.crossbow || this.actors.some((a) => a.weapon === 'crossbow' && !a.dead && !a.lost)) return
+    const dad = this.actors[2]
+    const holder = dad && !dad.dead && !dad.lost ? dad
+      : this.actors.filter((a) => a !== this.actors[0] && !a.guest && !a.dead && !a.lost).sort((x, y) => y.health - x.health)[0]
+    if (holder) holder.weapon = 'crossbow'
+  }
 
   /** 江野住进来了（不再来访、危机夜也不用"来帮忙"了） */
   jiangyeHome = false
@@ -1197,6 +1209,12 @@ export class Household {
       this.medkits += g.medkits ?? 0
       this.cores += g.cores ?? 0
       this.molotovs += g.molotovs ?? 0
+      // 第一次去五金店：顺手带回一把弩
+      if (t.def.id === 'hardware' && !this.crossbow) {
+        this.crossbow = true
+        this.equipCrossbow()
+        this.note('world.log.crossbow')
+      }
       if (r.gateBonus) {
         this.gateBonus = Math.min(120, this.gateBonus + r.gateBonus)
         this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + r.gateBonus)

@@ -329,6 +329,19 @@ export function shotgun(): THREE.Group {
   return g
 }
 
+/** 弩：木托 + 横着的弓臂 + 弦 */
+export function crossbowMesh(): THREE.Group {
+  const g = new THREE.Group()
+  g.add(rod(0.02, 0.55, '#6b4428', -0.05, 'z'))
+  const limb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.025, 0.03), new THREE.MeshStandardMaterial({ color: '#3a3a3e', roughness: 0.5, metalness: 0.4 }))
+  limb.position.set(0, 0.02, 0.42)
+  const string = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.006, 0.006), new THREE.MeshStandardMaterial({ color: '#d8d2c0' }))
+  string.position.set(0, 0.02, 0.36)
+  for (const m of [limb, string]) m.castShadow = true
+  g.add(limb, string)
+  return g
+}
+
 /** 撬棍：握在拳头里，横着伸出去 */
 export function crowbar(): THREE.Group {
   const g = new THREE.Group()

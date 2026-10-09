@@ -69,6 +69,7 @@ export interface WorldSave {
   hardHalved?: boolean
   jiangyeHome?: boolean
   shenyanHome?: boolean
+  crossbow?: boolean
   medicTomorrow?: number
   lent?: { name: string; back: number } | null
   fewerTonight?: boolean
@@ -124,6 +125,7 @@ export function snapshot(life: Household): WorldSave {
     hardHalved: life.hardHalved,
     jiangyeHome: life.jiangyeHome,
     shenyanHome: life.shenyanHome,
+    crossbow: life.crossbow,
     medicTomorrow: life.medicTomorrow,
     lent: life.lent,
     fewerTonight: life.fewerTonight,
@@ -167,6 +169,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.hardHalved = !!s.hardHalved
   life.jiangyeHome = !!s.jiangyeHome
   life.shenyanHome = !!s.shenyanHome
+  life.crossbow = !!s.crossbow
+  life.equipCrossbow()
   life.medicTomorrow = s.medicTomorrow ?? -1
   life.lent = s.lent ?? null
   life.fewerTonight = !!s.fewerTonight

@@ -13,7 +13,7 @@ import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
-  COLORS, barrel, box, car, counter, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
+  COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
@@ -275,6 +275,9 @@ export class World {
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   private trapMesh: THREE.Group | null = null
   private readonly graves = new Map<string, THREE.Object3D>()
+  /** 一家三口各自手里的武器模型（拿到弩以后把爸爸的撬棍藏起来） */
+  private readonly kitOf = new Map<Actor, THREE.Object3D>()
+  private bow: THREE.Object3D | null = null
   /** 末日字幕还显示几秒 */
   private doomT = 0
   /** 今天已经提醒过的（第几天） */
@@ -442,6 +445,7 @@ export class World {
       this.siegeView.onEvent(e)
       const vol = (at: { x: number; z: number }) => THREE.MathUtils.clamp(1.25 - Math.hypot(at.x - this.pose.target.x, at.z - this.pose.target.z) / 22, 0.15, 1)
       if (e.kind === 'shot') this.sound.shot(vol(e.at))
+      else if (e.kind === 'bolt') this.sound.twang(vol(e.at))
       else if (e.kind === 'bash') this.sound.bash(e.layer === 'gate', vol(e.at))
       else if (e.kind === 'broken') this.sound.crash()
       else if (e.kind === 'kill') this.sound.squelch()
@@ -542,7 +546,7 @@ export class World {
         const kit = [shotgun(), rollingPin(), crowbar()]
         kit.forEach((w, k) => {
           w.visible = false
-          if (this.actors[k].driver?.attach(w, 'RightHand')) this.weapons.push(w)
+          if (this.actors[k].driver?.attach(w, 'RightHand')) { this.weapons.push(w); this.kitOf.set(this.actors[k], w) }
         })
       }
       this.addLamps()
@@ -1343,6 +1347,18 @@ export class World {
       courier.animate(Math.min(sim, 0.1), walking)
     }
     for (const w of this.weapons) w.visible = fighting
+    // 弩：挂在拿弩的人手上（打仗时才拿出来），他原来的武器收起来
+    const archer = this.life.crossbow ? this.actors.find((a) => a.weapon === 'crossbow' && a.driver) : undefined
+    if (archer) {
+      if (!this.bow) { this.bow = crossbowMesh(); this.weapons.push(this.bow) }
+      if (this.bow.userData.owner !== archer) {
+        const ok = (archer.driver as { attach(o: THREE.Object3D, bone: string): boolean } | null)?.attach(this.bow, 'RightHand')
+        if (ok) this.bow.userData.owner = archer
+      }
+      this.bow.visible = fighting
+      const old = this.kitOf.get(archer)
+      if (old) old.visible = false
+    }
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     if (this.life.wall && !this.stoneWall && !this.hud.loading) this.raiseStoneWall()
     const g = this.life.garden

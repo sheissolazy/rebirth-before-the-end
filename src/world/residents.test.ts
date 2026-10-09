@@ -1174,3 +1174,41 @@ describe('末日降临', () => {
     expect(life.log.filter((l) => l.key === 'world.log.doomday').length).toBe(1)
   })
 })
+
+describe('弩', () => {
+  it('第一次去五金店带回一把弩，爸爸守夜改用弩：射得远、不耗子弹；存档后还在爸爸手上', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.speed = 3
+    const mom = life.actors[1]
+    expect(life.startTrip('hardware', [mom])).toBe(true)
+    const dt = 0.1
+    for (let i = 0; i < 20000 && life.trip; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+    expect(life.crossbow).toBe(true)
+    expect(life.actors[2].weapon).toBe('crossbow')
+    expect(life.log.some((l) => l.key === 'world.log.crossbow')).toBe(true)
+    // 守夜：爸爸放弩箭，子弹一发不少（女主没子弹）
+    life.spawnZombie = (at) => new Zombie(at)
+    life.ammo.n = 0
+    let bolts = 0
+    const emit = life.onSiege
+    life.onSiege = (e) => { if (e.kind === 'bolt') bolts++; emit?.(e) }
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.05 }
+    life.startSiege(3, false)
+    for (let i = 0; i < 20000 && life.siege && !life.siege.done; i++) {
+      life.tick(0.05, () => false)
+      for (const z of life.siege?.zombies ?? []) z.follow(0.05, z.speed)
+      for (const a of life.actors) a.follow(0.05, 2.2)
+    }
+    expect(bolts).toBeGreaterThan(0)
+    expect(life.ammo.n).toBe(0)
+    // 存档往返：爸爸手上还是弩
+    life.siege = null
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.actors[2].weapon).toBe('crossbow')
+  })
+})

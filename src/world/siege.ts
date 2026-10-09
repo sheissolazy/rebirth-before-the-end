@@ -48,6 +48,8 @@ export const fullBarriers = (): Barriers => ({ gate: LAYERS[0].max, door: LAYERS
 /** 武器：射程、冷却（秒）、伤害 */
 const WEAPONS = {
   shotgun: { range: 4.6, cool: 1.5, dmg: 34 },
+  // 弩：射得比霰弹枪远、不用子弹，但上弦慢
+  crossbow: { range: 5.4, cool: 2.4, dmg: 30 },
   crowbar: { range: 0, cool: 0.95, dmg: 16 },
   pin: { range: 0, cool: 1.05, dmg: 11 },
   knife: { range: 0, cool: 0.85, dmg: 12 },
@@ -124,6 +126,7 @@ export type SiegeEvent =
   | { kind: 'brute' }
   | { kind: 'trapBroken' }
   | { kind: 'shot'; from: Actor; at: Pt }
+  | { kind: 'bolt'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
   | { kind: 'bash'; layer: LayerId; at: Pt }
   | { kind: 'fire'; at: Pt }
@@ -477,7 +480,7 @@ export class Siege {
       dmg = bd < 3.5 ? w.dmg * 1.3 : w.dmg
       a.driver?.recoil()
       this.o.emit({ kind: 'shot', from: a, at: target.pos })
-    }
+    } else if (weapon === 'crossbow') this.o.emit({ kind: 'bolt', from: a, at: target.pos })
     target.hp -= dmg
     target.hitT = 0.15
     this.o.emit({ kind: 'hit', at: target.pos })

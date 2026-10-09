@@ -299,6 +299,15 @@ export class Sound {
     o.stop(t + 9.7)
   }
 
+  /** 弩：咔哒一声、弦嗡地一响 */
+  twang(vol = 1): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    this.noiseBurst(t, 'highpass', 2500, 1, 0.05, 0.12 * vol)
+    this.tone(t + 0.01, 'triangle', 180, 120, 0.18, 0.18 * vol)
+  }
+
   /** 水花 */
   splash(): void {
     const ctx = this.ready

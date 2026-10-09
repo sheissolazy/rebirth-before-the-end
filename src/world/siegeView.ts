@@ -226,6 +226,12 @@ export class SiegeView {
           new THREE.LineBasicMaterial({ color: '#fff2b0', transparent: true }))
         this.add(line, 0.09, (k1) => { (line.material as THREE.LineBasicMaterial).opacity = 1 - k1 })
       }
+    } else if (e.kind === 'bolt') {
+      // 弩箭：一道细细的灰线，没有枪口火光
+      const from = e.from.root.position.clone().add(new THREE.Vector3(0, 1.25, 0))
+      const to = new THREE.Vector3(e.at.x, 1.1, e.at.z)
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: '#cfc8b8', transparent: true }))
+      this.add(line, 0.14, (k1) => { (line.material as THREE.LineBasicMaterial).opacity = 1 - k1 })
     } else if (e.kind === 'hit') this.blood(e.at)
     else if (e.kind === 'kill') this.core(e.at)
     else if (e.kind === 'broken') this.shake = 0.5
