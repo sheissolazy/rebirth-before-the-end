@@ -302,7 +302,7 @@ export default function WorldView() {
         <div className="pointer-events-none absolute right-3 top-14 w-64 rounded-xl bg-amber-50/90 px-3 py-2 text-xs shadow">
           <div className="mb-1 font-semibold text-amber-900">📔 {t('world.diary')}</div>
           {hud.log.slice(0, 4).map((l, k) => (
-            <div key={`${l.day}-${l.hour}-${k}`} className={`mb-1 leading-snug ${k ? 'text-zinc-500' : 'text-zinc-800'}`}>
+            <div key={`${l.day}-${l.hour}-${k}`} className={`mb-1 line-clamp-3 leading-snug ${k ? 'text-zinc-500' : 'text-zinc-800'}`}>
               <span className="mr-1 text-[10px] text-amber-800">{calendarLabel({ day: l.day, hour: l.hour })}</span>
               {t(l.key as UiKey, l.vars)}
             </div>

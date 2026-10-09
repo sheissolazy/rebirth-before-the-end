@@ -13,6 +13,7 @@ import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEve
 import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
 import { npcs } from '../content/npcs'
+import { events as textEvents } from '../content/events'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
@@ -693,6 +694,22 @@ export class Household {
     return ok
   }
 
+  /** 从文字版这个地点的事件里挑一段，当作这一趟的见闻写进日记（只取文字） */
+  private tripScene(locationId: string): void {
+    const prologue = this.clock.day < PROLOGUE_DAYS
+    const pool = textEvents.filter((e) => e.locationId === locationId && e.kind !== 'story'
+      && !e.conditions?.some((c) => c.type === 'phase' && c.phase !== (prologue ? 'prologue' : 'apocalypse')))
+    const ev = pool[Math.floor(this.rand() * pool.length)]
+    if (!ev) return
+    const outs = Object.values(ev.outcomes ?? {}).filter(Boolean)
+    const out = outs[Math.min(outs.length - 1, 1 + Math.floor(this.rand() * Math.max(1, outs.length - 1)))]
+    this.note('world.log.scene', {
+      title: lt(ev.title),
+      text: lt(ev.text),
+      end: out?.text ? lt(out.text) : '',
+    })
+  }
+
   /** 军区门口/基地：不走通用的搜刮结算 */
   private settleArmy(t: Trip): void {
     const who = t.members.map((m) => m.name).join('、')
@@ -781,6 +798,7 @@ export class Household {
         a.setPath(route(this.navs, a.pos, { ...HOME_IN, x: HOME_IN.x + (k - 1) * 0.9 }) ?? [])
       })
     } else if (t.phase === 'back' && t.members.every((a) => !a.path.length) && t.def.id === 'armygate') {
+      this.tripScene('armygate')
       this.settleArmy(t)
       t.members.forEach((a) => { a.carrying = false; a.hold = 0.3 })
       this.trip = null
@@ -810,6 +828,7 @@ export class Household {
         a.health = Math.max(5, a.health - r.hurt[k])
         a.hold = 0.3
       })
+      this.tripScene(t.def.id)
       this.note(r.key, { ...r.vars, who: t.members.map((m) => m.name).join('、'), where: placeName(t.def.id) })
       this.trip = null
     }

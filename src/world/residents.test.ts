@@ -174,6 +174,9 @@ describe('出门', () => {
     expect(life.stock.food).toBeGreaterThan(food0 + 5)
     expect(hero.away || mom.away).toBe(false)
     expect(life.log.some((l) => l.key === 'world.trip.supermarket')).toBe(true)
+    // 文字版超市事件里的一段见闻
+    const scene = life.log.find((l) => l.key === 'world.log.scene')
+    expect(scene?.vars?.title).toBeTruthy()
   })
 
   it('天黑前回不来就不让出门；末日后不能去超市买东西', () => {
