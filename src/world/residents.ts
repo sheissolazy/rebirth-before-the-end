@@ -325,6 +325,8 @@ export class Household {
   careVariant = 0
   /** 拒绝了黑鸦：今晚他们来抢 */
   raidTonight = false
+  /** 白天当场打起来的那一场（不会因为"天亮了"就结束） */
+  private dayRaid = false
   /** 陌生人透露的线索：下次去那里搜刮翻倍 */
   tip: string | null = null
   /** 女主的空间异能：放进去的吃喝不会被抢、被淹、被打翻（文字版的设定：用空间不涨暴露） */
@@ -453,7 +455,7 @@ export class Household {
     return {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
-      food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
+      food: this.stock.food, water: this.stock.water, ammo: this.ammo.n, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
       affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes, jiangyeHome: this.jiangyeHome, shenyanHome: this.shenyanHome,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
@@ -830,6 +832,25 @@ export class Household {
           return
         }
       } else all(-4)
+    } else if (def.id === 'scout') {
+      // 给了水 = 让他把院子看清楚了：六成今晚带人来抢；亮出猎枪就吓退了；隔着门撵他走，一半当场翻墙打起来
+      let outcome = choice
+      if (choice === 'water') {
+        this.stock = { ...this.stock, water: Math.max(0, this.stock.water - 1) }
+        outcome = this.rand() < 0.6 ? 'marked' : 'thanks'
+        if (outcome === 'marked') this.raidTonight = true
+      } else if (choice === 'shut') outcome = this.rand() < 0.5 ? 'fight' : 'leave'
+      else this.actors[0].needs.mood = Math.min(100, this.actors[0].needs.mood + 2)
+      this.note(`world.visit.scout.log.${outcome}`, this.visitVars())
+      this.talking = null
+      v.phase = 'leave'
+      v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+      if (outcome === 'fight') {
+        // 大白天打起来：别让"天亮了丧尸散了"把这场架提前结束
+        this.dayRaid = true
+        this.startSiege(2 + Math.max(0, Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)), false, true)
+      }
+      return
     } else if (def.id === 'crow_tax') {
       if (choice === 'pay') food(-3)
       else this.raidTonight = true
@@ -1496,8 +1517,8 @@ export class Household {
     const s = this.siege
     if (!s) return
     s.tick(simSeconds)
-    if (!s.done && !s.ambush && c.hour >= SUNRISE && c.hour < 12) s.dawn()
-    if (s.finished) this.siege = null
+    if (!s.done && !s.ambush && !this.dayRaid && c.hour >= SUNRISE && c.hour < 12) s.dawn()
+    if (s.finished) { this.siege = null; this.dayRaid = false }
   }
 
   /** 原型调试用：下一个（危机）夜是哪一天——只往后，不倒回去 */

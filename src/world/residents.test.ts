@@ -667,6 +667,55 @@ describe('来敲门的人', () => {
   })
 })
 
+describe('来踩点的陌生人', () => {
+  function tickUntil(life: Household, cond: () => boolean, max = 4000) {
+    const dt = 0.05
+    for (let i = 0; i < max && !cond(); i++) {
+      life.tick(dt, () => false)
+      if (life.visitor) life.visitor.follow(dt * life.speed, 1.7)
+      for (const z of life.siege?.zombies ?? []) z.follow(dt * life.speed, z.speed)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+  const meet = (r: number) => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 11 }
+    life.stock = { food: 10, water: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'scout')!)
+    tickUntil(life, () => !!life.talking)
+    ;(life as unknown as { rand: () => number }).rand = () => r
+    return life
+  }
+  it('给了水：六成是来踩点的，当晚黑鸦来抢（日记里有门柱上的记号）', () => {
+    const life = meet(0.3)
+    life.answerVisitor('water')
+    expect(life.raidTonight).toBe(true)
+    expect(life.stock.water).toBe(9)
+    expect(life.log.some((l) => l.key === 'world.visit.scout.log.marked')).toBe(true)
+  })
+  it('亮出猎枪：吓退，没事', () => {
+    const life = meet(0.3)
+    life.answerVisitor('gun')
+    expect(life.raidTonight).toBe(false)
+    expect(life.siege).toBeNull()
+  })
+  it('隔着门撵走：一半当场翻墙打起来，大白天也不会因为"天亮了"就散', () => {
+    const life = meet(0.3)
+    let raid = false
+    life.onSiege = (e) => { if (e.kind === 'start') raid = !!e.raid }
+    life.answerVisitor('shut')
+    expect(life.siege).not.toBeNull()
+    tickUntil(life, () => raid, 2000)
+    expect(raid).toBe(true)
+    // 上午 11 点开打：过一会儿仗还在打（没被"天亮"提前结束）
+    tickUntil(life, () => false, 200)
+    expect(life.siege?.done ?? false).toBe(false)
+    expect(life.log.some((l) => l.key === 'world.visit.scout.log.fight')).toBe(true)
+  })
+})
+
 describe('月底危机夜跟着前世记忆走', () => {
   it('1 月尸潮、2 月匮乏', () => {
     expect(Household.crisisKind({ day: PROLOGUE_DAYS + 3, hour: 21 })).toBe('horde')

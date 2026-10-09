@@ -498,6 +498,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugCourier('xielin')} className={DBG}>{t('world.debug.xielin')}</button>
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className={DBG}>{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className={DBG}>{t('world.debug.beggar')}</button>
+          <button onClick={() => world.current?.debugVisitor('scout')} className={DBG}>{t('world.debug.scout')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className={DBG}>{t('world.debug.crow')}</button>
           <button onClick={() => world.current?.togglePeople()} className={DBG}>{t('world.debug.people')}</button>
           <button onClick={() => world.current?.toggleHard()} className={DBG}>{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>

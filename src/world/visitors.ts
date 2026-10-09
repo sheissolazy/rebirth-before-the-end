@@ -6,7 +6,7 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
+export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'scout' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
 export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen' | 'xielin'
 
 export interface VisitorCtx {
@@ -16,6 +16,9 @@ export interface VisitorCtx {
   /** 末日后第几个月（从 1 开始），末日前是 0 */
   month: number
   food: number
+  water: number
+  /** 子弹 */
+  ammo: number
   /** 已经来过的（id → 哪天来的） */
   seen: Record<string, number>
   /** 帮过王阿姨 */
@@ -68,6 +71,12 @@ export const VISITORS: VisitorDef[] = [
     id: 'beggar', model: 'stranger', icon: '🧔', chance: 0.12,
     when: (c) => !c.prologue && daytime(c) && (c.seen.beggar === undefined || c.day - c.seen.beggar >= 3),
     choices: [{ id: 'give', need: (c) => c.food >= 1 }, { id: 'invite', need: (c) => c.residents < 5 }, { id: 'refuse' }],
+  },
+  // 来踩点的人：说是讨碗水喝，眼睛却一直在数院子里有几个人、窗户在哪（陌生人敲门，有一定概率打起来）
+  {
+    id: 'scout', model: 'stranger', icon: '🧢', chance: 0.1,
+    when: (c) => !c.prologue && c.day >= 5 && c.hour >= 10 && c.hour < 16.5 && (c.seen.scout === undefined || c.day - c.seen.scout >= 3),
+    choices: [{ id: 'water', need: (c) => c.water >= 1 }, { id: 'gun', need: (c) => c.ammo >= 2 }, { id: 'shut' }],
   },
   // 男主：江野（青梅竹马、佣兵团长）。序章就能遇到，他无条件信你
   {

@@ -181,6 +181,8 @@ export class ForageView {
       hit.position.y = s.kind === 'honey' ? 1.4 : 0.3
       if (s.kind === 'honey') hit.scale.set(1.2, 2.6, 1.2)
       hit.userData.forage = s.id
+      // 只用来点：不画出来（射线照样打得到看不见的物体）
+      hit.visible = false
       holder.add(full, empty, glint, hit)
       this.root.add(holder)
       this.items.push({ spot: s, full, empty, glint, hit, ripe: true })
