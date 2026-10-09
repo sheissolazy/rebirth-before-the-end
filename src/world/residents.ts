@@ -137,7 +137,7 @@ export class Actor extends Walker {
     body.rotation.z = walking ? Math.sin(this.walkT) * 0.06 : 0
     const lying = state === 'sleep' || state === 'down'
     inner.rotation.x = lying ? -Math.PI / 2 : state === 'work' || state === 'melee' ? 0.22 : 0
-    inner.position.y = lying ? (state === 'down' ? 0.2 : 0.5) : state === 'sit' ? -0.22 : 0
+    inner.position.y = lying ? (state === 'down' ? 0.2 : 0.5) : state === 'sit' || state === 'sitEat' ? -0.22 : 0
   }
 }
 
@@ -766,7 +766,7 @@ export class Household {
 
   private assign(a: Actor, task: Task): void {
     a.task = task
-    if (!task.spot) a.pose = task.kind === 'eat' ? 'work' : 'idle'
+    if (!task.spot) a.pose = task.kind === 'eat' ? 'drink' : 'idle'
     if (task.spot) {
       this.taken.set(task.spot, a)
       const s = task.spot
@@ -809,6 +809,9 @@ export class Household {
       if (a.settling) return
       t.phase = 'use'
       a.pose = t.spot?.pose ?? 'idle'
+      // 坐着吃饭、站着喝水有自己的动作
+      if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
+      if (t.kind === 'drink') a.pose = 'drink'
       if (t.kind === 'cook') this.stock.food = Math.max(0, this.stock.food - MEAL.food)
       if (t.kind === 'drink') this.stock.water = Math.max(0, this.stock.water - DRINK.water)
       return
