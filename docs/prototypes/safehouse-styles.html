@@ -1,0 +1,435 @@
+<title>安全屋画风样张</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow reading column; each view is a framed night scene with its trade-offs underneath. */
+:root {
+  --bg: #eceef2;
+  --panel: #ffffff;
+  --fg: #1c2430;
+  --muted: #586374;
+  --line: #d3d8e0;
+  --accent: #a8641a;
+  --display: "ZCOOL XiaoWei", "Songti SC", "Noto Serif SC", serif;
+  --body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141922; --panel: #1b212b; --fg: #e3e7ee; --muted: #9aa5b4; --line: #2b333f; --accent: #e3a14c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141922; --panel: #1b212b; --fg: #e3e7ee; --muted: #9aa5b4; --line: #2b333f; --accent: #e3a14c;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--body); line-height: 1.7; }
+.wrap { max-width: 920px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 48px; }
+header { display: grid; gap: 10px; max-width: 64ch; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 5vw, 44px); line-height: 1.15; margin: 0; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); font-size: 15px; }
+.lede strong { color: var(--fg); font-weight: 500; }
+section.view { display: grid; gap: 16px; }
+.view-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+h2 { font-family: var(--display); font-weight: 400; font-size: 26px; margin: 0; }
+.ref { font-size: 13px; color: var(--accent); letter-spacing: 0.04em; }
+.stage { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #0e131c; }
+canvas { display: block; width: 100%; max-width: 100%; }
+.trade { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 32px; }
+.trade > div { min-width: 0; }
+h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 4px; }
+ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; font-size: 14.5px; }
+.limit { border-top: 1px solid var(--line); padding-top: 28px; display: grid; gap: 10px; max-width: 64ch; }
+.limit p { margin: 0; font-size: 15px; }
+.note { color: var(--muted); font-size: 13px; }
+</style>
+
+<main class="wrap">
+  <header>
+    <h1>安全屋画风样张</h1>
+    <p class="lede">两种 2.5D 视角，都是夜里的同一个小队：<strong>你、江野、妈妈</strong>，也就是女主加两名队友。画面里没有一张图片文件，人物、家具、丧尸和灯光全部由代码现场画出来。这就是我不借助任何美术素材能画到的程度。</p>
+  </header>
+
+  <section class="view" aria-labelledby="h-iso">
+    <div class="view-head">
+      <h2 id="h-iso">斜 45° 俯视</h2>
+      <span class="ref">饥荒、模拟人生的视角</span>
+    </div>
+    <div class="stage"><canvas id="iso" style="aspect-ratio: 720 / 420" role="img" aria-label="斜45度俯视的出租屋：木地板、钉了木板的窗、堵住的门、冰箱、罐头架、蓝色水桶、红色发电机，台灯下站着三个人"></canvas></div>
+    <div class="trade">
+      <div>
+        <h3>好处</h3>
+        <ul>
+          <li>有空间感，最接近饥荒和《生存日志》的感觉。</li>
+          <li>摆家具、走位、堵门都很直观。</li>
+          <li>出门搜刮可以用同一个视角四处走。</li>
+        </ul>
+      </div>
+      <div>
+        <h3>代价</h3>
+        <ul>
+          <li>多层楼要切换楼层才能看到。</li>
+          <li>人物要画四个朝向，每件家具都要画斜角，美术量大。</li>
+          <li>人走到柜子后面会被挡住，要处理遮挡。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" aria-labelledby="h-side">
+    <div class="view-head">
+      <h2 id="h-side">侧面剖面</h2>
+      <span class="ref">《这是我的战争》、辐射避难所的视角</span>
+    </div>
+    <div class="stage"><canvas id="side" style="aspect-ratio: 720 / 420" role="img" aria-label="侧面剖开的两层小楼：一楼储藏室和厨房，二楼卧室和发电间，屋顶有集雨桶、菜箱和太阳能板，左边门外有丧尸靠近，一名队友正在爬楼梯"></canvas></div>
+    <div class="trade">
+      <div>
+        <h3>好处</h3>
+        <ul>
+          <li>几层楼一眼看全，谁在哪个房间做什么最清楚。</li>
+          <li>镜头只左右平移，最不容易晕。</li>
+          <li>人物只画左右两个朝向，美术量最小。</li>
+        </ul>
+      </div>
+      <div>
+        <h3>代价</h3>
+        <ul>
+          <li>房间里不能前后走，空间感弱一些。</li>
+          <li>出门搜刮会变成横版闯关，不像饥荒那样四处走。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="limit" aria-labelledby="h-limit">
+    <h2 id="h-limit">代码画的上限</h2>
+    <p>代码能画出干净的几何扁平风，适合做原型，也可以直接当成游戏的统一画风。想要《生存日志》那种精细插画，需要用生图工具或请画师出图，我负责切图、做动画、接进游戏。</p>
+    <p class="note">开了"减少动态效果"的系统设置时，两张图会停在静止的一帧。</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FONT = '"Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
+
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+  function ellipse(ctx, x, y, rx, ry, fill) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
+  function circle(ctx, x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
+  function poly(ctx, pts, fill, stroke) {
+    ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  function shade(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const c = (v) => Math.max(0, Math.min(255, Math.round(v * f)));
+    return 'rgb(' + c(n >> 16) + ',' + c((n >> 8) & 255) + ',' + c(n & 255) + ')';
+  }
+  function tag(ctx, x, y, name, needs) {
+    ctx.font = '600 11px ' + FONT;
+    const w = ctx.measureText(name).width + 12;
+    rr(ctx, x - w / 2, y - 9, w, 17, 8); ctx.fillStyle = 'rgba(10,14,22,0.78)'; ctx.fill();
+    ctx.fillStyle = '#f4f1ea'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, x, y + 0.5);
+    if (needs) {
+      const cols = ['#e2a04a', '#5aa6e0', '#7cc47a'];
+      needs.forEach((v, i) => {
+        const bx = x - 16 + i * 11, by = y + 12;
+        ctx.fillStyle = 'rgba(10,14,22,0.7)'; ctx.fillRect(bx, by, 9, 3);
+        ctx.fillStyle = cols[i]; ctx.fillRect(bx, by, 9 * v, 3);
+      });
+    }
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
+
+  /* ---------- 人物（正面/侧面通用小人） ---------- */
+  function figure(ctx, px, py, o, t) {
+    const walking = !!o.walking;
+    const ph = t * 8 + (o.seed || 0);
+    const step = walking ? Math.sin(ph) * 3 : 0;
+    const bob = walking ? Math.abs(Math.sin(ph)) * 1.6 : Math.sin(t * 2 + (o.seed || 0)) * 0.5;
+    const dir = o.dir || 0;
+    ellipse(ctx, px, py, 11, 4.2, 'rgba(0,0,0,0.35)');
+    ctx.fillStyle = o.pants;
+    ctx.fillRect(px - 6 + step * 0.6, py - 15, 5, 15);
+    ctx.fillRect(px + 1 - step * 0.6, py - 15, 5, 15);
+    ctx.fillStyle = shade(o.coat, 0.75);
+    if (o.zombie) {
+      ctx.fillRect(px + (dir > 0 ? 2 : -18), py - 32 - bob, 16, 4);
+    } else {
+      ctx.fillRect(px - 11, py - 33 - bob + step * 0.4, 4, 15);
+      ctx.fillRect(px + 7, py - 33 - bob - step * 0.4, 4, 15);
+    }
+    rr(ctx, px - 8, py - 36 - bob, 16, 22, 5); ctx.fillStyle = o.coat; ctx.fill();
+    const hx = px + dir * 1.5, hy = py - 44 - bob + (o.zombie ? 2 : 0);
+    if (o.ponytail) circle(ctx, hx - 7 - dir * 2, hy + 1, 4, o.hair);
+    circle(ctx, hx, hy, 8, o.skin);
+    ctx.beginPath(); ctx.arc(hx, hy - 1, 8.4, Math.PI * 1.05, Math.PI * 1.95); ctx.fillStyle = o.hair; ctx.fill();
+    if (o.zombie) { circle(ctx, hx + dir * 4, hy, 1.4, '#e8e26a'); }
+    else if (dir) { circle(ctx, hx + dir * 4.5, hy + 0.5, 1.2, '#1a1a1a'); }
+    else { circle(ctx, hx - 3, hy + 0.5, 1.2, '#1a1a1a'); circle(ctx, hx + 3, hy + 0.5, 1.2, '#1a1a1a'); }
+    if (o.name) tag(ctx, px, py - 72 - bob, o.name, o.needs);
+  }
+
+  const HERO = { name: '你', coat: '#c0463b', pants: '#2f3440', hair: '#2a1d18', skin: '#f0cfb4', ponytail: true, needs: [0.8, 0.6, 0.7], seed: 0 };
+  const JIANG = { name: '江野', coat: '#3f5f3a', pants: '#26292f', hair: '#191513', skin: '#e2b896', needs: [0.5, 0.4, 0.9], seed: 1.7 };
+  const MOM = { name: '妈妈', coat: '#8a6aa8', pants: '#3b3b47', hair: '#4b4440', skin: '#efcfb6', needs: [0.7, 0.8, 0.4], seed: 3.1 };
+
+  /* ---------- 画布与灯光 ---------- */
+  function scene(canvas, W, H, draw) {
+    const ctx = canvas.getContext('2d');
+    const dark = document.createElement('canvas');
+    const dctx = dark.getContext('2d');
+    let last = 4;
+    function size() {
+      const r = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.max(1, Math.round(r.width * dpr));
+      canvas.width = w; canvas.height = Math.round(w * H / W);
+      dark.width = canvas.width; dark.height = canvas.height;
+    }
+    function frame(t) {
+      const s = canvas.width / W;
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      dctx.setTransform(s, 0, 0, s, 0, 0);
+      draw(ctx, t, (fill, lights) => {
+        dctx.globalCompositeOperation = 'source-over';
+        dctx.clearRect(0, 0, W, H);
+        dctx.fillStyle = fill; dctx.fillRect(0, 0, W, H);
+        dctx.globalCompositeOperation = 'destination-out';
+        lights.forEach((L) => {
+          const g = dctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r);
+          g.addColorStop(0, 'rgba(0,0,0,' + L.a + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+          dctx.fillStyle = g; dctx.fillRect(L.x - L.r, L.y - L.r, L.r * 2, L.r * 2);
+        });
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(dark, 0, 0); ctx.restore();
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        lights.filter((L) => L.warm).forEach((L) => {
+          const g = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r * 0.8);
+          g.addColorStop(0, 'rgba(255,176,90,' + L.warm + ')'); g.addColorStop(1, 'rgba(255,176,90,0)');
+          ctx.fillStyle = g; ctx.fillRect(L.x - L.r, L.y - L.r, L.r * 2, L.r * 2);
+        });
+        ctx.restore();
+      });
+    }
+    size();
+    if (window.ResizeObserver) new ResizeObserver(() => { size(); frame(last); }).observe(canvas);
+    if (reduce) {
+      frame(last);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => frame(last));
+    } else {
+      const loop = (ms) => { last = ms / 1000; frame(last); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    }
+  }
+
+  /* ---------- A：斜 45° 俯视 ---------- */
+  const T = 34, TH = 17, OX = 372, OY = 132;
+  const P = (x, y, z) => [OX + (x - y) * T, OY + (x + y) * TH - (z || 0)];
+  function box(ctx, x, y, w, d, h, col, z0) {
+    z0 = z0 || 0;
+    poly(ctx, [P(x, y + d, z0), P(x + w, y + d, z0), P(x + w, y + d, z0 + h), P(x, y + d, z0 + h)], shade(col, 0.8));
+    poly(ctx, [P(x + w, y, z0), P(x + w, y + d, z0), P(x + w, y + d, z0 + h), P(x + w, y, z0 + h)], shade(col, 0.62));
+    poly(ctx, [P(x, y, z0 + h), P(x + w, y, z0 + h), P(x + w, y + d, z0 + h), P(x, y + d, z0 + h)], col, 'rgba(0,0,0,0.12)');
+  }
+  function drawIso(ctx, t, light) {
+    const W = 720, H = 420;
+    ctx.fillStyle = '#0e131c'; ctx.fillRect(0, 0, W, H);
+    const RX = 8, RY = 7, WH = 112;
+    for (let x = 0; x < RX; x++) for (let y = 0; y < RY; y++) {
+      poly(ctx, [P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)], (x + y) % 2 ? '#6c5443' : '#745b49', 'rgba(0,0,0,0.16)');
+    }
+    // 地毯
+    poly(ctx, [P(2.9, 2.7), P(5.4, 2.7), P(5.4, 4.9), P(2.9, 4.9)], '#7a3a39');
+    poly(ctx, [P(3.1, 2.9), P(5.2, 2.9), P(5.2, 4.7), P(3.1, 4.7)], '#8a4644');
+    // 墙
+    poly(ctx, [P(0, 0), P(0, RY), P(0, RY, WH), P(0, 0, WH)], '#3c4554');
+    poly(ctx, [P(0, 0), P(RX, 0), P(RX, 0, WH), P(0, 0, WH)], '#4a5465');
+    poly(ctx, [P(0, 0, WH), P(RX, 0, WH), P(RX, 0, WH + 6), P(0, 0, WH + 6)], '#5d687a');
+    poly(ctx, [P(0, 0, WH), P(0, RY, WH), P(0, RY, WH + 6), P(0, 0, WH + 6)], '#525c6d');
+    // 窗（钉了木板）
+    poly(ctx, [P(4.6, 0, 40), P(6.2, 0, 40), P(6.2, 0, 84), P(4.6, 0, 84)], '#1a2a45');
+    poly(ctx, [P(5.6, 0, 70), P(6.0, 0, 70), P(6.0, 0, 80), P(5.6, 0, 80)], '#c9d3e6');
+    [[48, 4], [64, -3]].forEach(([z, tilt]) => {
+      poly(ctx, [P(4.4, 0, z), P(6.4, 0, z + tilt), P(6.4, 0, z + tilt + 8), P(4.4, 0, z + 8)], '#9b7752', 'rgba(0,0,0,0.3)');
+    });
+    // 日历：一排红叉
+    poly(ctx, [P(0, 1.9, 52), P(0, 2.8, 52), P(0, 2.8, 84), P(0, 1.9, 84)], '#e6e0d3');
+    ctx.strokeStyle = '#b33a32'; ctx.lineWidth = 1.2;
+    for (let i = 0; i < 6; i++) {
+      const yy = 2.0 + (i % 3) * 0.26, zz = 76 - Math.floor(i / 3) * 12;
+      const a = P(0, yy, zz), b = P(0, yy + 0.16, zz - 7), c = P(0, yy + 0.16, zz), d = P(0, yy, zz - 7);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+    }
+    // 门
+    poly(ctx, [P(0, 4.4), P(0, 5.6), P(0, 5.6, 76), P(0, 4.4, 76)], '#262a31');
+
+    const items = [];
+    const add = (cx, cy, fn) => items.push({ k: cx + cy, fn });
+    add(1.0, 1.6, () => {
+      box(ctx, 0.2, 0.3, 1.6, 2.6, 20, '#7a6a5a');
+      box(ctx, 0.28, 0.38, 1.44, 0.6, 9, '#e6e0d4', 20);
+      box(ctx, 0.25, 1.05, 1.5, 1.8, 6, '#58739a', 20);
+    });
+    add(2.85, 0.55, () => {
+      box(ctx, 2.4, 0.15, 0.9, 0.8, 76, '#d6dade');
+      const a = P(2.55, 0.95, 60), b = P(2.55, 0.95, 40);
+      ctx.strokeStyle = '#8b9096'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    });
+    add(4.45, 0.4, () => {
+      box(ctx, 3.6, 0.12, 1.7, 0.55, 64, '#7b5b3e');
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
+      [22, 43].forEach((z) => { const a = P(3.6, 0.67, z), b = P(5.3, 0.67, z); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
+      ['#c2402f', '#e0b43c', '#4d8f4a', '#c2402f', '#e0b43c'].forEach((c, i) => box(ctx, 3.7 + i * 0.32, 0.22, 0.22, 0.3, 11, c, 64));
+    });
+    [[6.5, 0.25], [7.2, 0.25], [6.5, 0.95]].forEach(([x, y]) => add(x + 0.33, y + 0.33, () => box(ctx, x, y, 0.62, 0.62, 44, '#3a78ac')));
+    add(7.3, 0.85, () => box(ctx, 6.9, 0.45, 0.62, 0.62, 40, '#4a89bd', 44));
+    add(7.4, 3.3, () => { box(ctx, 7.0, 3.0, 0.8, 0.6, 30, '#b8402f'); box(ctx, 7.1, 3.08, 0.6, 0.44, 4, '#2a2a2a', 30); });
+    add(7.0, 5.95, () => { box(ctx, 6.6, 5.7, 0.8, 0.55, 20, '#d4c69f'); box(ctx, 6.7, 5.75, 0.6, 0.45, 16, '#cbbb92', 20); });
+    add(0.5, 5.0, () => { box(ctx, 0.1, 4.3, 0.75, 1.4, 34, '#8a6a45'); box(ctx, 0.15, 4.5, 0.6, 0.9, 22, '#755838', 34); });
+    add(3.2, 3.7, () => box(ctx, 3.0, 3.5, 0.4, 0.4, 16, '#6a5038'));
+    add(4.2, 3.7, () => {
+      box(ctx, 3.5, 3.2, 1.4, 1.0, 26, '#8a6a4a');
+      box(ctx, 4.02, 3.52, 0.22, 0.22, 10, '#2f3338', 26);
+      box(ctx, 3.94, 3.44, 0.38, 0.38, 10, '#f0c77e', 36);
+    });
+    // 人
+    const u = (Math.sin(t * 0.55) + 1) / 2;
+    const jx = 5.4 + (6.3 - 5.4) * u, jy = 2.3 + (5.1 - 2.3) * u;
+    add(2.6, 3.4, () => { const p = P(2.6, 3.4); figure(ctx, p[0], p[1], HERO, t); });
+    add(4.6, 4.95, () => { const p = P(4.6, 4.95); figure(ctx, p[0], p[1], MOM, t); });
+    add(jx, jy, () => { const p = P(jx, jy); figure(ctx, p[0], p[1], Object.assign({ walking: !reduce }, JIANG), t); });
+    items.sort((a, b) => a.k - b.k).forEach((it) => it.fn());
+
+    const lamp = P(4.13, 3.63, 44), win = P(5.4, 0, 62);
+    light('rgba(6,10,26,0.6)', [
+      { x: lamp[0], y: lamp[1] + 20, r: 250, a: 0.95, warm: 0.2 + (reduce ? 0 : Math.sin(t * 3) * 0.015) },
+      { x: win[0], y: win[1] + 20, r: 80, a: 0.4 },
+    ]);
+    ctx.font = '500 13px ' + FONT; ctx.fillStyle = 'rgba(236,232,222,0.88)';
+    ctx.fillText('末日第 3 天 · 凌晨 2:40 · 出租屋', 18, 28);
+  }
+
+  /* ---------- B：侧面剖面 ---------- */
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const stars = Array.from({ length: 46 }, () => [rnd() * 720, rnd() * 190, rnd() * 1.2 + 0.4]);
+  const skyline = []; for (let x = -10; x < 740;) { const w = 30 + rnd() * 50; skyline.push([x, w, 60 + rnd() * 130]); x += w + 4; }
+  const winLights = skyline.map(([x, w, h]) => (rnd() > 0.6 ? [x + w * 0.3, 360 - h + 20 + rnd() * (h - 40)] : null));
+
+  function pathAt(pts, s) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (s <= len) return { x: a[0] + (b[0] - a[0]) * s / len, y: a[1] + (b[1] - a[1]) * s / len, dx: b[0] - a[0] };
+      s -= len;
+    }
+    const z = pts[pts.length - 1]; return { x: z[0], y: z[1], dx: 0 };
+  }
+  const route = [[460, 356], [612, 356], [524, 266], [596, 266]];
+  const routeLen = route.slice(1).reduce((s, b, i) => s + Math.hypot(b[0] - route[i][0], b[1] - route[i][1]), 0);
+
+  function drawSide(ctx, t, light) {
+    const W = 720, H = 420;
+    const g = ctx.createLinearGradient(0, 0, 0, 360);
+    g.addColorStop(0, '#0b1222'); g.addColorStop(1, '#22304a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    stars.forEach(([x, y, r]) => circle(ctx, x, y, r, 'rgba(230,235,245,0.7)'));
+    circle(ctx, 96, 66, 22, '#e9e3cd'); circle(ctx, 104, 60, 20, 'rgba(11,18,34,0.25)');
+    skyline.forEach(([x, w, h]) => { ctx.fillStyle = '#162036'; ctx.fillRect(x, 360 - h, w, h); });
+    winLights.forEach((p) => { if (p) { ctx.fillStyle = 'rgba(240,200,120,0.35)'; ctx.fillRect(p[0], p[1], 4, 5); } });
+    ctx.fillStyle = '#26231e'; ctx.fillRect(0, 360, W, 60);
+    ctx.fillStyle = '#34302a'; ctx.fillRect(0, 360, W, 4);
+
+    // 楼体
+    ctx.fillStyle = '#5a606a'; ctx.fillRect(228, 176, 414, 186);
+    const rooms = [
+      { x: 242, y: 274, w: 186, h: 82, fill: '#3d3631', label: '储藏室' },
+      { x: 434, y: 274, w: 194, h: 82, fill: '#33403d', label: '厨房 · 净水' },
+      { x: 242, y: 184, w: 226, h: 82, fill: '#3c3548', label: '卧室' },
+      { x: 474, y: 184, w: 154, h: 82, fill: '#363c45', label: '发电间' },
+    ];
+    rooms.forEach((r) => {
+      ctx.fillStyle = r.fill; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = 'rgba(255,255,255,0.035)';
+      for (let x = r.x + 10; x < r.x + r.w; x += 22) ctx.fillRect(x, r.y, 1, r.h);
+    });
+    ctx.fillStyle = '#363c45'; ctx.fillRect(500, 266, 60, 8);
+    // 储藏室：货架和箱子
+    ctx.fillStyle = '#6b5038'; ctx.fillRect(252, 292, 4, 64); ctx.fillRect(330, 292, 4, 64);
+    [300, 322, 344].forEach((y) => ctx.fillRect(252, y, 82, 3));
+    const cans = ['#c2402f', '#e0b43c', '#4d8f4a', '#d6c69f'];
+    [300, 322, 344].forEach((y, row) => { for (let i = 0; i < 6; i++) { ctx.fillStyle = cans[(i + row) % 4]; ctx.fillRect(258 + i * 12, y - 9, 9, 9); } });
+    [[350, 336, 34, 20, '#8a6a45'], [388, 340, 30, 16, '#8a6a45'], [356, 320, 24, 16, '#7a5c3c']].forEach(([x, y, w, h, c]) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(x, y + h / 2 - 1, w, 2); });
+    // 厨房：水桶、灶台、楼梯
+    [446, 474].forEach((x) => { rr(ctx, x, 322, 24, 34, 5); ctx.fillStyle = '#3a78ac'; ctx.fill(); ctx.fillStyle = '#4a89bd'; ctx.fillRect(x + 3, 330, 18, 3); });
+    rr(ctx, 450, 300, 20, 22, 5); ctx.fillStyle = '#4a89bd'; ctx.fill();
+    ctx.fillStyle = '#585e66'; ctx.fillRect(512, 330, 44, 26); ctx.fillStyle = '#2a2d31'; ctx.fillRect(518, 322, 30, 8);
+    ctx.fillStyle = '#c87a3a'; ctx.fillRect(524, 314, 16, 8);
+    ctx.fillStyle = '#6b5a48';
+    for (let i = 0; i < 9; i++) { const sx = 612 - i * 10, sy = 356 - (i + 1) * 10; ctx.fillRect(sx - 10, sy, 26, 10); }
+    // 卧室：床、钉木板的窗
+    [[256, 82], [352, 82]].forEach(([x, w]) => { ctx.fillStyle = '#7a6a5a'; ctx.fillRect(x, 248, w, 18); ctx.fillStyle = '#58739a'; ctx.fillRect(x + 18, 242, w - 20, 8); ctx.fillStyle = '#e6e0d4'; ctx.fillRect(x + 2, 240, 16, 10); });
+    ctx.fillStyle = '#1a2a45'; ctx.fillRect(392, 198, 54, 34);
+    ctx.save(); ctx.translate(419, 215); ctx.rotate(-0.12); ctx.fillStyle = '#9b7752'; ctx.fillRect(-32, -10, 64, 7); ctx.rotate(0.24); ctx.fillRect(-32, 4, 64, 7); ctx.restore();
+    // 发电间
+    ctx.fillStyle = '#b8402f'; ctx.fillRect(582, 236, 38, 30); ctx.fillStyle = '#2a2a2a'; ctx.fillRect(586, 230, 30, 6);
+    ctx.fillStyle = '#2f3540'; ctx.fillRect(484, 244, 12, 22); ctx.fillRect(498, 244, 12, 22);
+    ctx.fillStyle = '#7cc47a'; ctx.fillRect(486, 248, 8, 3); ctx.fillRect(500, 248, 8, 3);
+    // 灯泡和电线
+    [[335, 274], [530, 274], [350, 184], [548, 184]].forEach(([x, y]) => { ctx.fillStyle = '#20242a'; ctx.fillRect(x - 0.5, y, 1, 10); circle(ctx, x, y + 13, 4, '#f5d58e'); });
+    // 门和门外的木板
+    ctx.fillStyle = '#262a31'; ctx.fillRect(228, 300, 14, 56);
+    ctx.save(); ctx.translate(234, 328); ctx.fillStyle = '#9b7752';
+    [-0.5, 0.45, -0.1].forEach((a, i) => { ctx.save(); ctx.translate(0, (i - 1) * 16); ctx.rotate(a); ctx.fillRect(-16, -3, 32, 6); ctx.restore(); });
+    ctx.restore();
+    // 屋顶
+    ctx.fillStyle = '#4c525b'; ctx.fillRect(228, 160, 10, 16); ctx.fillRect(632, 160, 10, 16);
+    [250, 280].forEach((x) => { rr(ctx, x, 146, 24, 30, 5); ctx.fillStyle = '#3a78ac'; ctx.fill(); });
+    [318, 384].forEach((x) => {
+      ctx.fillStyle = '#6b5038'; ctx.fillRect(x, 160, 58, 16);
+      for (let i = 0; i < 4; i++) circle(ctx, x + 8 + i * 14, 156 - (i % 2) * 3, 7, i % 2 ? '#4f9a4a' : '#3f8a3c');
+    });
+    ctx.fillStyle = '#5d636b'; ctx.fillRect(520, 150, 3, 26); ctx.fillRect(596, 160, 3, 16);
+    poly(ctx, [[508, 156], [612, 166], [606, 152], [514, 138]], '#2b4a7a', '#8fa7c9');
+    // 房间名
+    ctx.font = '500 11px ' + FONT; ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    rooms.forEach((r) => ctx.fillText(r.label, r.x + 8, r.y + 16));
+    ctx.fillText('屋顶：集雨桶 · 菜箱 · 太阳能板', 250, 134);
+
+    // 小队
+    figure(ctx, 372, 356, Object.assign({ dir: -1 }, HERO), t);
+    figure(ctx, 300, 266, Object.assign({ dir: 1 }, MOM), t);
+    const cyc = (t * 26) % (routeLen * 2);
+    const s = cyc < routeLen ? cyc : routeLen * 2 - cyc;
+    const pos = pathAt(route, reduce ? routeLen * 0.5 : s);
+    const back = cyc >= routeLen;
+    figure(ctx, pos.x, pos.y, Object.assign({ dir: (pos.dx >= 0) !== back ? 1 : -1, walking: !reduce }, JIANG), t);
+
+    // 丧尸
+    const Z = { coat: '#4b4f5a', pants: '#2c2f36', hair: '#3a3f35', skin: '#8fa088', zombie: true, dir: 1 };
+    [30, 92, 150].forEach((bx, i) => {
+      const x = bx + ((t * 5 + i * 17) % 46);
+      figure(ctx, x, 360 + (i % 2) * 6, Object.assign({ walking: !reduce, seed: i * 2.3 }, Z), t * 0.45);
+    });
+
+    light('rgba(5,9,22,0.5)', [
+      { x: 335, y: 300, r: 130, a: 0.95, warm: 0.16 },
+      { x: 530, y: 300, r: 120, a: 0.9, warm: 0.14 },
+      { x: 350, y: 210, r: 130, a: 0.95, warm: 0.16 },
+      { x: 548, y: 210, r: 110, a: 0.9, warm: 0.14 },
+      { x: 96, y: 66, r: 120, a: 0.5 },
+    ]);
+    ctx.font = '500 13px ' + FONT; ctx.fillStyle = 'rgba(236,232,222,0.88)';
+    ctx.fillText('末日第 17 天 · 夜里 · 尸群在靠近', 18, 28);
+  }
+
+  scene(document.getElementById('iso'), 720, 420, drawIso);
+  scene(document.getElementById('side'), 720, 420, drawSide);
+})();
+</script>

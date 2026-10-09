@@ -47,8 +47,9 @@
 
 ## 分支与发布
 - `main` → https://sheissolazy.github.io/rebirth-before-the-end/ （稳定测试版，存档前缀 `rbte`）
-- `next` → https://sheissolazy.github.io/rebirth-before-the-end/next/ （开发版，存档前缀 `rbte-next`，与测试版互不影响）
-- 开发都在 `next` 上做；一批反馈验证完再合到 `main`。Codex 的分支从 `next` 切。
+- `next` → https://sheissolazy.github.io/rebirth-before-the-end/next/ （存档前缀 `rbte-next`）
+- `dev` → https://sheissolazy.github.io/rebirth-before-the-end/dev/ （存档前缀 `rbte-dev`）
+- 用户说她在测哪个网址，就在另一个分支上改；一批反馈验证完再合到 `main`。当前状态和交接见 [HANDOFF.md](./HANDOFF.md)。
 
 ## 目录约定
 
