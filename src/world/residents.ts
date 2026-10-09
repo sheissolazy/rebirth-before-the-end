@@ -329,6 +329,7 @@ export class Household {
     this.gardenGrow(hours)
     this.searchTick(hours)
     this.fishingTick(hours)
+    this.streetTick()
     this.chatTick(hours)
     this.visitorTick()
     for (const a of this.actors) {
@@ -495,17 +496,36 @@ export class Household {
     }
   }
 
+  /** 末日后女主在外面晃：偶尔有一只丧尸从街那头晃过来（每个游戏小时掷一次） */
+  private streetCheck = -1
+  private streetTick(): void {
+    const hero = this.actors[0]
+    if (this.clock.day < PROLOGUE_DAYS || this.siege || hero.away || this.isHomeBody(hero)) return
+    const hour = Math.floor(this.absHour)
+    if (hour === this.streetCheck) return
+    this.streetCheck = hour
+    const chance = isNight(this.clock.hour) ? 0.35 : 0.12
+    if (this.rand() > chance) return
+    const side = this.rand() < 0.5 ? -1 : 1
+    // 在屋后江边就从江边那头来，在街上就从街那头来
+    const z = hero.pos.z < YARD.z0 ? -7.5 : Math.min(19, Math.max(15.5, hero.pos.z))
+    const x = Math.min(30, Math.max(-22, hero.pos.x + (hero.pos.x + side * 8 > 30 || hero.pos.x + side * 8 < -22 ? -side : side) * 8))
+    this.ambush({ id: 'street', kind: 'car', at: { x, z }, hours: 0, danger: 1 }, 1)
+  }
+
   /** World 提供：钓到/跑了（画面上浮漂一沉、溅水花） */
   onFish: ((caught: boolean) => void) | null = null
 
   /** 街上遇袭：一两只丧尸从附近冒出来扑向女主和跟着的人 */
-  private ambush(spot: ScavengeSpot): void {
+  private ambush(spot: ScavengeSpot, count?: number): void {
     if (!this.spawnZombie || this.siege) return
-    const n = this.rand() < 0.4 ? 2 : 1
+    const n = count ?? (this.rand() < 0.4 ? 2 : 1)
     const at = Array.from({ length: n }, (_, k) => ({ x: spot.at.x + (k ? -5 : 6), z: spot.at.z + (k ? 1.5 : 2) }))
     const party = this.actors.filter((a) => !a.away && !a.lost && !a.runaway && !this.onTrip(a) && !this.isHomeBody(a))
     // 女主不在外面（比如被派出门了）就不会遇袭
     if (!party.length) return
+    this.cancelSearch()
+    this.stopFishing()
     this.siege = new Siege({
       count: n, crisis: false, navs: this.navs, defenders: party,
       barriers: { gate: 0, door: 0, stairs: 0 }, ammo: this.ammo, ambushAt: at,
