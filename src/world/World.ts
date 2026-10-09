@@ -90,6 +90,8 @@ export interface Hud {
   trap: number
   /** 攒着的草药（够 3 份捣成急救包） */
   herbs: number
+  /** 照现在家里的人数，吃的喝的还够几天 */
+  daysLeft: number
   /** 竹子；两排竹尖刺还能扎几只；下一排是第几排（-1 = 都插满了） */
   bamboo: number
   spikes: number[]
@@ -186,7 +188,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -734,15 +736,13 @@ export class World {
     this.scene.add(this.gardenObj)
   }
 
-  /** 两个人走得太近就让一让（不再穿身而过）：走路的人往旁边让、不往回退，
-   *  迎面走来的两个人各自靠右；坐着、躺着、正在挪位置的人不动 */
+  /** 两个人走得太近就让一让——只让一个人让：
+   *  以前两个人同时往各自右手边让，在桌子和楼梯中间这种窄地方会绕着对方转圈、谁也过不去。
+   *  现在按先后（女主 > 你派了事的人 > 有正事的人 > 闲逛的人）定谁让：让的人站一下、往空着的那边挪一步；
+   *  两边都没地方挪，就干脆擦身而过（叠一下也比原地跳舞好）。坐着、躺着、正在挪位置的人不动。 */
   private makeWay(): void {
     const R = 0.55
     const list = this.actors.filter((a) => !a.away && !a.settling && a.pose !== 'sleep')
-    const step = (a: Actor, x: number, z: number) => {
-      const p = a.root.position
-      if (!this.navs[a.floor].isBlockedAt(p.x + x, p.z + z)) { p.x += x; p.z += z }
-    }
     const heading = (a: Actor) => {
       const n = a.path[0]
       if (!n) return null
@@ -751,6 +751,9 @@ export class World {
       const d = Math.hypot(dx, dz)
       return d > 1e-3 ? { x: dx / d, z: dz / d } : null
     }
+    const rank = (a: Actor) => (a === this.heroine ? 4 : 0) + (a.task?.manual ? 2 : 0)
+      + (a.task && a.task.kind !== 'stroll' && a.task.kind !== 'idle' && a.task.kind !== 'relax' ? 1 : 0)
+    const free = (a: Actor, x: number, z: number) => !this.navs[a.floor].isBlockedAt(a.root.position.x + x, a.root.position.z + z)
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i]
@@ -763,23 +766,30 @@ export class World {
         const fa = heading(a)
         const fb = heading(b)
         if (!fa && !fb) continue // 都站着（面对面说话）不推
-        const push = (R - d) * 0.5
-        for (const [me, other, f] of [[a, b, fa], [b, a, fb]] as const) {
-          if (!f) continue
-          // 快走到地方了（最后一个路点就在眼前）：不推，不然会绕着站着的人打转、永远到不了
-          const last = me.path[me.path.length - 1]
-          if (me.path.length === 1 && last && Math.hypot(last.x - me.root.position.x, last.z - me.root.position.z) < R + 0.15) continue
-          // 从对方指向自己的方向，去掉往回退的那部分；正对着撞上就往右手边让
-          let nx = me.root.position.x - other.root.position.x
-          let nz = me.root.position.z - other.root.position.z
-          const back = nx * f.x + nz * f.z
-          if (back < 0) { nx -= back * f.x; nz -= back * f.z }
-          let len = Math.hypot(nx, nz)
-          const headOn = fa && fb && fa.x * fb.x + fa.z * fb.z < -0.3
-          if (len < 0.05 || headOn) { nx += -f.z * 0.6; nz += f.x * 0.6; len = Math.hypot(nx, nz) }
-          const k = (fa && fb ? push : push * 2) / Math.max(len, 1e-3)
-          step(me, nx * k, nz * k)
+        // 一前一后往同一个方向走（比如一起上楼睡觉）：后面的人等一下，排着队走，不往旁边挤
+        if (fa && fb && fa.x * fb.x + fa.z * fb.z > 0.5) {
+          const behind = (pb.x - pa.x) * fa.x + (pb.z - pa.z) * fa.z > 0 ? a : b
+          if (behind.waitT <= 0) behind.waitT = 0.15
+          continue
         }
+        // 谁让：只有一个人在走，就是走的人绕开站着的人；两个人都在走，排位低的让
+        const aYields = !fb ? true : !fa ? false : rank(a) !== rank(b) ? rank(a) < rank(b) : i > j
+        const me = aYields ? a : b
+        const other = aYields ? b : a
+        const f = (aYields ? fa : fb)!
+        // 快走到地方了（最后一个路点就在眼前）：不推，不然会绕着站着的人打转、永远到不了
+        const last = me.path[me.path.length - 1]
+        if (me.path.length === 1 && last && Math.hypot(last.x - me.root.position.x, last.z - me.root.position.z) < R + 0.15) continue
+        // 往"离对方远"的那一侧横着挪一步（垂直于自己走的方向）
+        const px = -f.z
+        const pz = f.x
+        const side = Math.sign((me.root.position.x - other.root.position.x) * px + (me.root.position.z - other.root.position.z) * pz) || 1
+        const k = (R - d) * 0.6
+        const moved = free(me, px * side * k, pz * side * k) ? side : free(me, -px * side * k, -pz * side * k) ? -side : 0
+        if (moved) { me.root.position.x += px * moved * k; me.root.position.z += pz * moved * k }
+        // 迎面撞上：让的人还要站一下，等对方先过去（两边都挪不开就不等了，直接擦身而过）
+        const otherF = aYields ? fb : fa
+        if (moved && otherF && f.x * otherF.x + f.z * otherF.z < -0.3 && me.waitT <= 0) me.waitT = 0.35
       }
     }
   }
@@ -1342,9 +1352,8 @@ export class World {
       return { target: new THREE.Vector3(h.x, 0.8, h.z).add(this.pan), elev: OUT_VIEW.elev, dist: OUT_VIEW.dist * this.zoom.outside, fov: OUT_VIEW.fov }
     }
     const baseY = this.viewFloor === 1 ? FLOOR_H + 0.8 : 0.8
+    // 家里的镜头固定看着房子（WASD 自己挪），不再跟着选中的人晃——一家人走来走去、互相让路时整个画面会跟着抖
     const t = new THREE.Vector3(HOUSE_CENTER.x, baseY, HOUSE_CENTER.z)
-    t.x += (h.x - HOUSE_CENTER.x) * 0.35
-    t.z += (h.z - HOUSE_CENTER.z) * 0.35
     // 打丧尸时镜头对着正在守的那一层
     const layer = this.life?.siege && !this.life.siege.done ? this.life.siege.current : null
     if (layer) {
@@ -1753,7 +1762,9 @@ export class World {
       let gliding = false
       for (let left = sim; left > 1e-6; left -= 0.05) {
         const step = Math.min(left, 0.05)
-        walking = a.follow(step, WALK_SPEED) || walking
+        // 正在给别人让路：站一下再走
+        if (a.waitT > 0) a.waitT -= step
+        else walking = a.follow(step, WALK_SPEED) || walking
         gliding = a.updateSettle(step) || gliding
       }
       a.animate(Math.min(sim, 0.1), walking || gliding)
@@ -2341,6 +2352,13 @@ export class World {
     if (Math.hypot(h.pos.x - s.at.x, h.pos.z - s.at.z) < 1.3 && this.life.startSearch(s)) this.pushLifeHud()
   }
 
+  /** 一个人一天大概吃 1 份、喝 1 份：按在家的人数算还够几天 */
+  daysLeft(): number {
+    const n = Math.max(1, this.actors.filter((a) => !a.dead && !a.lost && !a.runaway).length)
+    const av = this.life.available
+    return Math.floor(Math.min(av.food, av.water) / n)
+  }
+
   private tapForage(s: ForageSpot): void {
     if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
     const h = this.heroine
@@ -2736,6 +2754,7 @@ export class World {
       wall: this.life.wall,
       trap: Math.ceil(this.life.trap.hp),
       herbs: this.life.herbs,
+      daysLeft: this.daysLeft(),
       bamboo: this.life.bamboo,
       spikes: this.life.spikes.map((r) => r.hits),
       spikeNext: this.life.nextSpikeRow(),

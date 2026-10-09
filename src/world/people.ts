@@ -502,7 +502,8 @@ export class PoseDriver {
       this.rot('RightArm', SIDE, 0, rightDown)
       this.rot('Spine', SIDE, Math.sin(this.t * 0.6) * 0.02)
       this.model.rotation.x = -Math.PI / 2
-      this.model.position.y = 0.55
+      // Q 版人物头大、身子圆，躺平以后后脑勺和背比真人往下多出一截：抬高一点，免得陷进床垫里
+      this.model.position.y = 0.55 + (1 - this.legK) * 0.25
     } else if (state === 'work') {
       // 在灶台前忙：左手扶着锅，右手画圈翻炒，身子跟着轻轻动
       const c = this.t * 2.6

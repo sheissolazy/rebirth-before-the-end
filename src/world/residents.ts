@@ -105,6 +105,8 @@ export class Actor extends Walker {
   dead = false
   /** 玩家下过命令后，这么多游戏小时内不自己找事 */
   hold = 0
+  /** 让路：站住等别人先过去（秒） */
+  waitT = 0
   private settle: { from: THREE.Vector3; to: THREE.Vector3; r0: number; r1: number; t: number } | null = null
   private walkT = 0
   driver: PoseDriver | null = null

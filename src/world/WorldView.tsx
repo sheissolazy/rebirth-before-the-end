@@ -19,8 +19,14 @@ const WELCOME_KEYS = ['click', 'wasd', 'wheel', 'space', 'speed', 'map', 'diary'
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
 /** 左上角"建设"小按钮 */
-const BUILD = 'rounded-sm bg-white/5 px-2 py-0.5 text-left text-[11px] text-[#efe4d0] ring-1 ring-[#e8c98a]/30 transition hover:bg-white/15 disabled:opacity-40'
+const BUILD = 'w-full rounded-sm bg-white/5 px-2 py-1 text-left text-[11px] text-[#efe4d0] ring-1 ring-[#e8c98a]/30 transition hover:bg-white/15 disabled:opacity-40'
 const DBG = `${CHIP} px-3 py-1.5 text-left`
+/** 左上角工具条的按钮 */
+const TOOL = 'rounded-sm bg-[#1d1915]/90 px-2.5 py-1 text-xs font-medium text-[#efe4d0] ring-1 ring-[#e8c98a]/30 shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition hover:bg-[#2a241e] hover:ring-[#e8c98a]/60'
+const TOOL_ON = 'bg-[#3a3024] ring-[#e8c98a]/80 text-[#f4ecdc]'
+const BUILD_DONE = 'rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#c9dcb0] ring-1 ring-white/10'
+const MENU_ROW = 'block w-full rounded-sm px-2.5 py-1.5 text-left text-xs text-[#cbbfa8] transition hover:bg-white/10'
+const logKey = (l: LogEntry) => `${l.day}-${l.hour}-${l.key}`
 const FACE_MASK = 'radial-gradient(ellipse 90% 80% at 75% 30%, black 35%, transparent 75%)'
 
 
@@ -129,7 +135,12 @@ export default function WorldView() {
   const [style, setStyle] = useState<ArtStyle>(loadStyle)
   const [diary, setDiaryState] = useState(false)
   const [map, setMapState] = useState(false)
-  const [spaceOpen, setSpaceOpen] = useState(false)
+  /** 左上角哪一块展开着（存货 / 任务 / 建设 / 空间）；一次只开一块 */
+  const [pop, setPop] = useState<null | 'stock' | 'tasks' | 'build' | 'space'>(null)
+  const togglePop = (k: NonNullable<typeof pop>) => setPop((p) => (p === k ? null : k))
+  /** 日记：上次翻开时最新那条；刚冒出来的一条（右上角小纸条，几秒后消失） */
+  const [logSeen, setLogSeen] = useState('')
+  const [fresh, setFresh] = useState<LogEntry | null>(null)
   /** 右上角菜单：打开 / 正在确认哪一项；dayStart = "重过今天"回到几点 */
   const [menu, setMenu] = useState<null | 'open' | 'rewind' | 'restart'>(null)
   const [dayStart, setDayStart] = useState<string | null>(null)
@@ -252,6 +263,21 @@ export default function WorldView() {
     setStyle(next)
   }
 
+  // 日记：红点是翻开以后又多了几条；新的一条在日记本下面冒 6 秒
+  const newest = hud.log[0] ? logKey(hud.log[0]) : ''
+  const seenIdx = hud.log.findIndex((l) => logKey(l) === logSeen)
+  const unread = !newest || !logSeen ? 0 : seenIdx < 0 ? hud.log.length : seenIdx
+  const firstLog = useRef(true)
+  useEffect(() => {
+    if (!newest) return
+    // 刚读档进来的那些不算新的
+    if (firstLog.current) { firstLog.current = false; setLogSeen(newest); return }
+    setFresh(hud.log[0])
+    const id = setTimeout(() => setFresh(null), 6000)
+    return () => clearTimeout(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newest])
+
   const home = hud.mode === 'home'
   return (
     <div className="fixed inset-0 select-none overflow-hidden bg-[#15110e] text-zinc-900">
@@ -259,10 +285,10 @@ export default function WorldView() {
 
       {/* 片头放的时候把界面藏起来 */}
       <div className={hud.intro ? 'pointer-events-none opacity-0' : 'transition-opacity duration-1000'}>
-      <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-        <div className={`${PANEL} px-4 py-2.5`}>
+      <div className="absolute left-3 top-3 flex w-[276px] flex-col gap-1.5">
+        <div className={`${PANEL} px-3 py-2`}>
           <Grain />
-          <div className="relative flex items-center gap-2 text-[17px] font-bold tabular-nums tracking-wide" style={{ fontFamily: SERIF }}>
+          <div className="relative flex items-center gap-2 text-[16px] font-bold tabular-nums tracking-wide" style={{ fontFamily: SERIF }}>
             <span>{hud.rain > 0.05 ? '🌧️' : hud.night ? '🌙' : '☀️'}</span>
             <span>{hud.time}</span>
             {hud.hard && <span className="rounded bg-red-700 px-1 text-[10px] font-bold text-white">{t('world.hardTag')}</span>}
@@ -275,103 +301,103 @@ export default function WorldView() {
               </button>
             ))}
           </div>
-          <div className="relative mt-2 text-xs text-[#d9ccb4]">
-            🍚💧 {t('world.stock', { food: hud.food.toFixed(1), water: hud.water.toFixed(1) })}
-          </div>
-          <div className="relative mt-0.5 text-xs text-[#d9ccb4]">
-            🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })} · ⛽ {t('world.fuel', { n: hud.fuel })}
-          </div>
-          <div className="relative mt-0.5 text-xs text-[#d9ccb4]">
-            💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}{hud.herbs > 0 ? ` · ${t('world.herbs', { n: hud.herbs, max: 3 })}` : ''}
-          </div>
-          <div className="relative mt-2 flex gap-1.5">
-            <button onClick={() => setDiary(true)}
-              className="rounded-sm bg-[#7c2d24] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#93372c]">
-              {t('world.diary.open')}
-            </button>
-            <button onClick={() => setMap(true)}
-              className="rounded-sm bg-[#2f5a3e] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#386b4a]">
-              {t('world.map.open')}
-            </button>
-            <button onClick={() => setSpaceOpen((o) => !o)}
-              className="rounded-sm bg-[#3b3f73] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#474c88]">
-              {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
-            </button>
-          </div>
-          <div className="relative mt-2 flex max-w-[260px] flex-wrap gap-1">
-            {hud.trap > 0 ? (
-              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#d9ccb4] ring-1 ring-white/10">{t('world.trap.left', { n: hud.trap })}</div>
-            ) : (
-              <button onClick={() => world.current?.buildGateTrap()}
-                disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2}
-                className={BUILD}>
-                {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
-              </button>
-            )}
-            {!hud.wall && (
-              <button onClick={() => world.current?.buildYardWall()}
-                disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6}
-                className={BUILD}>
-                {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
-              </button>
-            )}
-            {!hud.garden.built ? (
-              <button onClick={() => world.current?.buildGardenPlot()}
-                disabled={hud.prologue ? hud.money < 800 : hud.cores < 2}
-                className={BUILD}>
-                {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
-              </button>
-            ) : (
-              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#c9dcb0] ring-1 ring-white/10">
-                {t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}
-              </div>
-            )}
-            {hud.spikeNext >= 0 ? (
-              <button onClick={() => world.current?.craftSpikes()} disabled={hud.bamboo < 3} className={BUILD}
-                title={t('world.spikes.tip')}>
-                {t('world.spikes.build', { n: hud.spikeNext + 1, have: hud.bamboo })}
-              </button>
-            ) : (
-              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#e6c78f] ring-1 ring-white/10">
-                {t('world.spikes.left', { a: hud.spikes[0], b: hud.spikes[1] })}
-              </div>
-            )}
-          </div>
-          {spaceOpen && (
-            <div className="relative mt-2 w-64 rounded-md bg-[#2a2747]/70 p-2 text-xs ring-1 ring-[#9aa0ff]/25">
-              <div className="mb-1 leading-snug text-[#cfd0f0]">{t('world.space.hint')}</div>
-              {(['food', 'water'] as const).map((k) => (
-                <div key={k} className="mt-1 flex items-center gap-1.5">
-                  <span className="w-20">{t(`world.space.${k}` as UiKey, { n: hud.space[k].toFixed(1) })}</span>
-                  <button onClick={() => world.current?.moveToSpace(k, -1)} className="rounded-sm bg-white/10 px-1.5 text-[#efe4d0] hover:bg-white/20">{t('world.space.out')}</button>
-                  <button onClick={() => world.current?.moveToSpace(k, 1)} className="rounded-sm bg-[#4b4f96] px-1.5 text-white hover:bg-[#5a5fb0]">{t('world.space.in')}</button>
-                </div>
-              ))}
-              <button disabled={hud.cores < 3} onClick={() => world.current?.upgradeSpace()}
-                className="mt-2 w-full rounded-sm bg-[#3b3f73] py-1 text-white ring-1 ring-white/10 hover:bg-[#474c88] disabled:opacity-40">{t('world.space.up')}</button>
-            </div>
-          )}
+          {/* 存货只显示最要紧的四样，点一下展开全部 */}
+          <button onClick={() => togglePop('stock')} title={t('world.stock.more')}
+            className="relative mt-1.5 flex w-full items-center gap-x-3 rounded-sm text-left text-xs tabular-nums text-[#d9ccb4] hover:text-[#f4ecdc]">
+            <span className={hud.food < 3 ? 'text-[#ff8f7a]' : ''}>🍚 {hud.food.toFixed(1)}</span>
+            <span className={hud.water < 3 ? 'text-[#ff8f7a]' : ''}>💧 {hud.water.toFixed(1)}</span>
+            <span className={!hud.prologue && hud.ammo < 6 ? 'text-[#ff8f7a]' : ''}>🔫 {hud.ammo}</span>
+            <span>🩹 {hud.medkits}</span>
+            <span className="ml-auto text-[10px] text-[#8a7f6d]">{pop === 'stock' ? '▲' : '▼'}</span>
+          </button>
         </div>
+        <div className="flex gap-1">
+          {hud.goals && (
+            <button onClick={() => togglePop('tasks')} className={`${TOOL} ${pop === 'tasks' ? TOOL_ON : ''}`}>
+              {t('world.tool.tasks', { n: hud.goals.filter((g) => g.done).length, all: hud.goals.length })}
+            </button>
+          )}
+          <button onClick={() => { setPop(null); setMap(true) }} className={TOOL}>{t('world.tool.out')}</button>
+          <button onClick={() => togglePop('build')} className={`${TOOL} ${pop === 'build' ? TOOL_ON : ''}`}>{t('world.tool.build')}</button>
+          <button onClick={() => togglePop('space')} className={`${TOOL} ${pop === 'space' ? TOOL_ON : ''}`}>
+            {t('world.tool.space', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
+          </button>
+        </div>
+        {pop && (
+          <div className={`${PANEL} px-3 py-2 text-xs`}>
+            <Grain />
+            {pop === 'stock' && (
+              <div className="relative space-y-0.5 text-[#e6dac4]">
+                <div className="mb-1 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.stock.title')}</div>
+                <div>🍚💧 {t('world.stock', { food: hud.food.toFixed(1), water: hud.water.toFixed(1) })}</div>
+                <div>🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })} · ⛽ {t('world.fuel', { n: hud.fuel })}</div>
+                <div>💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}</div>
+                {(hud.herbs > 0 || hud.bamboo > 0) && <div>{t('world.herbs', { n: hud.herbs, max: 3 })} · 🎋 {t('world.bamboo', { n: hud.bamboo })}</div>}
+                <div className="pt-1 text-[11px] text-[#a99d88]">{t('world.stock.hint', { days: hud.daysLeft })}</div>
+              </div>
+            )}
+            {pop === 'tasks' && hud.goals && (
+              <div className="relative">
+                <div className="mb-1 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.goal.title')}</div>
+                {hud.goals.map((g) => (
+                  <div key={g.key} className={`flex gap-1.5 leading-snug ${g.done ? 'text-[#8a7f6d] line-through' : 'text-[#e6dac4]'}`}>
+                    <span className={g.done ? 'text-[#9cbf7a]' : 'text-[#e8c98a]/70'}>{g.done ? '✓' : '○'}</span><span>{t(g.key as UiKey)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pop === 'build' && (
+              <div className="relative flex flex-col gap-1">
+                <div className="mb-0.5 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.build.title')}</div>
+                {hud.trap > 0 ? (
+                  <div className={BUILD_DONE}>{t('world.trap.left', { n: hud.trap })}</div>
+                ) : (
+                  <button onClick={() => world.current?.buildGateTrap()} disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2} className={BUILD}>
+                    {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
+                  </button>
+                )}
+                {!hud.wall && (
+                  <button onClick={() => world.current?.buildYardWall()} disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6} className={BUILD}>
+                    {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
+                  </button>
+                )}
+                {!hud.garden.built ? (
+                  <button onClick={() => world.current?.buildGardenPlot()} disabled={hud.prologue ? hud.money < 800 : hud.cores < 2} className={BUILD}>
+                    {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
+                  </button>
+                ) : (
+                  <div className={BUILD_DONE}>{t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}</div>
+                )}
+                {hud.spikeNext >= 0 ? (
+                  <button onClick={() => world.current?.craftSpikes()} disabled={hud.bamboo < 3} className={BUILD} title={t('world.spikes.tip')}>
+                    {t('world.spikes.build', { n: hud.spikeNext + 1, have: hud.bamboo })}
+                  </button>
+                ) : (
+                  <div className={BUILD_DONE}>{t('world.spikes.left', { a: hud.spikes[0], b: hud.spikes[1] })}</div>
+                )}
+              </div>
+            )}
+            {pop === 'space' && (
+              <div className="relative">
+                <div className="mb-1 leading-snug text-[#cfd0f0]">{t('world.space.hint')}</div>
+                {(['food', 'water'] as const).map((k) => (
+                  <div key={k} className="mt-1 flex items-center gap-1.5">
+                    <span className="w-20">{t(`world.space.${k}` as UiKey, { n: hud.space[k].toFixed(1) })}</span>
+                    <button onClick={() => world.current?.moveToSpace(k, -1)} className="rounded-sm bg-white/10 px-1.5 text-[#efe4d0] hover:bg-white/20">{t('world.space.out')}</button>
+                    <button onClick={() => world.current?.moveToSpace(k, 1)} className="rounded-sm bg-[#4b4f96] px-1.5 text-white hover:bg-[#5a5fb0]">{t('world.space.in')}</button>
+                  </div>
+                ))}
+                <button disabled={hud.cores < 3} onClick={() => world.current?.upgradeSpace()}
+                  className="mt-2 w-full rounded-sm bg-[#3b3f73] py-1 text-white ring-1 ring-white/10 hover:bg-[#474c88] disabled:opacity-40">{t('world.space.up')}</button>
+              </div>
+            )}
+          </div>
+        )}
         {hud.crisis && (
           <div className="w-fit rounded-sm bg-[#7c2d24] px-2.5 py-0.5 text-xs font-bold tracking-wide text-[#f4ecdc] ring-1 ring-[#e2553f]/50" style={{ fontFamily: SERIF }}>
             ⚠ {t('world.crisis')}{hud.crisisKind ? ` · ${t(`crisisKind.${hud.crisisKind}` as UiKey)}` : ''}
           </div>
         )}
-        <div className="pointer-events-none w-fit rounded-sm bg-[#1d1915]/80 px-2.5 py-0.5 text-[11px] tracking-wide text-[#d9ccb4] ring-1 ring-[#e8c98a]/20">
-          {t(home ? 'world.mode.home' : 'world.mode.outside')}
-        </div>
-        {hud.goals && !hud.siege && (
-          <div className={`pointer-events-none w-60 px-3 py-2 text-xs ${PANEL}`}>
-            <Grain />
-            <div className="relative mb-1 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.goal.title')}</div>
-            {hud.goals.map((g) => (
-              <div key={g.key} className={`relative flex gap-1.5 leading-snug ${g.done ? 'text-[#8a7f6d] line-through' : 'text-[#e6dac4]'}`}>
-                <span className={g.done ? 'text-[#9cbf7a]' : 'text-[#e8c98a]/70'}>{g.done ? '✓' : '○'}</span><span>{t(g.key as UiKey)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
       </div>
 
       {home && (
@@ -385,33 +411,24 @@ export default function WorldView() {
         </div>
       )}
 
-      <div className="absolute right-3 top-3 flex items-center gap-2">
-        <button onClick={() => world.current?.toggleMute()} title={t('world.sound')}
-          className={`${CHIP} px-2 py-1 text-xs`}>
-          {hud.muted ? '🔇' : '🔊'}
-        </button>
-        <button onClick={() => world.current?.snapshot()} title={t('world.photo')}
-          className={`${CHIP} px-2 py-1 text-xs`}>📷</button>
-        <button onClick={() => { setDayStart(world.current?.dayStartLabel() ?? null); setMenu((m) => (m ? null : 'open')) }}
-          className={`${CHIP} px-2.5 py-1 text-xs font-semibold text-[#e8c98a] ring-[#e8c98a]/60 ${menu ? 'bg-[#3a3024]' : ''}`}>{t('world.menu')}</button>
-        <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
-          className={`${CHIP} px-2 py-1 text-xs`}>❓</button>
-        <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
-          className={`${CHIP} px-2 py-1 text-xs ${hud.music ? '' : 'opacity-40'}`}>
-          🎵
-        </button>
-        <button onClick={toggleStyle} className={`${CHIP} px-2.5 py-1 text-xs`}>
-          {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
-        </button>
-        {style === 'paradise' && (
-          <button onClick={() => world.current?.togglePeople()} title={t('world.people.tip')}
-            className={`${CHIP} px-2.5 py-1 text-xs`}>
-            {t('world.people', { name: t(peopleStyle() === 'toon' ? 'world.people.toon' : 'world.people.real') })}
+      {/* 右上角：一本日记（有新的就冒个小红点，点开才是全部日记）+ 一个菜单（重开、存档、声音、画风……都收在里面） */}
+      <div className="absolute right-3 top-3 flex items-start gap-2">
+        <div className="relative flex flex-col items-end">
+          <button onClick={() => { setDiary(true); setLogSeen(hud.log[0] ? logKey(hud.log[0]) : '') }} title={t('world.notebook.tip')}
+            className="group relative h-[52px] w-[42px] rounded-[3px] bg-gradient-to-br from-[#8a3a2c] to-[#5a2219] shadow-[2px_4px_10px_rgba(0,0,0,0.5)] ring-1 ring-black/40 transition hover:-translate-y-0.5">
+            <span className="absolute inset-y-0 left-0 w-[7px] rounded-l-[3px] bg-[#3e160f]" />
+            <span className="absolute left-[11px] right-[5px] top-[9px] h-[22px] rounded-[2px] border border-[#e8c98a]/60 text-center text-[11px] font-bold leading-[20px] text-[#f1d8a3]" style={{ fontFamily: SERIF }}>{t('world.notebook')}</span>
+            <span className="absolute -bottom-[7px] right-[9px] h-[12px] w-[5px] bg-[#e8c98a] [clip-path:polygon(0_0,100%_0,100%_100%,50%_75%,0_100%)]" />
+            {unread > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e2553f] px-1 text-[10px] font-bold text-white ring-2 ring-[#1d1915]">{unread > 9 ? '9+' : unread}</span>}
           </button>
-        )}
-        <a href="#text" className={`${CHIP} px-2.5 py-1 text-xs text-[#a99d88]`}>
-          {t('world.textVersion')}
-        </a>
+          {fresh && (
+            <div className="pointer-events-none absolute right-0 top-[60px] w-56 rounded-sm bg-[#ece2cb]/95 px-2.5 py-1.5 text-[11px] leading-snug text-[#2f2418] shadow-[0_6px_16px_rgba(0,0,0,0.35)] ring-1 ring-[#b9a77f]/70" style={{ fontFamily: SERIF }}>
+              <span className="mr-1 text-[10px] text-[#8a5a2b]">{calendarLabel({ day: fresh.day, hour: fresh.hour })}</span>{t(fresh.key as UiKey, fresh.vars)}
+            </div>
+          )}
+        </div>
+        <button onClick={() => { setDayStart(world.current?.dayStartLabel() ?? null); setMenu((m) => (m ? null : 'open')) }}
+          className={`${CHIP} px-3 py-1.5 text-xs font-semibold text-[#e8c98a] ring-[#e8c98a]/60 ${menu ? 'bg-[#3a3024]' : ''}`}>{t('world.menu')}</button>
       </div>
 
       {menu && (
@@ -430,9 +447,22 @@ export default function WorldView() {
                 <div className="mt-0.5 text-[11px] text-[#a99d88]">{t('world.menu.restartSub')}</div>
               </button>
               <div className="mx-2 my-1 h-px bg-[#e8c98a]/15" />
-              <button onClick={() => { setMenu(null); setWelcome(true) }} className="rounded-sm px-2.5 py-1.5 text-left text-xs text-[#cbbfa8] transition hover:bg-white/10">
+              <button onClick={() => { setMenu(null); setWelcome(true) }} className={MENU_ROW}>
                 {t('world.menu.help')}
               </button>
+              <div className="mx-2 my-1 h-px bg-[#e8c98a]/15" />
+              <button onClick={() => world.current?.toggleMute()} className={MENU_ROW}>{t(hud.muted ? 'world.menu.soundOff' : 'world.menu.soundOn')}</button>
+              <button onClick={() => world.current?.toggleMusic()} className={MENU_ROW}>{t(hud.music ? 'world.menu.musicOn' : 'world.menu.musicOff')}</button>
+              <button onClick={() => { setMenu(null); world.current?.snapshot() }} className={MENU_ROW}>{t('world.menu.photo')}</button>
+              <button onClick={() => { setMenu(null); toggleStyle() }} className={MENU_ROW}>
+                {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
+              </button>
+              {style === 'paradise' && (
+                <button onClick={() => world.current?.togglePeople()} className={MENU_ROW}>
+                  {t('world.people', { name: t(peopleStyle() === 'toon' ? 'world.people.toon' : 'world.people.real') })}
+                </button>
+              )}
+              <a href="#text" className={MENU_ROW}>{t('world.textVersion')}</a>
             </div>
           ) : (
             <div className="relative p-2">
@@ -456,9 +486,6 @@ export default function WorldView() {
         ))}
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 max-w-xs rounded-md bg-[#1d1915]/80 px-3 py-2 text-[11px] leading-relaxed text-[#e6dac4] ring-1 ring-[#e8c98a]/20">
-        {home && hud.floor === 1 ? t('world.floor2Hint') : t(home ? 'world.help.home' : 'world.help.outside')}
-      </div>
 
       {hud.siege && (
         <div className="absolute left-1/2 top-14 w-80 -translate-x-1/2 overflow-hidden rounded-md bg-[#2a0f0c]/90 px-4 py-2 text-[#f4ecdc] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-[#e2553f]/40">
@@ -479,19 +506,6 @@ export default function WorldView() {
               <span className="tabular-nums">{Math.ceil(hud.siege.hp)}</span>
             </div>
           )}
-        </div>
-      )}
-
-      {hud.log.length > 0 && (
-        <div className="pointer-events-none absolute right-3 top-14 w-64 overflow-hidden rounded-sm bg-[#ece2cb]/95 px-3 py-2 text-xs shadow-[0_8px_24px_rgba(0,0,0,0.35)] ring-1 ring-[#b9a77f]/70">
-          <Grain opacity={0.45} />
-          <div className="relative mb-1 border-b border-[#8a6a48]/30 pb-0.5 text-[13px] font-bold tracking-wide text-[#5a3b22]" style={{ fontFamily: SERIF }}>📔 {t('world.diary')}</div>
-          {hud.log.slice(0, 4).map((l, k) => (
-            <div key={`${l.day}-${l.hour}-${k}`} className={`relative mb-1 line-clamp-3 leading-snug ${k ? 'text-[#6b5a45]' : 'text-[#2f2418]'}`} style={{ fontFamily: SERIF }}>
-              <span className="mr-1 text-[10px] text-[#8a5a2b]">{calendarLabel({ day: l.day, hour: l.hour })}</span>
-              {t(l.key as UiKey, l.vars)}
-            </div>
-          ))}
         </div>
       )}
 
