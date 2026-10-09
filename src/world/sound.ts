@@ -273,6 +273,32 @@ export class Sound {
     lfo.stop(t + 4.6)
   }
 
+  /** 远处的防空警报：两个音高来回爬升，响几轮慢慢消失（末日降临那一刻） */
+  siren(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    const o = ctx.createOscillator()
+    o.type = 'sawtooth'
+    for (let k = 0; k < 4; k++) {
+      o.frequency.setValueAtTime(380, t + k * 2.4)
+      o.frequency.linearRampToValueAtTime(620, t + k * 2.4 + 1.6)
+      o.frequency.linearRampToValueAtTime(380, t + k * 2.4 + 2.4)
+    }
+    // 远处的声音：低通滤掉刺耳的高频
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.value = 900
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.linearRampToValueAtTime(0.07, t + 1.5)
+    g.gain.setValueAtTime(0.07, t + 7)
+    g.gain.linearRampToValueAtTime(0.0001, t + 9.6)
+    o.connect(lp).connect(g).connect(this.master!)
+    o.start(t)
+    o.stop(t + 9.7)
+  }
+
   /** 水花 */
   splash(): void {
     const ctx = this.ready

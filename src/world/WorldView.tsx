@@ -468,6 +468,14 @@ export default function WorldView() {
         </div>
       )}
 
+      {hud.doom && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-gradient-to-b from-black/40 via-transparent to-black/40">
+          <div className="intro-title text-center font-serif text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+            <div className="text-4xl font-bold tracking-[0.4em]">{t('world.doom.title')}</div>
+            <div className="mt-3 text-base tracking-widest opacity-90">{t('world.doom.sub')}</div>
+          </div>
+        </div>
+      )}
       {hud.over && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4">
           <div className="over-card max-w-md text-center font-serif text-white">

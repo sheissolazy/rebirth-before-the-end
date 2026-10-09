@@ -70,6 +70,8 @@ export interface Hud {
   wall: boolean
   /** 第几世 */
   life: number
+  /** 末日降临的字幕（显示几秒） */
+  doom: boolean
   /** 困难模式 */
   hard: boolean
   /** 女主死了：这一世结束 */
@@ -154,7 +156,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -273,6 +275,8 @@ export class World {
   private cameo: { obj: THREE.Object3D; until: number } | null = null
   private trapMesh: THREE.Group | null = null
   private readonly graves = new Map<string, THREE.Object3D>()
+  /** 末日字幕还显示几秒 */
+  private doomT = 0
   /** 今天已经提醒过的（第几天） */
   private readonly warned = { crisis: -1, dusk: -1, stock: -1 }
   /** 上一帧看到的最后一条日记（undefined = 还没看过，刚读档的旧记录不弹提示） */
@@ -420,6 +424,12 @@ export class World {
       // 上一世用重生点买的开局加成
       const perks = applyPerks(this.life)
       if (perks.length) this.life.logNote('world.log.perks', { list: perks.map((p) => t(`world.perk.${p}` as UiKey)).join('、') })
+    }
+    this.life.onDoomsday = () => {
+      this.sound.siren()
+      this.sound.eerie()
+      this.setHud({ doom: true })
+      this.doomT = 8
     }
     this.life.onKnock = () => {
       this.sound.knock()
@@ -1341,6 +1351,7 @@ export class World {
       this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
       this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
     }
+    if (this.doomT > 0 && (this.doomT -= dt) <= 0) this.setHud({ doom: false })
     // 末日后：危机夜当天早上提醒一次；每天傍晚提醒丧尸要来了
     const ck = this.life.clock
     if (ck.day >= PROLOGUE_DAYS && !this.life.siege && this.introT < 0 && this.life.speed > 0) {

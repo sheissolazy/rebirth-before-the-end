@@ -311,6 +311,8 @@ export class Household {
   flooded = -1
   spawnVisitor: ((def: VisitorDef, at: Pt, model: string) => Visitor) | null = null
   spawnCourier: ((who: CourierId, at: Pt) => Courier) | null = null
+  /** 末日降临的那一刻 */
+  onDoomsday: (() => void) | null = null
   /** 送东西的人在铁门外放下了东西 / 走了 */
   onCourier: ((c: Courier, phase: 'drop' | 'gone') => void) | null = null
   /** World 提供：做一个新的家庭成员（带 3D 模型） */
@@ -343,7 +345,13 @@ export class Household {
   /** 每帧调用。dt 是现实秒数（已经限过最大值） */
   tick(dt: number, autonomous: (a: Actor) => boolean): void {
     if (this.speed <= 0 || this.over) return
+    const wasPrologue = this.clock.day < PROLOGUE_DAYS
     this.clock = advance(this.clock, dt, this.speed)
+    // 跨进末日第一天：记一笔，World 那边放警报和字幕
+    if (wasPrologue && this.clock.day >= PROLOGUE_DAYS) {
+      this.note('world.log.doomday')
+      this.onDoomsday?.()
+    }
     const hours = (dt * this.speed * 24) / DAY_SECONDS
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done

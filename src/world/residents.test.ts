@@ -1160,3 +1160,17 @@ describe('沈砚留下来', () => {
     expect(def.when({ ...life.visitorCtx(), day: life.clock.day + 10 })).toBe(false)
   })
 })
+
+describe('末日降临', () => {
+  it('跨进末日第一天：记一笔、通知画面（只一次）', () => {
+    const { life } = simulate('paradise', 0)
+    let n = 0
+    life.onDoomsday = () => n++
+    life.clock = { day: PROLOGUE_DAYS - 1, hour: 23.98 }
+    life.speed = 1
+    for (let i = 0; i < 100; i++) life.tick(0.05, () => false)
+    expect(life.clock.day).toBe(PROLOGUE_DAYS)
+    expect(n).toBe(1)
+    expect(life.log.filter((l) => l.key === 'world.log.doomday').length).toBe(1)
+  })
+})
