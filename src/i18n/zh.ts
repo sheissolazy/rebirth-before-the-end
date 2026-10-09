@@ -44,6 +44,8 @@ export const zh = {
   'world.toast.fighting': '打丧尸时：先点一个人，再点地上发光的守位圈（蓝色后排、橙色贴门）就能换位置',
   'world.toast.siege': '丧尸来了！大家各就各位',
   'world.toast.crisis': '月底危机夜：一大群丧尸朝这边涌过来了！',
+  'world.toast.siegeTip': '丧尸来了！大家会自己守门。点一个人、再点地上的圆圈能换守位；顶上横幅可以扔燃烧瓶',
+  'world.toast.downTip': '有人被扑倒了！点 TA 的人物卡，用急救包当场救起来',
   'world.toast.won': '打退了！今晚守住了',
   'world.toast.lost': '没守住……',
   'world.log.start': '夜里，{n} 只丧尸摸到了院门外',

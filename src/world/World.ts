@@ -106,6 +106,18 @@ const TMP_FWD = new THREE.Vector3()
 /** 坟的位置：房子西边的草地（家里视角看得见，不挡路） */
 const GRAVES = [{ x: -2.0, z: 2.0 }, { x: -2.0, z: 3.6 }, { x: -3.1, z: 2.8 }, { x: -3.1, z: 4.4 }]
 
+/** 只出现一次的教学提示（记在本地，换存档也不再出） */
+function firstTime(id: string): boolean {
+  const key = 'rbte-proto-tips'
+  try {
+    const seen = new Set<string>(JSON.parse(localStorage.getItem(key) ?? '[]') as string[])
+    if (seen.has(id)) return false
+    seen.add(id)
+    localStorage.setItem(key, JSON.stringify([...seen]))
+  } catch { /* 存不了就每次都提示 */ }
+  return true
+}
+
 /** 送东西的人放在铁门外的箱子 / 纸条（共用一份，不用每次新建） */
 const DROP = {
   box: new THREE.BoxGeometry(0.5, 0.36, 0.4),
@@ -135,7 +147,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -422,11 +434,14 @@ export class World {
       else if (e.kind === 'fire') this.sound.fire()
       else if (e.kind === 'trapBroken') this.sound.crash()
       else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1, 0.55) }
+      else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
       // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
       // （开打的事件在 Siege 构造时就发了，那时 life.siege 还没赋值，所以看防线耐久）
       const fightFloor = () => (this.life.barriers.gate > 0 || this.life.barriers.door > 0 ? 0 : 1)
       if (e.kind === 'start') {
-        this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
+        // 第一次打丧尸：顺便教一下能做什么
+        if (!e.ambush && firstTime('siege')) this.toast('world.toast.siegeTip', 7)
+        else this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home' && !e.ambush) this.setViewFloor(fightFloor())
       } else if (e.kind === 'broken') {
         this.toast(`world.log.broken.${e.layer}` as ToastKey, 3)
