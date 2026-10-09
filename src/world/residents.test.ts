@@ -1055,3 +1055,25 @@ describe('防线全破以后', () => {
     expect(upstairs).toBe(true)
   })
 })
+
+describe('疫病夜和沈砚', () => {
+  it('跟沈砚有交情：疫病那晚之后，第二天一早他送药来（全家健康 +15）', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    // 找到第一个疫病危机夜
+    let day = PROLOGUE_DAYS
+    while (Household.crisisKind({ day, hour: 21 }) !== 'plague' && day < PROLOGUE_DAYS + 60) day++
+    expect(Household.crisisKind({ day, hour: 21 })).toBe('plague')
+    life.affection.shenyan = 12
+    life.clock = { day, hour: 21.01 }
+    life.speed = 1
+    life.tick(0.05, () => false)
+    expect(life.medicTomorrow).toBe(day + 1)
+    life.siege = null
+    for (const a of life.actors) a.health = 50
+    life.clock = { day: day + 1, hour: 8.2 }
+    life.tick(0.05, () => false)
+    expect(life.log.some((l) => l.key === 'world.shenyan.care1')).toBe(true)
+    expect(life.actors[1].health).toBeGreaterThanOrEqual(64)
+  })
+})

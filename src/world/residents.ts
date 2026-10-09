@@ -437,6 +437,9 @@ export class Household {
   /** 困难模式（给设计者对比用：丧尸多一半、更狠、大块头更多、开局子弹减半） */
   hard = false
 
+  /** 疫病夜以后沈砚哪天来送药（-1 = 不来） */
+  medicTomorrow = -1
+
   /** 这一世一共打倒了多少（算重生点用） */
   kills = 0
 
@@ -1040,6 +1043,8 @@ export class Household {
     const c = this.clock
     if (c.day < PROLOGUE_DAYS || c.hour < 8 || this.careDay === c.day) return
     this.careDay = c.day
+    // 疫病夜的第二天：沈砚送药来，全家健康 +15
+    if (this.medicTomorrow === c.day) { this.medicTomorrow = -1; this.giveCare('shenyan', 1); return }
     // 谢临：同为重生者。第一张纸条一定是"下个月比你记得的更糟"
     if (this.xielinNotes === 0 || this.rand() < 0.15) this.giveCare('xielin')
     // 顾沉：末日前去军区门口见过他的话
@@ -1049,7 +1054,7 @@ export class Household {
   }
 
   /** 男主送来的东西（东西马上到账；有 3D 的话人会走到铁门外放下） */
-  giveCare(who: CourierId): void {
+  giveCare(who: CourierId, pick?: number): void {
     const careText = (k: number) => {
       const npc = npcs.find((n) => n.id === who)
       return npc?.care?.[k] ? lt(npc.care[k].text) : ''
@@ -1070,7 +1075,7 @@ export class Household {
       love(3)
       this.sendCourier('guchen', `world.army.care${k}`, { text: careText(k) })
     } else {
-      const k = Math.floor(this.rand() * 3)
+      const k = pick ?? Math.floor(this.rand() * 3)
       if (k === 0) this.medkits += 2
       else if (k === 1) for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 15)
       else this.stock = { ...this.stock, water: this.stock.water + 4 }
@@ -1233,6 +1238,8 @@ export class Household {
           who.health = Math.max(5, who.health - (this.medkits > 0 ? 15 : 40))
           if (this.medkits > 0) this.medkits -= 1
           this.note('world.log.plague', { who: who.name })
+          // 跟沈砚有交情的话，他第二天一早会送药来
+          if ((this.affection.shenyan ?? 0) >= 10) this.medicTomorrow = c.day + 1
         }
         this.startSiege(3, false)
       } else if (count > 0) {
