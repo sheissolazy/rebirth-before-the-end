@@ -3,7 +3,7 @@
 这是一个卡牌叙事策略游戏《重生末日之前》：女主重生到丧尸末日前 4 周，囤货、建基地、打丧尸、种田、谈恋爱。机制文档 `docs/DESIGN.md`，计划与分工 `docs/PLAN.md`，任务在 `docs/tasks/`。
 
 ## 技术栈
-React 19 + Vite + TypeScript + Tailwind v4 + Vitest。纯静态，部署 GitHub Pages，文字版必须在手机（~400px 宽）竖屏上可玩；2.5D 版（`proto-2.5d` 分支，`src/world/`）横屏优先。
+React 19 + Vite + TypeScript + Tailwind v4 + Vitest。纯静态，部署 GitHub Pages，文字版必须在手机（~400px 宽）竖屏上可玩；2.5D 版（`proto-2.5d` 分支，`src/world/`）按电脑来做（用户不打算用手机玩，2026-10-09）。
 
 ## 命令
 ```bash
