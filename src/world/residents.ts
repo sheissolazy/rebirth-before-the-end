@@ -955,7 +955,7 @@ export class Household {
 
   /** 下雨了：在院子里溜达、种地、擦车、撸猫、迎人的放下手里的事回屋（第一个人喊一声） */
   private runInside(): void {
-    const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy']
+    const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy', 'greet', 'modvan']
     let shouted = false
     for (const a of this.actors) {
       if (this.isOut(a) || a.dead || a.floor !== 0 || a.settling || inRect(HOUSE, a.pos.x, a.pos.z)) continue
@@ -1653,11 +1653,11 @@ export class Household {
     // 闲着的时候找点事：凑到家人身边说说话，或者收拾收拾屋子（不再一个人原地发呆）
     // （晚上 9 点以后、累了就不折腾了，该准备睡觉）
     const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
+    // 改装面包车的材料带回来了：会修东西的人（爸爸）一有空就去改装，比歇着、溜达优先
+    if (!task && !late && !night && fixer && this.vanKit && !this.vanArmor && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.modVanTask()
     if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
       const r = this.rand()
       if (r < 0.5) task = this.companyTask(a)
-      // 材料带回来了：会修东西的人（爸爸）找个白天把面包车改装了
-      if (r < 0.9 && a.handy && this.vanKit && !this.vanArmor && !night) task = this.modVanTask()
       // 爸爸闲了爱去擦擦那辆面包车
       if (!task && r < 0.68 && !night && a === this.actors[2]) task = this.washTask()
       if (!task && r < 0.85) task = this.tidyTask(a)
@@ -1683,28 +1683,46 @@ export class Household {
     let dz = a.pos.z - b.pos.z
     const len = Math.hypot(dx, dz)
     if (len < 0.2) { dx = Math.sin(b.root.rotation.y); dz = Math.cos(b.root.rotation.y) } else { dx /= len; dz /= len }
-    const x = b.pos.x + dx * 0.95
-    const z = b.pos.z + dz * 0.95
-    const face = THREE.MathUtils.radToDeg(Math.atan2(b.pos.x - x, b.pos.z - z))
-    const spot: Spot = { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
-    return { kind: 'company', spot, phase: 'go', hours: 0.4 + this.rand() * 0.5, manual: false, with: b }
+    // 站在对方身边 0.95 米：先试从自己这边过去的方向，挡着（墙、桌子、楼梯口）就绕着对方换个方向
+    const nav = this.navs[b.floor]
+    const base = Math.atan2(dx, dz)
+    for (const turn of [0, 0.8, -0.8, 1.6, -1.6, 2.6, -2.6]) {
+      const x = b.pos.x + Math.sin(base + turn) * 0.95
+      const z = b.pos.z + Math.cos(base + turn) * 0.95
+      if (nav.isBlockedAt(x, z) || !nav.clearLine(b.pos, { x, z })) continue
+      if (this.actors.some((o) => o !== a && o.task?.spot && Math.hypot(o.task.spot.x - x, o.task.spot.z - z) < 0.6)) continue
+      const face = THREE.MathUtils.radToDeg(Math.atan2(b.pos.x - x, b.pos.z - z))
+      const spot: Spot = { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
+      return { kind: 'company', spot, phase: 'go', hours: 0.4 + this.rand() * 0.5, manual: false, with: b }
+    }
+    return null
   }
 
   /** 收拾屋子：在屋里随便找个地方擦擦、扫扫 */
   private tidyTask(a: Actor): Task | null {
-    const x = HOUSE.x0 + 0.8 + this.rand() * (HOUSE.x1 - HOUSE.x0 - 1.6)
-    const z = HOUSE.z0 + 0.8 + this.rand() * (HOUSE.z1 - HOUSE.z0 - 1.6)
-    const floor = this.rand() < 0.7 ? a.floor : (a.floor === 0 ? 1 : 0)
-    const spot: Spot = { kind: 'stroll', x, z, floor: floor as Spot['floor'], face: this.rand() * 360, pose: 'work' }
+    const floor = (this.rand() < 0.7 ? a.floor : (a.floor === 0 ? 1 : 0)) as Floor
+    // 找一块空地（不在家具、楼梯、楼梯口里）；找不到就算了
+    let x = 0
+    let z = 0
+    let ok = false
+    for (let k = 0; k < 8 && !ok; k++) {
+      x = HOUSE.x0 + 0.8 + this.rand() * (HOUSE.x1 - HOUSE.x0 - 1.6)
+      z = HOUSE.z0 + 0.8 + this.rand() * (HOUSE.z1 - HOUSE.z0 - 1.6)
+      ok = !this.navs[floor].isBlockedAt(x, z)
+    }
+    if (!ok) return null
+    const spot: Spot = { kind: 'stroll', x, z, floor, face: this.rand() * 360, pose: 'work' }
     return { kind: 'tidy', spot, phase: 'go', hours: 0.25 + this.rand() * 0.35, manual: false }
   }
 
   /** 家里人听到车开回来 / 出门的人进了街口：没在忙的出来迎一迎（吃饭做饭睡觉的不动） */
   private greetArrivals(t: Trip): void {
     const free = ['idle', 'stroll', 'relax', 'company', 'tidy', 'wash', 'sit']
+    if (this.siege && !this.siege.done) return
     let k = 0
     for (const a of this.actors) {
-      if (t.members.includes(a) || this.isOut(a) || a.dead || a.settling || a.needs.energy < 25) continue
+      // 在街上的女主（和跟着她的人）不往回叫
+      if (t.members.includes(a) || this.isOut(a) || a.dead || a.settling || a.needs.energy < 25 || !this.isHomeBody(a)) continue
       if (a.task ? a.task.manual || !free.includes(a.task.kind) : a.path.length > 0) continue
       if (a === this.actors[0] && (this.search || this.fishing)) continue
       // 站在进屋那条路旁边，面朝人回来的方向
@@ -1766,15 +1784,20 @@ export class Household {
   /** 改装面包车：蹲在车边焊钢板、装铁栏，干一个多小时 */
   private modVanTask(): Task | null {
     if (this.vanAway || this.vanMove) return null
-    const spot: Spot = { kind: 'stroll', x: VAN_PARK.x + 0.3, z: 10.62, floor: 0, face: 0, pose: 'work' }
+    if (this.trip?.van && this.trip.phase === 'out') return null
+    // 站在车头前面装防撞杠（离上车的门远一点，不挡人上车）
+    const spot: Spot = { kind: 'stroll', x: VAN_PARK.x + 2.45, z: VAN_PARK.z, floor: 0, face: -90, pose: 'work' }
     return { kind: 'modvan', spot, phase: 'go', hours: 1.2, manual: false }
   }
 
   /** 擦车：站到车北边，面朝车 */
   private washTask(): Task | null {
-    if (this.vanAway || this.vanMove) return null
-    const x = VAN_PARK.x - 1.3 + this.rand() * 2.6
-    const spot: Spot = { kind: 'stroll', x, z: 10.62, floor: 0, face: 0, pose: 'work' }
+    if (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out')) return null
+    // 擦车头或者车尾（车门那边留给上下车的人）
+    const front = this.rand() < 0.5
+    const spot: Spot = front
+      ? { kind: 'stroll', x: VAN_PARK.x + 2.45, z: VAN_PARK.z, floor: 0, face: -90, pose: 'work' }
+      : { kind: 'stroll', x: VAN_PARK.x - 2.45, z: VAN_PARK.z, floor: 0, face: 90, pose: 'work' }
     return { kind: 'wash', spot, phase: 'go', hours: 0.3 + this.rand() * 0.3, manual: false }
   }
 
@@ -1850,7 +1873,11 @@ export class Household {
       t.phase = 'use'
       a.pose = t.spot?.pose ?? 'idle'
       // 晚上躺下：说声晚安
-      if (t.kind === 'sleep' && (this.clock.hour >= 20 || this.clock.hour < 2) && this.rand() < 0.6) this.say(a, 'night')
+      if (t.kind === 'sleep' && (this.clock.hour >= 20 || this.clock.hour < 2)) {
+        const night = this.clock.hour < 2 ? this.clock.day - 1 : this.clock.day
+        if (this.saidNight !== night || this.rand() < 0.35) this.say(a, 'night')
+        this.saidNight = night
+      }
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
@@ -1883,14 +1910,20 @@ export class Household {
     }
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了、不改了
-    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove)) return true
+    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out'))) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trip) return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
+      // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
+      if (isMealTime(this.clock.hour) && n.hunger < 75 && this.available.food >= MEAL.food && t.kind !== 'greet') return true
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false
   }
+
+  /** 今天（这一晚）谁先说过早安 / 晚安：第一个人一定说，后面的人看心情 */
+  private saidNight = -1
+  private saidMorning = -1
 
   /** 头顶冒一句话（同一种话：末日前后各有几句，随机挑一句） */
   say(a: Actor, kind: 'dinner' | 'night' | 'morning' | 'home', hours = 0.22): void {
@@ -1904,7 +1937,10 @@ export class Household {
     const others = this.actors.some((b) => b !== a && !this.isOut(b) && !b.dead)
     // 饭做好了喊一声；早上醒了打个招呼
     if (t.kind === 'cook' && isMealTime(this.clock.hour) && others) this.say(a, 'dinner')
-    if (t.kind === 'sleep' && this.clock.hour >= 5 && this.clock.hour < 11 && others && this.rand() < 0.7) this.say(a, 'morning')
+    if (t.kind === 'sleep' && this.clock.hour >= 5 && this.clock.hour < 11 && others && (this.saidMorning !== this.clock.day || this.rand() < 0.35)) {
+      this.say(a, 'morning')
+      this.saidMorning = this.clock.day
+    }
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()

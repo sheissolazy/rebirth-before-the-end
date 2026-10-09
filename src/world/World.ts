@@ -711,6 +711,9 @@ export class World {
         const push = (R - d) * 0.5
         for (const [me, other, f] of [[a, b, fa], [b, a, fb]] as const) {
           if (!f) continue
+          // 快走到地方了（最后一个路点就在眼前）：不推，不然会绕着站着的人打转、永远到不了
+          const last = me.path[me.path.length - 1]
+          if (me.path.length === 1 && last && Math.hypot(last.x - me.root.position.x, last.z - me.root.position.z) < R + 0.15) continue
           // 从对方指向自己的方向，去掉往回退的那部分；正对着撞上就往右手边让
           let nx = me.root.position.x - other.root.position.x
           let nz = me.root.position.z - other.root.position.z
@@ -1827,7 +1830,7 @@ export class World {
     const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
     if (this.mode === 'home' && this.tapPost()) return
     // 点大橘：喵一声、呼噜呼噜，身边的人心情好一点
-    if (this.cat?.root.visible && this.raycaster.intersectObject(this.cat.root, true).length) {
+    if (this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length) {
       this.petCat()
       return
     }

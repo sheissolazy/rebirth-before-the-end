@@ -140,6 +140,9 @@ export type IdleVar = 'plain' | 'crossed' | 'hips' | 'look' | 'scratch' | 'stret
 const IDLE_PICK: [IdleVar, number, number, number][] = [
   ['plain', 34, 4, 9], ['crossed', 22, 6, 12], ['hips', 16, 5, 10], ['look', 14, 3, 5], ['scratch', 8, 2.4, 2.4], ['stretch', 6, 2.8, 2.8],
 ]
+/** 坐着的姿势：坐直、往后靠、跷二郎腿（名字、权重、最短、最长秒数） */
+export type SitVar = 'upright' | 'lean' | 'cross'
+const SIT_PICK: [SitVar, number, number, number][] = [['upright', 40, 5, 10], ['lean', 32, 6, 14], ['cross', 28, 8, 16]]
 /** 一个短动作的力度：开头 0.45 秒抬起、结尾 0.45 秒放下 */
 const envelope = (t: number, dur: number) => {
   const k = Math.max(0, Math.min(1, t / 0.45, (dur - t) / 0.45))
@@ -260,6 +263,27 @@ export class PoseDriver {
     if (v) { this.idleVar = v; this.idleT = 1.2 }
   }
   private forced: IdleVar | null = null
+  private sitVar: SitVar = 'upright'
+  private sitLeft = 2 + Math.random() * 6
+  /** 调试用：固定一个坐姿 */
+  forceSit(v: SitVar | null): void {
+    this.sitForced = v
+    if (v) this.sitVar = v
+  }
+  private sitForced: SitVar | null = null
+
+  private pickSit(dt: number): void {
+    if (this.sitForced) return
+    if (!this.fidget) { this.sitVar = 'upright'; return }
+    this.sitLeft -= dt
+    if (this.sitLeft > 0) return
+    const total = SIT_PICK.reduce((n, x) => n + x[1], 0)
+    let r = Math.random() * total
+    let pick = SIT_PICK[0]
+    for (const x of SIT_PICK) { r -= x[1]; if (r <= 0) { pick = x; break } }
+    this.sitVar = pick[0]
+    this.sitLeft = pick[2] + Math.random() * (pick[3] - pick[2])
+  }
 
   private pickIdle(dt: number): void {
     if (this.forced) return
@@ -431,17 +455,46 @@ export class PoseDriver {
       this.rot('Head', SIDE, -lift * 0.2)
       this.rot('Spine', SIDE, -lift * 0.04)
     } else if (state === 'sit') {
-      this.rot('LeftUpLeg', SIDE, -1.45)
-      this.rot('RightUpLeg', SIDE, -1.45)
-      this.rot('LeftLeg', SIDE, 1.45)
-      this.rot('RightLeg', SIDE, 1.45)
+      // 坐着也会换姿势：坐直、往后靠、跷二郎腿；聊天时右手照样比划
+      this.pickSit(dt)
       const g = this.talkGesture(dt)
-      this.rot('LeftArm', SIDE, -0.35, leftDown)
-      this.rotMany('RightArm', [[SIDE, -0.35 - g.arm], [FWD, -g.out]], rightDown)
-      this.rot('LeftForeArm', SIDE, -0.9)
-      this.rotMany('RightForeArm', [[UP, g.turn], [SIDE, -0.9 - g.fore]])
-      this.rot('Spine', SIDE, Math.sin(this.t) * 0.015 + g.lean)
-      this.rot('Head', SIDE, g.nod)
+      const v = this.sitVar
+      let la: Rots = [[SIDE, -0.35]]
+      let ra: Rots = [[SIDE, -0.35 - g.arm], [FWD, -g.out]]
+      let lf: Rots = [[SIDE, -0.9]]
+      let rf: Rots = [[UP, g.turn], [SIDE, -0.9 - g.fore]]
+      let spine = Math.sin(this.t) * 0.015 + g.lean
+      let head = g.nod
+      let lk = 1.45
+      let rk = 1.45
+      let rThigh: Rots = [[SIDE, -1.45]]
+      if (v === 'lean') {
+        // 往后一靠，腿往前伸一点，两手搭在沙发上
+        spine -= 0.2
+        head += 0.08
+        lk = 1.15
+        rk = 1.2
+        la = [[SIDE, -0.1], [FWD, 0.35]]
+        lf = [[SIDE, -0.35]]
+        if (!this.talking) { ra = [[SIDE, -0.1], [FWD, -0.35]]; rf = [[SIDE, -0.35]] }
+      } else if (v === 'cross') {
+        // 跷二郎腿：右腿搭在左腿上，两手放在膝盖上
+        rThigh = [[UP, 0.4], [SIDE, -1.75]]
+        rk = 1.15
+        la = [[SIDE, -0.55]]
+        lf = [[SIDE, -0.55]]
+        if (!this.talking) { ra = [[SIDE, -0.6]]; rf = [[SIDE, -0.5]] }
+      }
+      this.rot('LeftUpLeg', SIDE, -1.45)
+      this.rotMany('RightUpLeg', rThigh)
+      this.rot('LeftLeg', SIDE, lk)
+      this.rot('RightLeg', SIDE, rk)
+      this.rotMany('LeftArm', la, leftDown)
+      this.rotMany('RightArm', ra, rightDown)
+      this.rotMany('LeftForeArm', lf)
+      this.rotMany('RightForeArm', rf)
+      this.rot('Spine', SIDE, spine)
+      this.rot('Head', SIDE, head)
       this.model.position.y = -0.42 * this.legK
     } else if (state === 'sleep') {
       this.rot('LeftArm', SIDE, 0, leftDown)
