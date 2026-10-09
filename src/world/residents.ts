@@ -12,6 +12,7 @@ import {
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
 import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
+import { rainAt } from './weather'
 import { lt } from '../i18n'
 
 export type { Where } from './walker'
@@ -197,6 +198,8 @@ export class Household {
   medkits = 0
   gateBonus = 0
   trip: Trip | null = null
+  /** 这场雨木桶接了多少水 */
+  private rainWater = 0
   private readonly spots: Spot[]
   private readonly beds: Spot[]
   private readonly taken = new Map<Spot, Actor>()
@@ -227,6 +230,7 @@ export class Household {
     const fighting = !!this.siege && !this.siege.done
     this.tripTick()
     this.runawayTick()
+    this.rainTick(hours)
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -243,6 +247,25 @@ export class Household {
         a.hold = Math.max(0, a.hold - hours)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
       }
+    }
+  }
+
+  // --- 天气 -----------------------------------------------------------------
+
+  get rain(): number {
+    return rainAt(this.clock.day, this.clock.hour)
+  }
+
+  /** 院子里的木桶接雨水；雨停了在日记里记一笔 */
+  private rainTick(hours: number): void {
+    const r = this.rain
+    if (r > 0) {
+      const got = r * 0.3 * hours
+      this.rainWater += got
+      this.stock = { ...this.stock, water: this.stock.water + got }
+    } else if (this.rainWater > 0) {
+      if (this.rainWater >= 0.1) this.note('world.log.rainWater', { n: this.rainWater.toFixed(1) })
+      this.rainWater = 0
     }
   }
 
@@ -505,7 +528,8 @@ export class Household {
 
   private think(a: Actor): void {
     const want = chooseWant(a.needs, this.clock, this.stock, this.rand())
-    const night = isNight(this.clock.hour)
+    // 下雨天和夜里一样，不去院子里
+    const night = isNight(this.clock.hour) || this.rain > 0.1
     const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
     let task: Task | null = null
     // 白天爸爸有空就去修被丧尸砸坏的门

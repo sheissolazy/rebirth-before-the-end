@@ -21,6 +21,7 @@ import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
+import { Rain } from './weather'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -33,6 +34,7 @@ export interface Hud {
   /** 顶栏日期，比如"末日前 4 天 · 08:30" */
   time: string
   night: boolean
+  rain: number
   crisis: boolean
   speed: number
   food: number
@@ -64,6 +66,7 @@ const SKY = '#bfe3f2'
 const WALK_SPEED = 2.2
 const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
+const RAIN_GREY = new THREE.Color('#9aa3a8')
 
 type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
@@ -71,7 +74,7 @@ type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.siege
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
-  loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
+  loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, speed: 1,
   food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true,
 }
 
@@ -122,6 +125,9 @@ export class World {
   private readonly weapons: THREE.Object3D[] = []
   private readonly groanT = new WeakMap<object, number>()
   private nightness = 0
+  private readonly rain = new Rain()
+  private readonly glass: THREE.Material[] = []
+  private fogBase = 0.013
   private frontDoor: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
@@ -172,6 +178,7 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
+    this.scene.add(this.rain.lines)
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at) => this.siegeView.spawn(at)
     this.life.onSiege = (e) => {
@@ -272,6 +279,12 @@ export class World {
       }
       this.addLamps()
       this.collectClickables()
+      // 窗玻璃：夜里亮起暖光
+      const seen = new Set<THREE.Material>()
+      this.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material
+        for (const x of m ? (Array.isArray(m) ? m : [m]) : []) if (x.name === 'pal_glass' && !seen.has(x)) { seen.add(x); this.glass.push(x) }
+      })
       const gates: THREE.Object3D[] = []
       this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
@@ -568,16 +581,21 @@ export class World {
   /** 按游戏时间调太阳、天色、雾和灯 */
   private applySky(): void {
     const s = skyAt(this.life.clock.hour, this.dayBase)
+    const rain = this.life.rain
     this.nightness = s.night
     this.sunDir.copy(s.dir)
     this.sun.color.copy(s.color)
-    this.sun.intensity = this.sunBase * s.light
-    this.hemi.intensity = this.hemiBase * s.ambient
+    // 下雨：太阳被云遮住、天和雾变灰、雾更浓
+    this.sun.intensity = this.sunBase * s.light * (1 - rain * 0.7)
+    this.hemi.intensity = this.hemiBase * s.ambient * (1 - rain * 0.2)
     this.hemi.color.copy(HEMI_DAY).lerp(HEMI_NIGHT, s.night)
-    this.scene.environmentIntensity = this.envBase * s.ambient
-    if (this.scene.background instanceof THREE.Color) this.scene.background.copy(s.sky)
+    this.scene.environmentIntensity = this.envBase * s.ambient * (1 - rain * 0.35)
+    const grey = RAIN_GREY.clone().multiplyScalar(1 - s.night * 0.8)
+    if (this.scene.background instanceof THREE.Color) this.scene.background.copy(s.sky).lerp(grey, rain * 0.75)
     else this.scene.background = s.sky.clone()
-    this.scene.fog?.color.copy(s.fog)
+    this.scene.fog?.color.copy(s.fog).lerp(grey, rain * 0.75)
+    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.fogBase * (1 + rain * 1.3)
+    for (const g of this.glass) (g as THREE.MeshStandardMaterial).emissive?.setRGB(1, 0.72, 0.38).multiplyScalar(s.lamps * 0.55)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const l of this.lamps) {
       const off = l.userData.floor === 1 && upstairsHidden
@@ -728,7 +746,9 @@ export class World {
         this.groanT.set(z, 4 + Math.random() * 6)
       } else this.groanT.set(z, left)
     }
-    this.sound.ambience(this.nightness, !fighting)
+    const rainNow = this.life.rain
+    this.rain.update(Math.min(sim, 0.1), this.pose.target, rainNow)
+    this.sound.ambience(this.nightness, !fighting, rainNow)
     for (const a of this.actors) {
       let walking = a === this.heroine && this.keysMoving
       let gliding = false
@@ -1017,6 +1037,7 @@ export class World {
     this.setHud({
       time: calendarLabel(c),
       night: isNight(c.hour),
+      rain: this.life.rain,
       crisis: isCrisisNight(c),
       speed: this.life.speed,
       food: this.life.stock.food,

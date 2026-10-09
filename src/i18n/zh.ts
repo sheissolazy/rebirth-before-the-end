@@ -103,6 +103,7 @@ export const zh = {
   'world.log.lost1': '{who}再也没有回来……',
   'world.do.runaway': '离家出走了',
   'world.do.lost': '不在了',
+  'world.log.rainWater': '下了一场雨，院子里的桶接了 {n} 份雨水',
   'world.log.medkit': '{who}伤得不轻，用掉一个急救包',
   'world.tripInfo.office': '还在正常上班。去一天领一份工资（3000 元）。',
   'world.tripInfo.supermarket': '囤吃的和水。两个人去能多扛一半。',

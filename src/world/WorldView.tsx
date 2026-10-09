@@ -124,7 +124,7 @@ export default function WorldView() {
       <div className="absolute left-3 top-3 flex flex-col gap-1.5">
         <div className={`rounded-2xl px-4 py-2 shadow ${hud.night ? 'bg-zinc-900/80 text-white' : 'bg-white/90'}`}>
           <div className="flex items-center gap-2 text-base font-semibold tabular-nums">
-            <span>{hud.night ? '🌙' : '☀️'}</span>
+            <span>{hud.rain > 0.05 ? '🌧️' : hud.night ? '🌙' : '☀️'}</span>
             <span>{hud.time}</span>
           </div>
           <div className="mt-1.5 flex items-center gap-1">

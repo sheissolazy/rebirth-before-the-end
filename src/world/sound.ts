@@ -177,11 +177,39 @@ export class Sound {
     this.noiseBurst(ctx.currentTime, 'bandpass', 1300, 2, 0.25, 0.08)
   }
 
-  /** 每帧：环境声。night 0~1；outdoors 表示镜头在屋外 */
-  ambience(night: number, calm: boolean): void {
+  private rainGain: GainNode | null = null
+  private nextThunder = 0
+
+  /** 雨声：一直开着的带通噪声，音量跟着雨势；大雨偶尔打雷 */
+  private rainSound(ctx: AudioContext, amount: number): void {
+    if (!this.rainGain) {
+      const src = ctx.createBufferSource()
+      src.buffer = this.noise
+      src.loop = true
+      const bp = ctx.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.frequency.value = 2400
+      bp.Q.value = 0.4
+      this.rainGain = ctx.createGain()
+      this.rainGain.gain.value = 0
+      src.connect(bp).connect(this.rainGain).connect(this.master!)
+      src.start()
+    }
+    this.rainGain.gain.setTargetAtTime(amount * 0.16, ctx.currentTime, 0.4)
+    const t = ctx.currentTime
+    if (amount > 0.8 && t > this.nextThunder) {
+      this.nextThunder = t + 18 + Math.random() * 25
+      this.noiseBurst(t + Math.random(), 'lowpass', 180, 0.5, 0.55, 2.4, 60)
+    }
+  }
+
+  /** 每帧：环境声。night 0~1；calm = 没在打仗；rain 0~1 */
+  ambience(night: number, calm: boolean, rain = 0): void {
     const ctx = this.ready
     if (!ctx) return
+    this.rainSound(ctx, rain)
     const t = ctx.currentTime
+    if (rain > 0.3) return // 下雨天没有鸟和蛐蛐
     // 夜里的蛐蛐：一串很快的高音
     if (night > 0.3 && calm && t > this.nextCricket) {
       this.nextCricket = t + 0.35 + Math.random() * 0.9
