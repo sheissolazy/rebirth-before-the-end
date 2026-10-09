@@ -100,7 +100,7 @@ fuser -k 4173/tcp                   # 关预览；别用 pkill -f，会把自己
 
 - 分支 `proto-2.5d` → https://sheissolazy.github.io/rebirth-before-the-end/proto/ 。每一步做了什么、为什么、怎么验证的，按时间记在 `docs/DEVLOG.md`（开头有"早上先看这里"的总结和"下一步"）。
 - 代码地图（`src/world/`）：
-  - `life.ts` 时钟/需求/自主决策（纯函数）· `residents.ts` 一家人（Actor、Household：任务、出门、访客、丧尸夜调度、种田、空间、存货、男主送东西 `giveCare`/`courierTick`、借人给顾沉 `lent`、生死 `die`/`over`、钉板 `trap`）· `walker.ts` 走路
+  - `life.ts` 时钟/需求/自主决策（纯函数）· `residents.ts` 一家人（Actor、Household：任务、出门、访客、丧尸夜调度、种田、空间、存货、男主送东西 `giveCare`/`courierTick`、借人给顾沉 `lent`、生死 `die`/`over`、钉板 `trap`、弩 `crossbow`/`equipCrossbow`、男主住下来 `jiangyeHome`/`shenyanHome`、困难模式 `hard`、末日降临 `onDoomsday`）· `walker.ts` 走路
   - `people.ts` MakeHuman 人物加载 + 代码摆骨骼（PoseDriver）+ **衣服贴图修改 `WARDROBE`**（盖掉 MakeHuman 标志、换上衣颜色、改发色）
   - `siege.ts` 丧尸夜的逻辑（防线、守位、武器、燃烧瓶、钉板 `TRAP`、危机夜大块头、街上遇袭）· `siegeView.ts` 丧尸夜的画面（模型、特效、血条、铁门/大门）
   - `visitors.ts` 来敲门的人（`VISITORS` 表）+ 送东西的男主（`Courier`）· `expedition.ts` 地图出门 · `scavenge.ts` 街上搜东西 · `weather.ts` 下雨 · `daylight.ts` 昼夜 · `sound.ts` 合成音效和音乐 · `bubbles.ts` 想法泡泡 · `save.ts` 自动存档 + 第几世 / 重生点 / 开局加成（`currentLife`、`awardRebirthPoints`、`PERK_DEFS`、`applyPerks`）
