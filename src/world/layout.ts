@@ -76,6 +76,7 @@ export const FURNITURE: Placement[] = [
   { piece: 'table', x: 2.5, z: 3, rot: 0, floor: 0, block: [0.65, 0.4] },
   { piece: 'chair', x: 2.5, z: 2.35, rot: 180, floor: 0 },
   { piece: 'chair', x: 2.5, z: 3.65, rot: 0, floor: 0 },
+  { piece: 'chair', x: 1.62, z: 3.0, rot: -90, floor: 0 },
   { piece: 'sofa', x: 1.0, z: 5.2, rot: 0, floor: 0, block: [0.9, 0.45] },
   { piece: 'crate', x: 0.5, z: 0.5, rot: 0, floor: 0, block: [0.35, 0.35] },
   { piece: 'crate', x: 1.2, z: 0.5, rot: 0, floor: 0, block: [0.35, 0.35] },
@@ -84,11 +85,11 @@ export const FURNITURE: Placement[] = [
   // 一楼厨房
   { piece: 'counter', x: 6.5, z: 0.4, rot: 0, floor: 0, block: [1.5, 0.35] },
   { piece: 'fridge', x: 7.6, z: 1.4, rot: -90, floor: 0, block: [0.4, 0.4] },
-  // 楼梯（只是样子，原型里还不能上楼）
+  // 楼梯：西头上、东头到二楼
   { piece: 'stairs', x: 6.5, z: 4.5, rot: 0, floor: 0, block: [1.4, 0.6] },
   // 二楼
-  { piece: 'bed', x: 1.0, z: 1.2, rot: 180, floor: 1 },
-  { piece: 'bed', x: 3.0, z: 1.2, rot: 180, floor: 1 },
+  { piece: 'bed', x: 1.0, z: 1.2, rot: 180, floor: 1, block: [0.5, 1.0] },
+  { piece: 'bed', x: 3.0, z: 1.2, rot: 180, floor: 1, block: [0.5, 1.0] },
   { piece: 'desk', x: 6.0, z: 0.5, rot: 0, floor: 1 },
   { piece: 'chair', x: 6.0, z: 1.1, rot: 0, floor: 1 },
   { piece: 'shelf', x: 7.6, z: 1.5, rot: -90, floor: 1 },
@@ -99,11 +100,14 @@ export const PARADISE_EXTRAS: Placement[] = [
   { piece: 'Rockingchair_01', x: 0.9, z: 2.0, rot: 110, floor: 0, block: [0.4, 0.45] },
   { piece: 'chinese_cabinet', x: 3.3, z: 0.42, rot: 0, floor: 0, block: [0.65, 0.32], scale: 0.85 },
   { piece: 'potted_plant_01', x: 4.35, z: 0.55, rot: 0, floor: 0, block: [0.3, 0.3] },
-  { piece: 'WoodenTable_01', x: 1.0, z: 4.25, rot: 0, floor: 0, block: [0.65, 0.25], scale: 0.7 },
+  { piece: 'WoodenTable_01', x: 0.3, z: 3.3, rot: 90, floor: 0, block: [0.63, 0.23], scale: 0.7 },
   { piece: 'chinese_chandelier', x: 2.5, z: 3.0, rot: 0, floor: 0, y: 1.7, scale: 0.8 },
-  { piece: 'ClassicNightstand_01', x: 2.7, z: 0.38, rot: 0, floor: 1 },
+  { piece: 'ClassicNightstand_01', x: 2.7, z: 0.38, rot: 0, floor: 1, block: [0.3, 0.22] },
   { piece: 'wooden_lantern_01', x: 2.7, z: 0.38, rot: 0, floor: 1, y: 0.7 },
-  { piece: 'painted_wooden_bench', x: 7.0, z: 9.2, rot: -90, floor: 0, block: [0.3, 0.6] },
+  { piece: 'vintage_day_bed', x: 1.25, z: 0.55, rot: 0, floor: 1, block: [1.0, 0.45] },
+  { piece: 'vintage_day_bed', x: 0.55, z: 3.7, rot: 90, floor: 1, block: [1.0, 0.45] },
+  { piece: 'vintage_day_bed', x: 2.4, z: 5.45, rot: 180, floor: 1, block: [1.0, 0.45] },
+  { piece: 'painted_wooden_bench', x: 7.0, z: 9.2, rot: -90, floor: 0, block: [0.6, 0.3] },
   { piece: 'wine_barrel_01', x: 8.75, z: 5.3, rot: 0, floor: 0, block: [0.4, 0.4] },
   { piece: 'wooden_bucket_01', x: 8.8, z: 4.4, rot: 0, floor: 0, block: [0.2, 0.2] },
   { piece: 'boulder_01', x: 11.0, z: 11.8, rot: 30, floor: 0, block: [0.7, 0.9] },
@@ -148,4 +152,76 @@ export function inRect(r: Rect, x: number, z: number, margin = 0): boolean {
 /** 女主是否在自家地盘里（决定用哪种镜头）。带一点滞后，避免在门口来回闪。 */
 export function isHome(x: number, z: number, wasHome: boolean): boolean {
   return inRect(YARD, x, z, wasHome ? -0.3 : 0.3)
+}
+
+// --- 楼梯和"能干什么"的位置 ----------------------------------------------------
+
+export interface StairPoint { x: number; z: number; y: number; floor: Floor }
+/** 楼梯：一楼从西头（x≈5）往东爬，到二楼东头再往南迈一步上楼板 */
+export const STAIR_PATH: StairPoint[] = [
+  { x: 4.75, z: 4.5, y: 0, floor: 0 },
+  { x: 5.15, z: 4.5, y: 0, floor: 0 },
+  { x: 7.6, z: 4.5, y: FLOOR_H, floor: 1 },
+  { x: 7.25, z: 5.25, y: FLOOR_H, floor: 1 },
+]
+/** 二楼楼板上楼梯那一块是空的（不能走、也不铺地板） */
+export const STAIR_HOLE: Rect = { x0: 5, z0: 4, x1: 8, z1: 5 }
+
+export type SpotKind = 'cook' | 'drink' | 'dine' | 'relax' | 'stroll' | 'sleep'
+export type SpotPose = 'idle' | 'sit' | 'sleep' | 'work'
+export interface Spot {
+  kind: SpotKind
+  /** 人在这里时 root 的位置（坐着是屁股、躺着是脚） */
+  x: number
+  z: number
+  floor: Floor
+  /** 朝向：rotation.y，角度（0 = 面朝 +z / 南） */
+  face: number
+  pose: SpotPose
+  /** 离本层地面的高度偏移 */
+  y?: number
+  /** 先走到这里再挪进去（家具占的格子走不进去） */
+  ax?: number
+  az?: number
+}
+
+export const SPOTS: Spot[] = [
+  // 厨房：灶台、案板、冰箱
+  { kind: 'cook', x: 6.85, z: 1.1, floor: 0, face: 180, pose: 'work' },
+  { kind: 'cook', x: 5.95, z: 1.1, floor: 0, face: 180, pose: 'work' },
+  { kind: 'drink', x: 6.75, z: 1.65, floor: 0, face: 90, pose: 'work' },
+  // 餐桌三把椅子
+  { kind: 'dine', x: 2.5, z: 2.3, floor: 0, face: 0, pose: 'sit' },
+  { kind: 'dine', x: 2.5, z: 3.7, floor: 0, face: 180, pose: 'sit' },
+  { kind: 'dine', x: 1.62, z: 3.0, floor: 0, face: 90, pose: 'sit', ax: 1.25, az: 3.2 },
+  // 沙发两个座位、院子里的长椅
+  { kind: 'relax', x: 0.62, z: 5.15, floor: 0, face: 180, pose: 'sit', ax: 0.62, az: 4.25 },
+  { kind: 'relax', x: 1.38, z: 5.15, floor: 0, face: 180, pose: 'sit', ax: 1.38, az: 4.25 },
+  // 院子里溜达
+  { kind: 'stroll', x: 2, z: 9, floor: 0, face: 160, pose: 'idle' },
+  { kind: 'stroll', x: 9.5, z: 2.5, floor: 0, face: 90, pose: 'idle' },
+  { kind: 'stroll', x: -2, z: 6, floor: 0, face: -90, pose: 'idle' },
+  { kind: 'stroll', x: 10, z: 8, floor: 0, face: 45, pose: 'idle' },
+  { kind: 'stroll', x: 5.5, z: 11, floor: 0, face: 0, pose: 'idle' },
+  { kind: 'stroll', x: 3, z: -1.8, floor: 0, face: 180, pose: 'idle' },
+]
+
+/** 世外桃源画风多出来能坐的地方：摇椅、院子里的长椅 */
+export const PARADISE_SPOTS: Spot[] = [
+  { kind: 'relax', x: 0.92, z: 2.0, floor: 0, face: 110, pose: 'sit', y: 0.04, ax: 1.75, az: 2.0 },
+  { kind: 'relax', x: 7.02, z: 9.2, floor: 0, face: -90, pose: 'sit', ax: 6.25, az: 9.2 },
+]
+
+/** 每人一张床，按人的顺序分（女主、妈妈、爸爸）。x/z 是脚的位置，躺下后头朝 face 的反方向 */
+export const BEDS: Record<'toon' | 'paradise', Spot[]> = {
+  toon: [
+    { kind: 'sleep', x: 1, z: 2.1, floor: 1, face: 0, pose: 'sleep', ax: 1, az: 2.75 },
+    { kind: 'sleep', x: 3, z: 2.1, floor: 1, face: 0, pose: 'sleep', ax: 3, az: 2.75 },
+    { kind: 'sleep', x: 1.8, z: 5.15, floor: 0, face: 90, pose: 'sleep', y: -0.12, ax: 1.6, az: 4.25 },
+  ],
+  paradise: [
+    { kind: 'sleep', x: 2.1, z: 0.52, floor: 1, face: 90, pose: 'sleep', y: -0.08, ax: 2.1, az: 1.25 },
+    { kind: 'sleep', x: 0.52, z: 4.6, floor: 1, face: 0, pose: 'sleep', y: -0.08, ax: 1.25, az: 4.3 },
+    { kind: 'sleep', x: 3.25, z: 5.48, floor: 1, face: 90, pose: 'sleep', y: -0.08, ax: 3.25, az: 4.75 },
+  ],
 }

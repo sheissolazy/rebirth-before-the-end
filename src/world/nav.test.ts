@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { GATE, YARD, inRect, isHome } from './layout'
-import { buildNav } from './nav'
+import { BEDS, FLOOR_H, GATE, PARADISE_SPOTS, SPOTS, STAIR_PATH, YARD, inRect, isHome } from './layout'
+import { buildNav, navFloors, route } from './nav'
 
 const nav = buildNav()
 
@@ -57,5 +57,41 @@ describe('地盘边界', () => {
     expect(isHome(3.5, z, true)).toBe(true)
     expect(isHome(3.5, z, false)).toBe(false)
     expect(inRect(YARD, 0, 0)).toBe(true)
+  })
+})
+
+describe('两层楼和"能干什么"的位置', () => {
+  for (const style of ['toon', 'paradise'] as const) {
+    const navs = navFloors(style)
+    const spots = [...SPOTS, ...BEDS[style], ...(style === 'paradise' ? PARADISE_SPOTS : [])]
+    it(`${style}：从客厅能走到每个位置的入口，还能走回来`, () => {
+      const start = { x: 3.5, z: 4.5, floor: 0 as const }
+      for (const s of spots) {
+        const goal = { x: s.ax ?? s.x, z: s.az ?? s.z, floor: s.floor }
+        expect(navs[s.floor].isBlockedAt(goal.x, goal.z), `${s.kind} @${goal.x},${goal.z} 入口被挡`).toBe(false)
+        const there = route(navs, start, goal)
+        expect(there, `${s.kind} @${goal.x},${goal.z} 走不到`).not.toBeNull()
+        const end = there![there!.length - 1]
+        expect(Math.hypot(end.x - goal.x, end.z - goal.z)).toBeLessThan(0.01)
+        expect(end.floor).toBe(s.floor)
+        expect(route(navs, goal, start), `${s.kind} 走不回来`).not.toBeNull()
+      }
+    })
+  }
+
+  it('上楼要经过楼梯，高度一路升到二楼', () => {
+    const navs = navFloors('paradise')
+    const path = route(navs, { x: 2, z: 4.5, floor: 0 }, { x: 2.1, z: 1.25, floor: 1 })!
+    const ys = path.map((p) => p.y)
+    expect(ys[0]).toBe(0)
+    expect(ys[ys.length - 1]).toBeCloseTo(FLOOR_H)
+    expect(path.some((p) => Math.abs(p.x - STAIR_PATH[2].x) < 0.01 && p.floor === 1)).toBe(true)
+  })
+
+  it('二楼楼梯口是空的，不能踩', () => {
+    const up = navFloors('toon')[1]
+    expect(up.isBlockedAt(6, 4.5)).toBe(true)
+    expect(up.isBlockedAt(-1, 3)).toBe(true) // 二楼没有院子
+    expect(up.isBlockedAt(2, 3)).toBe(false)
   })
 })

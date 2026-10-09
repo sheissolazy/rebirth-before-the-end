@@ -148,13 +148,33 @@ export function wallMap(): THREE.Group {
   return g
 }
 
-/** 楼梯：沿 +x 往上，只是样子 */
+/** 楼梯：沿 +x 往上。镂空踏板 + 两侧斜梁 + 南侧扶手，从 45° 看过去不挡视线 */
 export function stairs(rise: number): THREE.Group {
   const g = new THREE.Group()
   const n = 10
+  const run = 0.28
+  const len = n * run
   for (let k = 0; k < n; k++) {
     const h = (rise / n) * (k + 1)
-    g.add(box(0.28, h, 1.1, k % 2 ? COLORS.wood : '#b37847', [-1.26 + k * 0.28, 0, 0]))
+    g.add(box(0.32, 0.05, 1.0, COLORS.wood, [-len / 2 + run / 2 + k * run, h - 0.05, 0]))
+  }
+  const slope = Math.hypot(len, rise)
+  const angle = Math.atan2(rise, len)
+  const beam = (z: number, y: number, h: number, t: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(slope, h, t), toon(COLORS.woodDark))
+    m.position.set(0, rise / 2 + y, z)
+    m.rotation.z = angle
+    m.castShadow = true
+    m.receiveShadow = true
+    g.add(m)
+  }
+  beam(-0.52, -0.08, 0.24, 0.06)
+  beam(0.52, -0.08, 0.24, 0.06)
+  beam(0.55, 0.88, 0.05, 0.05) // 扶手
+  for (let k = 0; k <= 4; k++) {
+    const x = -len / 2 + 0.1 + (k * (len - 0.2)) / 4
+    const y = ((x + len / 2) / len) * rise
+    g.add(box(0.035, 0.9, 0.035, COLORS.woodDark, [x, y, 0.55]))
   }
   return g
 }

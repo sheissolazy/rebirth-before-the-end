@@ -1,5 +1,8 @@
 // 走路用的格子地图和寻路（纯逻辑，可单测）。
-import { FURNITURE, PROPS, WALLS, WORLD, fenceSegments, type Placement, type Rect } from './layout'
+import {
+  FLOOR_H, FURNITURE, HOUSE, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STAIR_PATH, WALLS, WORLD, fenceSegments,
+  type Floor, type Placement, type Rect, type StairPoint,
+} from './layout'
 
 export const CELL = 0.5
 
@@ -140,7 +143,7 @@ export class NavGrid {
 
 const WALL_HALF_T = 0.15
 
-/** 一楼和院子、街道的可走地图。二楼原型里还不能走。`extra` 是画风特有的家具。 */
+/** 一楼和院子、街道的可走地图。`extra` 是画风特有的家具。 */
 export function buildNav(extra: Placement[] = []): NavGrid {
   const nav = new NavGrid(WORLD)
   for (const s of WALLS) {
@@ -166,4 +169,49 @@ export function buildNav(extra: Placement[] = []): NavGrid {
     else nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
   }
   return nav
+}
+
+/** 二楼的可走地图：只有房子里面，挡掉墙、家具和楼梯口 */
+export function buildNavUpstairs(extra: Placement[] = [], skip: string[] = []): NavGrid {
+  const nav = new NavGrid(WORLD)
+  nav.blockRect(WORLD.x0, WORLD.z0, WORLD.x1, HOUSE.z0)
+  nav.blockRect(WORLD.x0, HOUSE.z1, WORLD.x1, WORLD.z1)
+  nav.blockRect(WORLD.x0, WORLD.z0, HOUSE.x0, WORLD.z1)
+  nav.blockRect(HOUSE.x1, WORLD.z0, WORLD.x1, WORLD.z1)
+  for (const s of WALLS) {
+    if (s.floor !== 1 || s.kind === 'door') continue
+    if (s.axis === 'x') nav.blockRect(s.x - 0.5, s.z - WALL_HALF_T, s.x + 0.5, s.z + WALL_HALF_T)
+    else nav.blockRect(s.x - WALL_HALF_T, s.z - 0.5, s.x + WALL_HALF_T, s.z + 0.5)
+  }
+  nav.blockRect(STAIR_HOLE.x0, STAIR_HOLE.z0, STAIR_HOLE.x1, STAIR_HOLE.z1)
+  for (const p of [...FURNITURE, ...extra]) {
+    if (p.floor !== 1 || !p.block || skip.includes(p.piece)) continue
+    const swap = Math.abs(p.rot) % 180 === 90
+    const [hw, hd] = swap ? [p.block[1], p.block[0]] : p.block
+    nav.blockRect(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
+  }
+  return nav
+}
+
+/** 两层楼各一张寻路图。世外桃源画风的床是另外摆的，卡通床不挡路 */
+export function navFloors(style: 'toon' | 'paradise'): Record<Floor, NavGrid> {
+  const extra = style === 'paradise' ? PARADISE_EXTRAS : []
+  return { 0: buildNav(extra), 1: buildNavUpstairs(extra, style === 'paradise' ? ['bed'] : []) }
+}
+
+/** 跨楼层寻路：同层直接走；不同层先走到楼梯口，按楼梯路线爬上/爬下，再走到目的地。 */
+export function route(navs: Record<Floor, NavGrid>, from: Pt & { floor: Floor }, to: Pt & { floor: Floor }): StairPoint[] | null {
+  const lift = (pts: Pt[], floor: Floor): StairPoint[] => pts.map((p) => ({ x: p.x, z: p.z, y: floor * FLOOR_H, floor }))
+  if (from.floor === to.floor) {
+    const p = navs[from.floor].findPath(from, to)
+    return p && lift(p, from.floor)
+  }
+  const up = from.floor === 0
+  const stairs = up ? STAIR_PATH : [...STAIR_PATH].reverse()
+  const enter = stairs[0]
+  const exit = stairs[stairs.length - 1]
+  const a = navs[from.floor].findPath(from, enter)
+  const b = navs[to.floor].findPath(exit, to)
+  if (!a || !b) return null
+  return [...lift(a, from.floor), ...stairs.slice(1), ...lift(b, to.floor)]
 }

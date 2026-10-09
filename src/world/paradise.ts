@@ -116,6 +116,7 @@ export function placeModel(kit: ParadiseKit, slug: string, x: number, y: number,
   o.position.set(x, y, z)
   o.rotation.y = THREE.MathUtils.degToRad(rotDeg)
   o.scale.setScalar(scale)
+  o.userData.slug = slug
   return o
 }
 

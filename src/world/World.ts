@@ -4,18 +4,21 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STREET, WALLS, WORLD, YARD,
-  fenceSegments, isHome, type Floor, type Placement,
+  FLOOR_H, FURNITURE, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, WALLS, WORLD, YARD,
+  fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
-import { buildNav, type NavGrid, type Pt } from './nav'
-import { PoseDriver, loadPerson, type PoseState } from './people'
+import { navFloors, type NavGrid } from './nav'
+import { loadPerson } from './people'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
-  COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, person, shelf, sofa, stairs,
+  COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, shelf, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
+import { Actor, Household, type PersonHud } from './residents'
+import { calendarLabel, isCrisisNight, isNight } from './life'
+import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
 export interface Hud {
@@ -24,6 +27,16 @@ export interface Hud {
   floor: Floor
   selected: string
   error?: string
+  /** 顶栏日期，比如"末日前 4 天 · 08:30" */
+  time: string
+  night: boolean
+  crisis: boolean
+  speed: number
+  food: number
+  water: number
+  people: PersonHud[]
+  /** 短暂的提示（比如"有人在用"） */
+  toast: string
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -34,74 +47,15 @@ const OUT_VIEW = { elev: THREE.MathUtils.degToRad(52), dist: 15, fov: 38 }
 const TWEEN_S = 0.9
 const STUB = 0.12
 const SKY = '#bfe3f2'
+const WALK_SPEED = 2.2
+const HEMI_DAY = new THREE.Color('#dcefff')
+const HEMI_NIGHT = new THREE.Color('#5d74b0')
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
-class Actor {
-  readonly name: string
-  readonly root: THREE.Group
-  path: Pt[] = []
-  pose: PoseState = 'idle'
-  private walkT = 0
-  private driver: PoseDriver | null = null
-
-  constructor(name: string, shirt: string, hair: string, height: number, at: Pt) {
-    this.name = name
-    this.root = person(shirt, hair, height)
-    this.root.position.set(at.x, 0, at.z)
-    this.root.userData.actor = this
-  }
-
-  get pos(): Pt {
-    return { x: this.root.position.x, z: this.root.position.z }
-  }
-
-  /** 沿路点走；返回这一帧是否在走 */
-  follow(dt: number, speed: number): boolean {
-    const next = this.path[0]
-    if (!next) return false
-    const dx = next.x - this.root.position.x
-    const dz = next.z - this.root.position.z
-    const d = Math.hypot(dx, dz)
-    const step = speed * dt
-    if (d <= step) {
-      this.root.position.x = next.x
-      this.root.position.z = next.z
-      this.path.shift()
-    } else {
-      this.root.position.x += (dx / d) * step
-      this.root.position.z += (dz / d) * step
-    }
-    if (d > 1e-3) this.face(dx, dz, dt)
-    return true
-  }
-
-  face(dx: number, dz: number, dt: number): void {
-    const want = Math.atan2(dx, dz)
-    let diff = want - this.root.rotation.y
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff))
-    this.root.rotation.y += diff * Math.min(1, dt * 12)
-  }
-
-  /** 换成真人模型（世外桃源画风） */
-  setModel(model: THREE.Object3D): void {
-    for (const c of [...this.root.children]) this.root.remove(c)
-    this.root.scale.setScalar(1)
-    this.root.add(model)
-    this.root.userData.body = null
-    this.driver = new PoseDriver(model)
-  }
-
-  animate(dt: number, walking: boolean): void {
-    if (this.driver) {
-      this.driver.update(dt, walking ? 'walk' : this.pose)
-      return
-    }
-    const body = this.root.userData.body as THREE.Object3D
-    this.walkT = walking ? this.walkT + dt * 11 : 0
-    body.position.y = 0.55 + (walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0)
-    body.rotation.z = walking ? Math.sin(this.walkT) * 0.06 : 0
-  }
+export const EMPTY_HUD: Hud = {
+  loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
+  food: 0, water: 0, people: [], toast: '',
 }
 
 export class World {
@@ -111,9 +65,9 @@ export class World {
   private readonly sun = new THREE.DirectionalLight('#fff1d6', 2.4)
   private readonly clock = new THREE.Clock()
   private readonly raycaster = new THREE.Raycaster()
-  private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-  private readonly nav: NavGrid
+  private readonly navs: Record<Floor, NavGrid>
   private readonly actors: Actor[] = []
+  private life!: Household
   private heroine!: Actor
   private selected!: Actor
   private readonly nearWalls: THREE.Object3D[] = []
@@ -137,7 +91,17 @@ export class World {
   private followTimer = 0
   private raf = 0
   private disposed = false
-  private hud: Hud = { loading: true, mode: 'home', floor: 0, selected: '林知夏' }
+  private hud: Hud = { ...EMPTY_HUD }
+  private hudTimer = 0
+  private toastTimer = 0
+  private readonly clickables: THREE.Object3D[] = []
+  private readonly lamps: THREE.PointLight[] = []
+  private readonly bulbs: THREE.Mesh[] = []
+  private readonly sunDir = new THREE.Vector3(0.4, 0.9, 0.2)
+  private dayBase: StyleDay = { sky: SKY, fog: SKY, sun: '#fff1d6' }
+  private sunBase = 2.4
+  private hemiBase = 1.5
+  private envBase = 0
   private readonly resize: ResizeObserver
   private readonly listeners: [EventTarget, string, EventListener][] = []
   private readonly host: HTMLElement
@@ -154,7 +118,7 @@ export class World {
     this.host = host
     this.onHud = onHud
     this.style = style
-    this.nav = buildNav(style === 'paradise' ? PARADISE_EXTRAS : [])
+    this.navs = navFloors(style)
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -256,6 +220,8 @@ export class World {
       this.assembleVilla(kit)
       if (paradise) this.applyParadise(paradise)
       if (people) people.forEach((m, k) => this.actors[k].setModel(m))
+      this.addLamps()
+      this.collectClickables()
       this.setHud({ loading: false })
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
@@ -273,14 +239,20 @@ export class World {
     }
     const floorGroup = (f: Floor) => (f === 0 ? this.scene : this.floor2)
     // 地板
+    const hole = (x: number, z: number) => x > STAIR_HOLE.x0 && x < STAIR_HOLE.x1 && z > STAIR_HOLE.z0 && z < STAIR_HOLE.z1
     for (let i = HOUSE.x0; i < HOUSE.x1; i++)
       for (let j = HOUSE.z0; j < HOUSE.z1; j++) {
         this.scene.add(place('floor_1x1', i + 0.5, 0, j + 0.5, 0))
-        this.floor2.add(place('floor_1x1', i + 0.5, FLOOR_H, j + 0.5, 0))
+        if (!hole(i + 0.5, j + 0.5)) this.floor2.add(place('floor_1x1', i + 0.5, FLOOR_H, j + 0.5, 0))
       }
     const w = HOUSE.x1 - HOUSE.x0
     const d = HOUSE.z1 - HOUSE.z0
-    this.floor2.add(box(w, 0.2, d, COLORS.wall, [HOUSE.x0 + w / 2, FLOOR_H - 0.3, HOUSE.z0 + d / 2]))
+    // 二楼楼板（楼梯那一块留空）
+    const slab = (x0: number, z0: number, x1: number, z1: number) =>
+      this.floor2.add(box(x1 - x0, 0.2, z1 - z0, COLORS.wall, [(x0 + x1) / 2, FLOOR_H - 0.3, (z0 + z1) / 2]))
+    slab(HOUSE.x0, HOUSE.z0, HOUSE.x1, STAIR_HOLE.z0)
+    slab(HOUSE.x0, STAIR_HOLE.z0, STAIR_HOLE.x0, STAIR_HOLE.z1)
+    slab(HOUSE.x0, STAIR_HOLE.z1, HOUSE.x1, HOUSE.z1)
     // 墙
     const piece = { wall: 'wall_1m', window: 'wall_window_1m', door: 'wall_door_1m' } as const
     for (const s of WALLS) {
@@ -338,12 +310,12 @@ export class World {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
     this.scene.environment = kit.env
-    this.scene.environmentIntensity = 0.75
-    this.scene.background = new THREE.Color('#cfe1e8')
     this.scene.fog = new THREE.FogExp2('#dfe6dd', 0.013)
-    this.hemi.intensity = 0.55
-    this.sun.color.set('#ffe2b8')
-    this.sun.intensity = 2.8
+    // 白天的基准；早晚和夜里由 applySky 按时间调
+    this.dayBase = { sky: '#cfe1e8', fog: '#dfe6dd', sun: '#ffe2b8' }
+    this.sunBase = 2.8
+    this.hemiBase = 0.55
+    this.envBase = 0.75
     this.swapToModels(kit)
     // 草、花、蕨、苔石：Poly Haven 植物模型实例化撒在地上
     this.scene.add(
@@ -391,6 +363,8 @@ export class World {
       chair: { slug: 'painted_wooden_chair_01', rot: 180 },
       desk: { slug: 'wooden_table_02' },
       shelf: { slug: 'wooden_bookshelf_worn', scale: 0.95 },
+      // 冰箱换成囤货的老柜子
+      fridge: { slug: 'chinese_cabinet', rot: 0, scale: 0.85 },
     }
     const doomed: THREE.Object3D[] = []
     let crate = 0
@@ -435,12 +409,7 @@ export class World {
     })
     visit(this.scene)
     for (const o of doomed) o.removeFromParent()
-    // 二楼卧室：两张复古坐卧床，一张靠北墙、一张靠西墙
-    this.floor2.add(
-      placeModel(kit, 'vintage_day_bed', 1.25, FLOOR_H, 0.55, 0),
-      placeModel(kit, 'vintage_day_bed', 0.55, FLOOR_H, 3.7, 90),
-    )
-    // 画风特有的家具和院子里的小物件
+    // 画风特有的家具（含二楼三张复古坐卧床）和院子里的小物件
     for (const p of PARADISE_EXTRAS) {
       const m = placeModel(kit, p.piece, p.x, p.floor * FLOOR_H + (p.y ?? 0), p.z, p.rot, p.scale ?? 1)
       ;(p.floor === 1 ? this.floor2 : this.scene).add(m)
@@ -448,22 +417,95 @@ export class World {
     // 两米宽的铁门
     this.scene.add(placeModel(kit, 'large_iron_gate', GATE.x, 0, GATE.z, 0, 0.68))
     // 街边的路灯
-    for (const x of [-18, -6, 6, 18, 30]) this.scene.add(placeModel(kit, 'street_lamp_01', x, 0, STREET.z0 - 0.7, 0, 0.9))
+    for (const x of [-18, -6, 6, 18, 30]) {
+      this.scene.add(placeModel(kit, 'street_lamp_01', x, 0, STREET.z0 - 0.7, 0, 0.9))
+      this.addBulb(x, 3.05, STREET.z0 - 0.7, Math.abs(x) === 6 ? 9 : 0)
+    }
   }
 
   private spawnActors(): void {
-    this.heroine = new Actor('林知夏', '#d9534f', '#2b1d16', 1, { x: 3.2, z: 4.4 })
-    const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 })
-    const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 })
+    this.heroine = new Actor('林知夏', '#d9534f', '#2b1d16', 1, { x: 3.2, z: 4.4 }, { hunger: 72, thirst: 66, energy: 92, mood: 64 })
+    const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
+    const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
     this.actors.push(this.heroine, mom, dad)
     for (const a of this.actors) this.scene.add(a.root)
     this.selected = this.heroine
+    this.life = new Household(this.actors, this.navs, this.style)
+  }
+
+  /** 屋里的暖灯和路灯：一直在场景里，白天亮度为 0（灯的数量不变，免得着色器重新编译） */
+  private addLamps(): void {
+    const room = (x: number, y: number, z: number, i: number, floor: Floor) => {
+      const l = new THREE.PointLight('#ffc27a', 0, 6.5, 1.6)
+      l.position.set(x, y, z)
+      l.userData.base = i
+      l.userData.floor = floor
+      this.lamps.push(l)
+      this.scene.add(l)
+    }
+    room(2.4, 1.6, 3.2, 5.5, 0) // 客厅吊灯
+    room(6.5, 2.1, 1.6, 3.5, 0) // 厨房
+    room(2.0, FLOOR_H + 2.0, 2.8, 4.5, 1) // 二楼卧室
+  }
+
+  /** 路灯的灯泡：夜里发光；base > 0 的那两盏还真的照亮地面 */
+  private addBulb(x: number, y: number, z: number, base: number): void {
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), new THREE.MeshBasicMaterial({ color: '#ffe0a3', transparent: true, opacity: 0 }))
+    bulb.position.set(x, y, z)
+    this.bulbs.push(bulb)
+    this.scene.add(bulb)
+    if (base > 0) {
+      const l = new THREE.PointLight('#ffd08a', 0, 11, 1.4)
+      l.position.set(x, y - 0.2, z)
+      l.userData.base = base
+      l.userData.floor = 0
+      this.lamps.push(l)
+      this.scene.add(l)
+    }
+  }
+
+  /** 能点的家具（点了就让选中的人去用） */
+  private collectClickables(): void {
+    this.clickables.length = 0
+    const visit = (o: THREE.Object3D) => {
+      for (const c of o.children) {
+        if (c.userData.piece || c.userData.slug) this.clickables.push(c)
+        else if (c !== this.floor2 && !c.userData.actor) visit(c)
+      }
+    }
+    visit(this.scene)
+    visit(this.floor2)
+  }
+
+  private floorOf(o: THREE.Object3D): Floor {
+    for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === this.floor2) return 1
+    return 0
+  }
+
+  /** 按游戏时间调太阳、天色、雾和灯 */
+  private applySky(): void {
+    const s = skyAt(this.life.clock.hour, this.dayBase)
+    this.sunDir.copy(s.dir)
+    this.sun.color.copy(s.color)
+    this.sun.intensity = this.sunBase * s.light
+    this.hemi.intensity = this.hemiBase * s.ambient
+    this.hemi.color.copy(HEMI_DAY).lerp(HEMI_NIGHT, s.night)
+    this.scene.environmentIntensity = this.envBase * s.ambient
+    if (this.scene.background instanceof THREE.Color) this.scene.background.copy(s.sky)
+    else this.scene.background = s.sky.clone()
+    this.scene.fog?.color.copy(s.fog)
+    const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
+    for (const l of this.lamps) {
+      const off = l.userData.floor === 1 && upstairsHidden
+      l.intensity = off ? 0 : (l.userData.base as number) * s.lamps
+    }
+    for (const b of this.bulbs) (b.material as THREE.MeshBasicMaterial).opacity = s.lamps
   }
 
   // --- 镜头 -------------------------------------------------------------------
 
   private desiredPose(mode: ViewMode): Pose {
-    const h = this.heroine.root.position
+    const h = (mode === 'home' ? this.selected : this.heroine).root.position
     if (mode === 'outside') {
       return { target: new THREE.Vector3(h.x, 0.8, h.z), elev: OUT_VIEW.elev, dist: OUT_VIEW.dist * this.zoom.outside, fov: OUT_VIEW.fov }
     }
@@ -502,7 +544,7 @@ export class World {
       target.z + Math.cos(YAW) * Math.cos(elev) * dist,
     )
     this.camera.lookAt(target)
-    this.sun.position.set(target.x + 9, target.y + 20, target.z + 5)
+    this.sun.position.copy(target).addScaledVector(this.sunDir, 26)
     this.sun.target.position.copy(target)
   }
 
@@ -535,7 +577,7 @@ export class World {
       // 回到家里时，跟在后面的人也一起进门
       const h = this.heroine.pos
       this.actors.filter((a) => a !== this.heroine && !isHome(a.pos.x, a.pos.z, false)).forEach((a, k) => {
-        a.path = this.nav.findPath(a.pos, { x: h.x + (k ? -1 : 1), z: h.z - 1.2 }) ?? a.path
+        this.life.commandWalk(a, { x: h.x + (k ? -1 : 1), z: h.z - 1.2, floor: 0 })
       })
     }
     this.setHud({ mode, selected: this.selected.name, floor: this.viewFloor })
@@ -554,21 +596,47 @@ export class World {
   private loop = (): void => {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
-    const dt = Math.min(this.clock.getDelta(), 0.05)
+    const raw = Math.min(this.clock.getDelta(), 0.25)
+    const dt = Math.min(raw, 0.05)
     this.elapsed += dt
     this.petals?.update(dt, this.elapsed)
     this.river?.update(this.elapsed)
-    this.updateHeroineKeys(dt)
+    // 游戏时间：暂停时人和钟都停，镜头照常能动
+    // 时钟按真实时间走（掉帧时也不变慢），走路按小步算
+    const sim = raw * this.life.speed
+    this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && this.keysMoving))
+    this.updateHeroineKeys(sim)
     this.updateFollowers(dt)
+    const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const a of this.actors) {
-      const walking = a.follow(dt, a === this.heroine ? 3.4 : 3.2) || (a === this.heroine && this.keysMoving)
-      a.animate(dt, walking)
+      let walking = a === this.heroine && this.keysMoving
+      let gliding = false
+      for (let left = sim; left > 1e-6; left -= 0.05) {
+        const step = Math.min(left, 0.05)
+        walking = a.follow(step, WALK_SPEED) || walking
+        gliding = a.updateSettle(step) || gliding
+      }
+      a.animate(Math.min(sim, 0.1), walking || gliding)
+      // 只看一楼时，二楼的人藏起来（楼板也藏起来了，不然像飘在空中）
+      a.root.visible = !(upstairsHidden && a.root.position.y > FLOOR_H - 0.4)
+      if (a.floorChanged) {
+        a.floorChanged = false
+        if (a === this.selected && this.mode === 'home') this.setViewFloor(a.floor)
+      }
     }
     this.setMode(isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
     this.updateCamera(dt)
     this.updateCutaway()
-    this.ring.position.set(this.selected.root.position.x, 0.03, this.selected.root.position.z)
-    this.ring.visible = this.mode === 'home' && this.viewFloor === 0
+    this.applySky()
+    const sp = this.selected.root.position
+    this.ring.position.set(sp.x, sp.y + 0.03, sp.z)
+    this.ring.visible = this.mode === 'home' && this.selected.root.visible && this.selected.pose !== 'sleep'
+    this.hudTimer -= dt
+    if (this.hudTimer <= 0) {
+      this.hudTimer = 0.25
+      this.pushLifeHud()
+    }
+    if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) this.setHud({ toast: '' })
     if (this.marker.visible) {
       const m = this.marker.material as THREE.MeshBasicMaterial
       m.opacity -= dt * 1.5
@@ -591,12 +659,15 @@ export class World {
     const fwd = new THREE.Vector2(-Math.sin(YAW), -Math.cos(YAW))
     const right = new THREE.Vector2(Math.cos(YAW), -Math.sin(YAW))
     const dir = fwd.multiplyScalar(-fz).add(right.multiplyScalar(fx)).normalize()
-    const step = 3.4 * dt
+    const step = WALK_SPEED * 1.15 * dt
     const a = this.heroine
-    a.path = []
+    // 坐着/躺着/正在干活时按方向键：先站起来
+    if (a.task || a.anchor || a.path.length) this.life.cancel(a)
+    a.hold = 0.6
+    const nav = this.navs[a.floor]
     const p = a.root.position
     const free = (x: number, z: number) =>
-      [[0.18, 0], [-0.18, 0], [0, 0.18], [0, -0.18]].every(([ox, oz]) => !this.nav.isBlockedAt(x + ox, z + oz))
+      [[0.18, 0], [-0.18, 0], [0, 0.18], [0, -0.18]].every(([ox, oz]) => !nav.isBlockedAt(x + ox, z + oz))
     const nx = p.x + dir.x * step
     const nz = p.z + dir.y * step
     if (free(nx, nz)) { p.x = nx; p.z = nz } else if (free(nx, p.z)) p.x = nx
@@ -611,11 +682,12 @@ export class World {
     this.followTimer = 0.4
     const h = this.heroine.root
     const back = new THREE.Vector2(-Math.sin(h.rotation.y), -Math.cos(h.rotation.y))
-    this.actors.filter((a) => a !== this.heroine).forEach((a, k) => {
+    // 睡着的人不跟出去
+    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep').forEach((a, k) => {
       const side = k === 0 ? 1 : -1
-      const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8 }
+      const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8, floor: 0 as const }
       const d = Math.hypot(a.pos.x - h.position.x, a.pos.z - h.position.z)
-      if (d > 2.2) a.path = this.nav.findPath(a.pos, spot) ?? a.path
+      if (d > 2.2 || a.floor !== 0) this.life.commandWalk(a, spot)
     })
   }
 
@@ -682,30 +754,99 @@ export class World {
     const rect = this.renderer.domElement.getBoundingClientRect()
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, this.camera)
+    const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
     if (this.mode === 'home') {
-      const hits = this.raycaster.intersectObjects(this.actors.map((a) => a.root), true)
+      const hits = this.raycaster.intersectObjects(this.actors.filter((a) => a.root.visible).map((a) => a.root), true)
       if (hits.length) {
         let o: THREE.Object3D | null = hits[0].object
         while (o && !o.userData.actor) o = o.parent
         if (o) {
-          this.selected = o.userData.actor as Actor
-          this.setHud({ selected: this.selected.name })
+          this.select(o.userData.actor as Actor)
           return
         }
       }
-      if (this.viewFloor === 1) return
+      // 点家具：让选中的人去用（坐沙发、做饭、睡觉…）
+      const spot = this.spotUnder(floor)
+      if (spot) {
+        if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
+        else this.toast('world.toast.busy')
+        return
+      }
     }
     const p = new THREE.Vector3()
-    if (!this.raycaster.ray.intersectPlane(this.ground, p)) return
+    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -floor * FLOOR_H), p)) return
     const who = this.mode === 'home' ? this.selected : this.heroine
-    const path = this.nav.findPath(who.pos, { x: p.x, z: p.z })
+    const path = this.life.commandWalk(who, { x: p.x, z: p.z, floor })
     if (!path) return
-    who.path = path
-    const end = path[path.length - 1] ?? who.pos
-    this.marker.position.set(end.x, 0.04, end.z)
+    const end = path[path.length - 1] ?? { ...who.pos, y: who.root.position.y }
+    this.flashMarker(end.x, floor * FLOOR_H, end.z)
+  }
+
+  private spotUnder(floor: Floor): Spot | null {
+    const hits = this.raycaster.intersectObjects(this.clickables, true)
+    for (const h of hits) {
+      let root: THREE.Object3D | null = h.object
+      while (root && !this.clickables.includes(root)) root = root.parent
+      if (!root || this.floorOf(root) !== floor) continue
+      let shown = true
+      for (let q: THREE.Object3D | null = root; q; q = q.parent) if (!q.visible) shown = false
+      if (!shown) continue
+      const at = root.getWorldPosition(new THREE.Vector3())
+      let best: Spot | null = null
+      let bestD = 1.4
+      for (const s of this.life.allSpots) {
+        if (s.floor !== floor || s.kind === 'stroll') continue
+        const d = Math.hypot(s.x - at.x, s.z - at.z)
+        if (d < bestD) { bestD = d; best = s }
+      }
+      return best
+    }
+    return null
+  }
+
+  private flashMarker(x: number, y: number, z: number): void {
+    this.marker.position.set(x, y + 0.04, z)
     this.marker.scale.setScalar(1)
     ;(this.marker.material as THREE.MeshBasicMaterial).opacity = 1
     this.marker.visible = true
+  }
+
+  private toast(key: 'world.toast.busy'): void {
+    this.toastTimer = 2
+    this.setHud({ toast: key })
+  }
+
+  // --- 给界面用 ---------------------------------------------------------------
+
+  select(a: Actor | string): void {
+    const actor = typeof a === 'string' ? this.actors.find((x) => x.name === a) : a
+    if (!actor) return
+    if (this.mode === 'outside' && actor !== this.heroine) return
+    this.selected = actor
+    if (this.mode === 'home') this.setViewFloor(actor.root.position.y > FLOOR_H - 0.4 ? 1 : 0)
+    this.setHud({ selected: actor.name })
+  }
+
+  setSpeed(n: number): void {
+    this.life.speed = n
+    this.pushLifeHud()
+  }
+
+  get speed(): number {
+    return this.life.speed
+  }
+
+  private pushLifeHud(): void {
+    const c = this.life.clock
+    this.setHud({
+      time: calendarLabel(c),
+      night: isNight(c.hour),
+      crisis: isCrisisNight(c),
+      speed: this.life.speed,
+      food: this.life.stock.food,
+      water: this.life.stock.water,
+      people: this.life.hud(),
+    })
   }
 
   // --- 杂项 -------------------------------------------------------------------
