@@ -22,7 +22,7 @@ export default defineConfig({
         lang: 'zh-CN',
         icons: [{ src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' }],
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2,glb}'] },
     }),
   ],
   test: { environment: 'node', include: ['src/**/*.test.ts'] },
