@@ -9,6 +9,7 @@ import {
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { clothesline, decorateHouse, parchmentMap } from './decor'
 import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
@@ -35,6 +36,8 @@ import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
 export interface Hud {
+  /** 左下角人物卡的头像（名字 → 图片 data URL） */
+  portraits: Record<string, string>
   loading: boolean
   mode: ViewMode
   floor: Floor
@@ -137,6 +140,19 @@ const DROP = {
 
 /** 谢临：衣服换成黑色（复制一次材质就缓存起来，不影响别人，也不会每次来都复制） */
 const darkCopies = new WeakMap<THREE.Material, THREE.Material>()
+/** 点家具弹出的菜单 */
+export interface FurnitureMenu { x: number; y: number; title: string; who: string; options: { label: UiKey; spot: Spot }[] }
+
+/** 家具在菜单标题上叫什么 */
+const FURNITURE_NAMES: [RegExp, string][] = [
+  [/sofa/i, '沙发'], [/bed/i, '床'], [/stove|counter/i, '灶台'], [/kettle|fridge/i, '水壶'], [/cabinet/i, '柜子'],
+  [/rocking/i, '摇椅'], [/bench/i, '长椅'], [/chair/i, '椅子'], [/table/i, '桌子'], [/crate/i, '储物箱'],
+]
+function furnitureName(o: THREE.Object3D): string {
+  const id = String(o.userData.slug ?? o.userData.piece ?? '')
+  return FURNITURE_NAMES.find(([re]) => re.test(id))?.[1] ?? '家具'
+}
+
 function darkCoat(model: THREE.Object3D): void {
   model.traverse((o) => {
     const m = o as THREE.Mesh
@@ -155,12 +171,13 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
+  portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
   food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
@@ -621,6 +638,8 @@ export class World {
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
       this.hingeGate(gates)
       this.setHud({ loading: false, intro: this.introT >= 0 })
+      // 人物模型好了就给人物卡拍头像（不等第一帧）
+      this.setHud({ portraits: this.portraits() })
       // 丧尸、访客、住进来的人的模型不挡开场：别墅出来以后在后台加载，好了再预热着色器
       void this.siegeView.loadModels(this.toonPeople).then(() => this.afterExtraModels(), () => this.afterExtraModels())
     } catch (e) {
@@ -1253,7 +1272,7 @@ export class World {
   private desiredPose(mode: ViewMode): Pose {
     const h = (mode === 'home' ? this.selected : this.heroine).root.position
     if (mode === 'outside') {
-      return { target: new THREE.Vector3(h.x, 0.8, h.z), elev: OUT_VIEW.elev, dist: OUT_VIEW.dist * this.zoom.outside, fov: OUT_VIEW.fov }
+      return { target: new THREE.Vector3(h.x, 0.8, h.z).add(this.pan), elev: OUT_VIEW.elev, dist: OUT_VIEW.dist * this.zoom.outside, fov: OUT_VIEW.fov }
     }
     const baseY = this.viewFloor === 1 ? FLOOR_H + 0.8 : 0.8
     const t = new THREE.Vector3(HOUSE_CENTER.x, baseY, HOUSE_CENTER.z)
@@ -1418,8 +1437,7 @@ export class World {
     // 打起来了还在车上：先下车
     if (this.driving && (fighting || this.life.onTrip(this.heroine))) this.exitVan(true)
     if (this.driving) this.updateDriving(Math.min(sim, dt * 1.5))
-    else if (!busy) this.updateHeroineKeys(sim)
-    else this.keysMoving = false
+    else { this.keysMoving = false; this.updateCameraKeys(dt) }
     if (!busy && !this.driving) this.updateFollowers(dt)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
@@ -1754,36 +1772,20 @@ export class World {
     this.renderer.render(this.scene, this.camera)
   }
 
-  private updateHeroineKeys(dt: number): void {
+  /** WASD / 方向键：平移镜头（人都用鼠标点着走） */
+  private updateCameraKeys(dt: number): void {
     let fx = 0
     let fz = 0
     if (this.keys.has('w') || this.keys.has('arrowup')) fz -= 1
     if (this.keys.has('s') || this.keys.has('arrowdown')) fz += 1
     if (this.keys.has('a') || this.keys.has('arrowleft')) fx -= 1
     if (this.keys.has('d') || this.keys.has('arrowright')) fx += 1
-    this.keysMoving = fx !== 0 || fz !== 0
-    if (!this.keysMoving) return
-    // 屏幕上的"上"是远离镜头的方向
-    const fwd = new THREE.Vector2(-Math.sin(YAW), -Math.cos(YAW))
-    const right = new THREE.Vector2(Math.cos(YAW), -Math.sin(YAW))
-    const dir = fwd.multiplyScalar(-fz).add(right.multiplyScalar(fx)).normalize()
-    const step = WALK_SPEED * 1.15 * dt
-    const a = this.heroine
-    this.life.cancelSearch()
-    this.life.stopFishing()
-    // 坐着/躺着/正在干活时按方向键：先站起来
-    if (a.task || a.anchor || a.path.length) this.life.cancel(a)
-    a.hold = 0.6
-    const nav = this.navs[a.floor]
-    const p = a.root.position
-    const free = (x: number, z: number) =>
-      [[0.18, 0], [-0.18, 0], [0, 0.18], [0, -0.18]].every(([ox, oz]) => !nav.isBlockedAt(x + ox, z + oz))
-    const nx = p.x + dir.x * step
-    const nz = p.z + dir.y * step
-    if (free(nx, nz)) { p.x = nx; p.z = nz } else if (free(nx, p.z)) p.x = nx
-    else if (free(p.x, nz)) p.z = nz
-    a.face(dir.x, dir.y, dt)
-    if (this.mode === 'home') this.selected = a
+    if (!fx && !fz) return
+    const fwd = new THREE.Vector3(-Math.sin(YAW), 0, -Math.cos(YAW))
+    const right = new THREE.Vector3(Math.cos(YAW), 0, -Math.sin(YAW))
+    const speed = 7 * (this.mode === 'home' ? this.zoom.home : this.zoom.outside)
+    this.pan.addScaledVector(fwd, -fz * speed * dt).addScaledVector(right, fx * speed * dt)
+    this.pan.clampLength(0, this.mode === 'home' ? 10 : 14)
   }
 
   private updateFollowers(dt: number): void {
@@ -1820,7 +1822,7 @@ export class World {
     }) as EventListener)
     this.on(el, 'pointermove', ((e: PointerEvent) => {
       const prev = this.pointers.get(e.pointerId)
-      if (!prev) return
+      if (!prev) { this.hover(e.clientX, e.clientY); return }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (this.pointers.size === 2) {
         const spread = this.pointerSpread()
@@ -1844,7 +1846,6 @@ export class World {
       if (this.life.over) return
       const k = e.key.toLowerCase()
       if (k === 'e' && !e.repeat) this.searchHere()
-      if (k === 'f' && !e.repeat) this.toggleDrive()
       this.keys.add(k)
     }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
@@ -2012,15 +2013,17 @@ export class World {
         this.toast('world.toast.fighting')
         return
       }
+      // 点院门或者面包车：出门（打开地图，选地方、选人、要不要开车）
+      if (this.van.parts.root.visible && this.raycaster.intersectObject(this.van.parts.root, true).length) { this.onMap?.(); return }
       // 书桌上的红本子：打开重生日记
       const hit = this.furnitureUnder(floor)
       if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
       if (hit && hit.userData.piece === 'wall_map') { this.onMap?.(); return }
-      // 点家具：让选中的人去用（坐沙发、做饭、睡觉…）
-      const spot = hit && this.spotNear(hit, floor)
-      if (spot) {
-        if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
-        else this.toast('world.toast.busy')
+      if (hit && (hit.userData.slug === 'large_iron_gate' || hit.userData.gate)) { this.onMap?.(); return }
+      // 点家具：弹出一个小菜单（坐着歇会儿 / 做饭吃 / 喝口水 / 睡一觉…），选了以后让选中的人去
+      const options = hit ? this.furnitureOptions(hit, floor) : []
+      if (hit && options.length) {
+        this.onFurnitureMenu?.({ x: cx, y: cy, title: furnitureName(hit), who: this.selected.name, options: options.map((o) => ({ label: o.label, spot: o.spot })) })
         return
       }
     }
@@ -2032,6 +2035,23 @@ export class World {
     if (!path) return
     const end = path[path.length - 1] ?? { ...who.pos, y: who.root.position.y }
     this.flashMarker(end.x, floor * FLOOR_H, end.z)
+  }
+
+  /** 鼠标停在能点的东西上（人、家具、面包车、猫）：变成小手 */
+  private hoverT = 0
+  private hover(cx: number, cy: number): void {
+    const now = performance.now()
+    if (now - this.hoverT < 80) return
+    this.hoverT = now
+    const el = this.renderer.domElement
+    const rect = el.getBoundingClientRect()
+    this.raycaster.setFromCamera(new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1), this.camera)
+    const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
+    const people = this.actors.filter((a) => a.root.visible).map((a) => a.root)
+    const over = this.raycaster.intersectObjects(people, true).length > 0
+      || (!!this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length > 0)
+      || (this.mode === 'home' && (this.raycaster.intersectObject(this.van.parts.root, true).length > 0 || !!this.furnitureUnder(floor)))
+    el.style.cursor = over ? 'pointer' : ''
   }
 
   /** 打丧尸时点了地上的守位圈（哪怕上面站着人）：把选中的人换过去 */
@@ -2062,17 +2082,34 @@ export class World {
     return null
   }
 
-  /** 家具旁边能用的位置 */
-  private spotNear(root: THREE.Object3D, floor: Floor): Spot | null {
-    const at = root.getWorldPosition(new THREE.Vector3())
-    let best: Spot | null = null
-    let bestD = 1.4
+  /** 点家具弹出的菜单：这件家具旁边能干的事（每种挑一个空着的位置） */
+  onFurnitureMenu: ((menu: FurnitureMenu | null) => void) | null = null
+
+  private furnitureOptions(root: THREE.Object3D, floor: Floor): { label: UiKey; spot: Spot }[] {
+    const box = new THREE.Box3().setFromObject(root)
+    const c = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const reach = Math.max(1.0, Math.max(size.x, size.z) / 2 + 0.7)
+    const best = new Map<Spot['kind'], { spot: Spot; d: number; free: boolean }>()
     for (const s of this.life.allSpots) {
       if (s.floor !== floor || s.kind === 'stroll') continue
-      const d = Math.hypot(s.x - at.x, s.z - at.z)
-      if (d < bestD) { bestD = d; best = s }
+      const d = Math.hypot(s.x - c.x, s.z - c.z)
+      if (d > reach) continue
+      const who = this.life.whoUses(s)
+      const free = !who || who === this.selected
+      const cur = best.get(s.kind)
+      if (!cur || (free && !cur.free) || (free === cur.free && d < cur.d)) best.set(s.kind, { spot: s, d, free })
     }
-    return best
+    const order: Spot['kind'][] = ['cook', 'drink', 'dine', 'relax', 'sleep']
+    return order.filter((k) => best.has(k)).map((k) => ({ label: `world.use.${k}` as UiKey, spot: best.get(k)!.spot }))
+  }
+
+  /** 菜单里选了一项：让选中的人去用 */
+  useFurniture(spot: Spot): void {
+    this.onFurnitureMenu?.(null)
+    if (this.life.siege && !this.life.siege.done) return
+    if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
+    else this.toast(this.life.whoUses(spot) ? 'world.toast.taken' : 'world.toast.busy')
   }
 
   /** 界面设置：点了日记本 / 墙上的地图 */
@@ -2347,8 +2384,69 @@ export class World {
     return this.life.speed
   }
 
+  /** 头像缓存：每个人拍一次 */
+  private portraitCache = new Map<Actor, string>()
+
+  /** 给人物卡拍头像：把这个人的模型复制一份放进小摄影棚（暖色侧光、深色背景），摆站姿，拍胸像 */
+  private portraitOf(a: Actor): string | null {
+    if (!a.driver) return null
+    const model = cloneSkinned(a.mesh)
+    model.position.set(0, 0, 0)
+    model.rotation.set(0, -0.3, 0)
+    model.scale.copy(a.mesh.scale)
+    const studio = new THREE.Scene()
+    studio.background = new THREE.Color('#3a332c')
+    const key = new THREE.DirectionalLight('#ffe4c4', 2.6)
+    key.position.set(-1.4, 2.4, 2.2)
+    const rim = new THREE.DirectionalLight('#a9c4e0', 1.2)
+    rim.position.set(1.8, 1.6, -1.5)
+    studio.add(key, rim, new THREE.HemisphereLight('#b8c4cc', '#2a221a', 0.9), model)
+    new PoseDriverFor(model).update(0, 'idle')
+    model.updateMatrixWorld(true)
+    const head = new THREE.Vector3(0, 1.45, 0)
+    model.traverse((o) => { if ((o as THREE.Bone).isBone && /Head$/.test(o.name.replace(/[^A-Za-z]/g, ''))) o.getWorldPosition(head) })
+    const cam = new THREE.PerspectiveCamera(26, 0.75, 0.05, 30)
+    cam.position.set(head.x + 0.25, head.y + 0.02, head.z + 1.75)
+    cam.lookAt(head.x, head.y - 0.2, head.z)
+    const W = 240
+    const H = 320
+    const rt = new THREE.WebGLRenderTarget(W, H)
+    rt.texture.colorSpace = THREE.SRGBColorSpace
+    const prev = this.renderer.getRenderTarget()
+    this.renderer.setRenderTarget(rt)
+    this.renderer.render(studio, cam)
+    this.renderer.setRenderTarget(prev)
+    const px = new Uint8Array(W * H * 4)
+    this.renderer.readRenderTargetPixels(rt, 0, 0, W, H, px)
+    rt.dispose()
+    const c = document.createElement('canvas')
+    c.width = W
+    c.height = H
+    const g = c.getContext('2d')!
+    const img = g.createImageData(W, H)
+    for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4)
+    g.putImageData(img, 0, 0)
+    return c.toDataURL('image/jpeg', 0.86)
+  }
+
+  private portraits(): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const a of this.actors) {
+      let p = this.portraitCache.get(a)
+      if (!p) {
+        try { p = this.portraitOf(a) ?? undefined } catch (e) { console.warn('portrait', e) }
+        if (p) this.portraitCache.set(a, p)
+      }
+      if (p) out[a.name] = p
+    }
+    return out
+  }
+
   private pushLifeHud(): void {
     const c = this.life.clock
+    // 新来的人（住进来的、换了模型的）补拍头像；只在有人还没头像时才更新这一项
+    const needShot = this.actors.some((a) => a.driver && !this.portraitCache.has(a))
+    if (needShot && !this.hud.loading) this.setHud({ portraits: this.portraits() })
     this.setHud({
       time: calendarLabel(c),
       life: currentLife(),

@@ -118,6 +118,11 @@ export class Actor extends Walker {
     return this.settle !== null
   }
 
+  /** 现在用的人物模型（拍头像用） */
+  get mesh(): THREE.Object3D {
+    return this.inner
+  }
+
   /** 换成真人模型（世外桃源画风） */
   setModel(model: THREE.Object3D): void {
     this.root.remove(this.inner)
@@ -376,6 +381,11 @@ export class Household {
   private rand(): number {
     this.seed = (this.seed * 1664525 + 1013904223) >>> 0
     return this.seed / 4294967296
+  }
+
+  /** 这个位置现在谁在用（或者正走过去） */
+  whoUses(spot: Spot): Actor | undefined {
+    return this.taken.get(spot)
   }
 
   get allSpots(): readonly Spot[] {

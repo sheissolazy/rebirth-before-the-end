@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { lt, t, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
-import { EMPTY_HUD, World, type Hud } from './World'
+import { EMPTY_HUD, World, type FurnitureMenu, type Hud } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
-import { DEPRESSED, calendarLabel, type NeedKey } from './life'
+import { DEPRESSED, calendarLabel } from './life'
 import type { PersonHud } from './residents'
 import { DiaryPanel } from './DiaryPanel'
 import { MapPanel, type MapMember } from './MapPanel'
@@ -12,56 +12,111 @@ import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
 import { peopleStyle } from './people'
 
-const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
-const WELCOME_KEY = 'rbte-proto-welcome-v6'
+const WELCOME_KEY = 'rbte-proto-welcome-v7'
 const WELCOME_ITEMS = ['world.welcome.today', 'world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
 
-function barColor(v: number): string {
-  if (v < 25) return 'bg-red-500'
-  if (v < 50) return 'bg-amber-400'
-  return 'bg-emerald-500'
+
+/** 纸面颗粒感（像《这是我的战争》的炭笔画）：一张很小的 SVG 噪点图，叠在头像上 */
+const GRAIN = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>")`
+const SERIF = '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif'
+
+/** 状态词（像《这是我的战争》卡片上的"很饿""累了""受伤"）：只列不好的 */
+function statusWords(p: PersonHud): string[] {
+  const out: string[] = []
+  const n = p.needs
+  if (p.health < 30) out.push(t('world.st.badlyHurt'))
+  else if (p.health < 70) out.push(t('world.st.hurt'))
+  if (n.hunger < 20) out.push(t('world.st.starving'))
+  else if (n.hunger < 40) out.push(t('world.st.hungry'))
+  if (n.thirst < 20) out.push(t('world.st.parched'))
+  else if (n.thirst < 40) out.push(t('world.st.thirsty'))
+  if (n.energy < 15) out.push(t('world.st.exhausted'))
+  else if (n.energy < 30) out.push(t('world.st.tired'))
+  if (n.mood < DEPRESSED) out.push(t('world.st.depressed'))
+  else if (n.mood < 40) out.push(t('world.st.sad'))
+  return out
 }
 
-function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean; onClick: () => void }) {
+function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait?: string; selected: boolean; onClick: () => void }) {
   const doing = p.gone ? t(`world.do.${p.gone}` as UiKey) : p.trip
     ? t('world.away', { where: lt(locations.find((l) => l.id === p.trip!.id)?.name ?? { zh: '' }), h: p.trip.left.toFixed(1) })
     : t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
+  const words = p.gone ? [] : statusWords(p)
+  const bars: [string, number, string][] = [
+    ['🍚', p.needs.hunger, '#d9a441'], ['💧', p.needs.thirst, '#6fa8c8'], ['☾', p.needs.energy, '#a99ad6'], ['♥', p.needs.mood, '#d4787a'],
+  ]
   return (
     <button onClick={onClick}
-      className={`w-36 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
-      <div className="flex items-baseline justify-between gap-1">
-        <span className="whitespace-nowrap text-sm font-semibold">{p.name}</span>
-        {p.trait && <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-800">{p.trait}</span>}
-        {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
+      className={`relative h-[12.5rem] w-[9.25rem] shrink-0 overflow-hidden rounded-md text-left shadow-[0_8px_22px_rgba(0,0,0,0.5)] transition duration-200
+        ${selected ? '-translate-y-1.5 ring-2 ring-[#e8c98a]' : 'ring-1 ring-black/50 hover:-translate-y-0.5'} ${p.gone ? 'grayscale' : ''}`}>
+      {/* 头像：去色、偏旧照片的暖灰，加颗粒和暗角 */}
+      <div className="absolute inset-0 bg-[#2e2924]" />
+      {portrait && <img src={portrait} alt="" className="absolute inset-0 h-full w-full object-cover"
+        style={{ filter: `grayscale(${p.gone ? 1 : 0.72}) sepia(0.28) contrast(1.18) brightness(${p.gone ? 0.6 : 0.95})` }} />}
+      <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.5 }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(130% 95% at 50% 28%, transparent 38%, rgba(10,8,6,0.7))' }} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-[#0e0b09] via-[#0e0b09]/80 to-transparent" />
+      {/* 左上：特质、楼上 */}
+      <div className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
+        {p.trait && <span className="rounded-sm bg-[#e8c98a]/90 px-1 text-[10px] font-medium text-[#2b2117]">{p.trait}</span>}
+        {p.floor === 1 && !p.trip && !p.gone && <span className="rounded-sm bg-black/45 px-1 text-[10px] text-[#efe4d0]">{t('world.upstairs')}</span>}
       </div>
-      <div className="truncate text-[11px] text-zinc-500" title={doing}>{doing}</div>
-      {p.gone !== 'dead' && <div className="mt-1.5 grid grid-cols-[2rem_1fr] items-center gap-x-1.5 gap-y-1">
-        {p.health < 100 && (
-          <div className="contents">
-            <span className="text-[11px] font-medium text-red-700">{t('world.need.health')}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
-              <div className="h-full rounded-full bg-red-600" style={{ width: `${Math.round(p.health)}%` }} />
-            </div>
+      {/* 底部：名字、在干什么、状态词、四条细条 */}
+      <div className="absolute inset-x-0 bottom-0 px-2 pb-1.5">
+        <div className="text-[17px] font-bold leading-tight tracking-[0.06em] text-[#f4ecdc] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ fontFamily: SERIF }}>{p.name}</div>
+        <div className="mt-0.5 truncate text-[11px] text-[#d9ccb4]" title={doing}>{doing}</div>
+        {p.doing === 'down' && !p.gone && <div className="mt-0.5 text-[11px] font-semibold text-[#ff8f7a]">{t('world.rescueHint')}</div>}
+        <div className="mt-0.5 min-h-[15px] truncate text-[11px] font-semibold tracking-wide text-[#ec8a72]" style={{ fontFamily: SERIF }}>
+          {words.join(' · ')}
+        </div>
+        {p.gone !== 'dead' && (
+          <div className="mt-1 grid grid-cols-4 gap-1">
+            {bars.map(([icon, v, color]) => (
+              <div key={icon} className="flex items-center gap-0.5" title={String(Math.round(v))}>
+                <span className="w-2.5 text-center text-[9px] leading-none text-[#e9dfcc]/80">{icon}</span>
+                <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/15">
+                  <div className="h-full rounded-full" style={{ width: `${Math.round(v)}%`, background: v < 25 ? '#e2553f' : color }} />
+                </div>
+              </div>
+            ))}
           </div>
         )}
-        {NEEDS.map((k) => (
-          <div key={k} className="contents">
-            <span className="text-[11px] text-zinc-600">{t(`world.need.${k}` as UiKey)}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
-              <div className={`h-full rounded-full ${barColor(p.needs[k])}`} style={{ width: `${Math.round(p.needs[k])}%` }} />
-            </div>
+        {p.health < 100 && p.gone !== 'dead' && (
+          <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-white/15">
+            <div className="h-full rounded-full bg-[#c9473a]" style={{ width: `${Math.round(p.health)}%` }} />
           </div>
-        ))}
-      </div>}
-      {p.doing === 'down' && !p.gone && (
-        <div className="mt-1 text-[11px] font-semibold text-red-700">{t('world.rescueHint')}</div>
-      )}
-      {p.needs.mood < DEPRESSED && !p.gone && (
-        <div className="mt-1 text-[11px] font-medium text-red-600">{t('world.depressed')}</div>
-      )}
+        )}
+      </div>
     </button>
+  )
+}
+
+/** 点家具弹出的小菜单（同一套深色纸面风格） */
+function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onPick: (s: FurnitureMenu['options'][number]['spot']) => void; onClose: () => void }) {
+  const left = Math.min(menu.x + 12, window.innerWidth - 200)
+  const top = Math.min(menu.y - 10, window.innerHeight - 60 - menu.options.length * 34)
+  return (
+    <div className="fixed inset-0 z-30" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose() }}>
+      <div className="absolute w-44 overflow-hidden rounded-md bg-[#1b1714]/95 shadow-[0_10px_30px_rgba(0,0,0,0.55)] ring-1 ring-[#e8c98a]/40"
+        style={{ left, top }} onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.35 }} />
+        <div className="relative border-b border-[#e8c98a]/20 px-3 pb-1.5 pt-2">
+          <div className="text-[15px] font-bold tracking-[0.08em] text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{menu.title}</div>
+          <div className="text-[11px] text-[#c9bba2]">{t('world.use.who', { name: menu.who })}</div>
+        </div>
+        <div className="relative py-1">
+          {menu.options.map((o) => (
+            <button key={o.label} onClick={() => onPick(o.spot)}
+              className="block w-full px-3 py-1.5 text-left text-[13px] text-[#efe4d0] transition hover:bg-[#e8c98a]/15">
+              {t(o.label)}
+            </button>
+          ))}
+          <button onClick={onClose} className="block w-full px-3 py-1 text-left text-[12px] text-[#a99d88] hover:bg-white/5">{t('world.use.cancel')}</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -73,6 +128,7 @@ export default function WorldView() {
   const [diary, setDiaryState] = useState(false)
   const [map, setMapState] = useState(false)
   const [spaceOpen, setSpaceOpen] = useState(false)
+  const [furn, setFurn] = useState<FurnitureMenu | null>(null)
   const [welcome, setWelcome] = useState(() => {
     try { return localStorage.getItem(WELCOME_KEY) !== '1' } catch { return true }
   })
@@ -125,6 +181,7 @@ export default function WorldView() {
       else if (keptSpeed.current !== null) w.setSpeed(keptSpeed.current)
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
+      w.onFurnitureMenu = (m) => setFurn(m)
       world.current = w
     } catch (e) {
       // 不支持 WebGL 等情况：下一拍再显示错误
@@ -338,7 +395,7 @@ export default function WorldView() {
 
       <div className="absolute bottom-3 left-3 flex gap-2">
         {hud.people.map((p) => (
-          <PersonCard key={p.name} p={p} selected={p.name === hud.selected} onClick={() => world.current?.select(p.name)} />
+          <PersonCard key={p.name} p={p} portrait={hud.portraits[p.name]} selected={p.name === hud.selected} onClick={() => world.current?.select(p.name)} />
         ))}
       </div>
 
@@ -564,6 +621,8 @@ export default function WorldView() {
           onGo={(id, names, van) => { if (world.current?.startTrip(id, names, van)) setMap(false) }}
           onClose={() => setMap(false)} />
       )}
+
+      {furn && <FurnitureMenuView menu={furn} onPick={(spot) => world.current?.useFurniture(spot)} onClose={() => setFurn(null)} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />
