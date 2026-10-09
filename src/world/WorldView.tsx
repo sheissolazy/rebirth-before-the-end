@@ -11,16 +11,18 @@ import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
 import { peopleStyle } from './people'
+import { BTN_GOLD, BTN_RED, CHIP, GRAIN, Grain, PANEL, SERIF } from './ui'
 
-const WELCOME_KEY = 'rbte-proto-welcome-v7'
-const WELCOME_ITEMS = ['world.welcome.today', 'world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
+const WELCOME_KEY = 'rbte-proto-welcome-v8'
+const WELCOME_ITEMS = ['life', 'night', 'map', 'feel'] as const
+const WELCOME_KEYS = ['click', 'wasd', 'wheel', 'space', 'speed', 'map', 'diary', 'act'] as const
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
+/** 左上角"建设"小按钮 */
+const BUILD = 'rounded-sm bg-white/5 px-2 py-0.5 text-left text-[11px] text-[#efe4d0] ring-1 ring-[#e8c98a]/30 transition hover:bg-white/15 disabled:opacity-40'
+const DBG = `${CHIP} px-3 py-1.5 text-left`
+const FACE_MASK = 'radial-gradient(ellipse 90% 80% at 75% 30%, black 35%, transparent 75%)'
 
-
-/** 纸面颗粒感（像《这是我的战争》的炭笔画）：一张很小的 SVG 噪点图，叠在头像上 */
-const GRAIN = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>")`
-const SERIF = '"Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif'
 
 /** 状态词（像《这是我的战争》卡片上的"很饿""累了""受伤"）：只列不好的 */
 function statusWords(p: PersonHud): string[] {
@@ -249,105 +251,109 @@ export default function WorldView() {
 
   const home = hud.mode === 'home'
   return (
-    <div className="fixed inset-0 select-none overflow-hidden bg-sky-200 text-zinc-900">
+    <div className="fixed inset-0 select-none overflow-hidden bg-[#15110e] text-zinc-900">
       <div ref={host} className="absolute inset-0" />
 
       {/* 片头放的时候把界面藏起来 */}
       <div className={hud.intro ? 'pointer-events-none opacity-0' : 'transition-opacity duration-1000'}>
       <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-        <div className={`rounded-2xl px-4 py-2 shadow ${hud.night ? 'bg-zinc-900/80 text-white' : 'bg-white/90'}`}>
-          <div className="flex items-center gap-2 text-base font-semibold tabular-nums">
+        <div className={`${PANEL} px-4 py-2.5`}>
+          <Grain />
+          <div className="relative flex items-center gap-2 text-[17px] font-bold tabular-nums tracking-wide" style={{ fontFamily: SERIF }}>
             <span>{hud.rain > 0.05 ? '🌧️' : hud.night ? '🌙' : '☀️'}</span>
             <span>{hud.time}</span>
             {hud.hard && <span className="rounded bg-red-700 px-1 text-[10px] font-bold text-white">{t('world.hardTag')}</span>}
           </div>
-          <div className="mt-1.5 flex items-center gap-1">
+          <div className="relative mt-1.5 flex items-center gap-1">
             {SPEEDS.map((n) => (
               <button key={n} title={t(`world.speed.${n}` as UiKey)} onClick={() => changeSpeed(n)}
-                className={`rounded-md px-2 py-0.5 text-xs font-medium ${hud.speed === n ? 'bg-amber-400 text-zinc-900' : hud.night ? 'bg-white/15' : 'bg-zinc-100'}`}>
+                className={`rounded-sm px-2 py-0.5 text-xs font-medium transition ${hud.speed === n ? 'bg-[#e8c98a] text-[#1d1915]' : 'bg-white/10 text-[#efe4d0] hover:bg-white/20'}`}>
                 {SPEED_ICON[n]}
               </button>
             ))}
           </div>
-          <div className={`mt-1.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+          <div className="relative mt-2 text-xs text-[#d9ccb4]">
             🍚💧 {t('world.stock', { food: hud.food.toFixed(1), water: hud.water.toFixed(1) })}
           </div>
-          <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+          <div className="relative mt-0.5 text-xs text-[#d9ccb4]">
             🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })} · ⛽ {t('world.fuel', { n: hud.fuel })}
           </div>
-          <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+          <div className="relative mt-0.5 text-xs text-[#d9ccb4]">
             💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}
           </div>
-          <div className="mt-1.5 flex gap-1.5">
+          <div className="relative mt-2 flex gap-1.5">
             <button onClick={() => setDiary(true)}
-              className="rounded-md bg-red-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-red-700">
+              className="rounded-sm bg-[#7c2d24] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#93372c]">
               {t('world.diary.open')}
             </button>
             <button onClick={() => setMap(true)}
-              className="rounded-md bg-emerald-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-emerald-700">
+              className="rounded-sm bg-[#2f5a3e] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#386b4a]">
               {t('world.map.open')}
             </button>
             <button onClick={() => setSpaceOpen((o) => !o)}
-              className="rounded-md bg-indigo-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-indigo-600">
+              className="rounded-sm bg-[#3b3f73] px-2 py-0.5 text-xs font-medium text-[#f4ecdc] ring-1 ring-white/10 hover:bg-[#474c88]">
               {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
             </button>
           </div>
-          {hud.trap > 0 ? (
-            <div className="mt-1.5 w-fit rounded-md bg-white/70 px-2 py-0.5 text-xs text-zinc-700">{t('world.trap.left', { n: hud.trap })}</div>
-          ) : (
-            <button onClick={() => world.current?.buildGateTrap()}
-              disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2}
-              className="mt-1.5 w-fit rounded-md bg-zinc-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
-              {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
-            </button>
-          )}
-          {!hud.wall && (
-            <button onClick={() => world.current?.buildYardWall()}
-              disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6}
-              className="mt-1.5 w-fit rounded-md bg-stone-600 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
-              {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
-            </button>
-          )}
-          {!hud.garden.built ? (
-            <button onClick={() => world.current?.buildGardenPlot()}
-              disabled={hud.prologue ? hud.money < 800 : hud.cores < 2}
-              className="mt-1.5 w-fit rounded-md bg-lime-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
-              {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
-            </button>
-          ) : (
-            <div className={`mt-1 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
-              {t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}
-            </div>
-          )}
+          <div className="relative mt-2 flex max-w-[260px] flex-wrap gap-1">
+            {hud.trap > 0 ? (
+              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#d9ccb4] ring-1 ring-white/10">{t('world.trap.left', { n: hud.trap })}</div>
+            ) : (
+              <button onClick={() => world.current?.buildGateTrap()}
+                disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2}
+                className={BUILD}>
+                {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
+              </button>
+            )}
+            {!hud.wall && (
+              <button onClick={() => world.current?.buildYardWall()}
+                disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6}
+                className={BUILD}>
+                {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
+              </button>
+            )}
+            {!hud.garden.built ? (
+              <button onClick={() => world.current?.buildGardenPlot()}
+                disabled={hud.prologue ? hud.money < 800 : hud.cores < 2}
+                className={BUILD}>
+                {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
+              </button>
+            ) : (
+              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#c9dcb0] ring-1 ring-white/10">
+                {t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}
+              </div>
+            )}
+          </div>
           {spaceOpen && (
-            <div className={`mt-2 w-64 rounded-lg p-2 text-xs ${hud.night ? 'bg-white/10' : 'bg-indigo-50'}`}>
-              <div className="mb-1 leading-snug opacity-80">{t('world.space.hint')}</div>
+            <div className="relative mt-2 w-64 rounded-md bg-[#2a2747]/70 p-2 text-xs ring-1 ring-[#9aa0ff]/25">
+              <div className="mb-1 leading-snug text-[#cfd0f0]">{t('world.space.hint')}</div>
               {(['food', 'water'] as const).map((k) => (
                 <div key={k} className="mt-1 flex items-center gap-1.5">
                   <span className="w-20">{t(`world.space.${k}` as UiKey, { n: hud.space[k].toFixed(1) })}</span>
-                  <button onClick={() => world.current?.moveToSpace(k, -1)} className="rounded bg-white/80 px-1.5 text-zinc-800 shadow-sm">{t('world.space.out')}</button>
-                  <button onClick={() => world.current?.moveToSpace(k, 1)} className="rounded bg-indigo-600 px-1.5 text-white shadow-sm">{t('world.space.in')}</button>
+                  <button onClick={() => world.current?.moveToSpace(k, -1)} className="rounded-sm bg-white/10 px-1.5 text-[#efe4d0] hover:bg-white/20">{t('world.space.out')}</button>
+                  <button onClick={() => world.current?.moveToSpace(k, 1)} className="rounded-sm bg-[#4b4f96] px-1.5 text-white hover:bg-[#5a5fb0]">{t('world.space.in')}</button>
                 </div>
               ))}
               <button disabled={hud.cores < 3} onClick={() => world.current?.upgradeSpace()}
-                className="mt-2 w-full rounded bg-indigo-700 py-1 text-white shadow-sm disabled:opacity-40">{t('world.space.up')}</button>
+                className="mt-2 w-full rounded-sm bg-[#3b3f73] py-1 text-white ring-1 ring-white/10 hover:bg-[#474c88] disabled:opacity-40">{t('world.space.up')}</button>
             </div>
           )}
         </div>
         {hud.crisis && (
-          <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">
-            {t('world.crisis')}{hud.crisisKind ? ` · ${t(`crisisKind.${hud.crisisKind}` as UiKey)}` : ''}
+          <div className="w-fit rounded-sm bg-[#7c2d24] px-2.5 py-0.5 text-xs font-bold tracking-wide text-[#f4ecdc] ring-1 ring-[#e2553f]/50" style={{ fontFamily: SERIF }}>
+            ⚠ {t('world.crisis')}{hud.crisisKind ? ` · ${t(`crisisKind.${hud.crisisKind}` as UiKey)}` : ''}
           </div>
         )}
-        <div className="pointer-events-none w-fit rounded-full bg-white/70 px-3 py-1 text-xs shadow">
+        <div className="pointer-events-none w-fit rounded-sm bg-[#1d1915]/80 px-2.5 py-0.5 text-[11px] tracking-wide text-[#d9ccb4] ring-1 ring-[#e8c98a]/20">
           {t(home ? 'world.mode.home' : 'world.mode.outside')}
         </div>
         {hud.goals && !hud.siege && (
-          <div className="pointer-events-none w-56 rounded-xl bg-white/85 px-3 py-2 text-xs shadow">
-            <div className="mb-1 font-semibold text-zinc-800">{t('world.goal.title')}</div>
+          <div className={`pointer-events-none w-60 px-3 py-2 text-xs ${PANEL}`}>
+            <Grain />
+            <div className="relative mb-1 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.goal.title')}</div>
             {hud.goals.map((g) => (
-              <div key={g.key} className={`flex gap-1.5 leading-snug ${g.done ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
-                <span>{g.done ? '✅' : '⬜'}</span><span>{t(g.key as UiKey)}</span>
+              <div key={g.key} className={`relative flex gap-1.5 leading-snug ${g.done ? 'text-[#8a7f6d] line-through' : 'text-[#e6dac4]'}`}>
+                <span className={g.done ? 'text-[#9cbf7a]' : 'text-[#e8c98a]/70'}>{g.done ? '✓' : '○'}</span><span>{t(g.key as UiKey)}</span>
               </div>
             ))}
           </div>
@@ -359,7 +365,7 @@ export default function WorldView() {
         <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2">
           {([1, 0] as const).map((f) => (
             <button key={f} onClick={() => world.current?.setViewFloor(f)}
-              className={`rounded-lg px-3 py-2 text-sm font-medium shadow ${hud.floor === f ? 'bg-amber-400 text-zinc-900' : 'bg-white/85'}`}>
+              className={`px-3 py-2 text-sm font-bold tracking-widest ${hud.floor === f ? BTN_GOLD : CHIP}`} style={{ fontFamily: SERIF }}>
               {t(f === 1 ? 'world.floor2' : 'world.floor1')}
             </button>
           ))}
@@ -368,27 +374,27 @@ export default function WorldView() {
 
       <div className="absolute right-3 top-3 flex items-center gap-2">
         <button onClick={() => world.current?.toggleMute()} title={t('world.sound')}
-          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
+          className={`${CHIP} px-2 py-1 text-xs`}>
           {hud.muted ? '🔇' : '🔊'}
         </button>
         <button onClick={() => world.current?.snapshot()} title={t('world.photo')}
-          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">📷</button>
+          className={`${CHIP} px-2 py-1 text-xs`}>📷</button>
         <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
-          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">❓</button>
+          className={`${CHIP} px-2 py-1 text-xs`}>❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
-          className={`rounded-full bg-white/90 px-2.5 py-1 text-xs shadow ${hud.music ? '' : 'opacity-40'}`}>
+          className={`${CHIP} px-2 py-1 text-xs ${hud.music ? '' : 'opacity-40'}`}>
           🎵
         </button>
-        <button onClick={toggleStyle} className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
+        <button onClick={toggleStyle} className={`${CHIP} px-2.5 py-1 text-xs`}>
           {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
         </button>
         {style === 'paradise' && (
           <button onClick={() => world.current?.togglePeople()} title={t('world.people.tip')}
-            className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
+            className={`${CHIP} px-2.5 py-1 text-xs`}>
             {t('world.people', { name: t(peopleStyle() === 'toon' ? 'world.people.toon' : 'world.people.real') })}
           </button>
         )}
-        <a href="#text" className="rounded-full bg-zinc-900/70 px-3 py-1 text-xs text-white shadow">
+        <a href="#text" className={`${CHIP} px-2.5 py-1 text-xs text-[#a99d88]`}>
           {t('world.textVersion')}
         </a>
       </div>
@@ -399,24 +405,25 @@ export default function WorldView() {
         ))}
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 max-w-xs rounded-xl bg-zinc-900/65 px-3 py-2 text-[11px] leading-relaxed text-white">
+      <div className="pointer-events-none absolute bottom-3 right-3 max-w-xs rounded-md bg-[#1d1915]/80 px-3 py-2 text-[11px] leading-relaxed text-[#e6dac4] ring-1 ring-[#e8c98a]/20">
         {home && hud.floor === 1 ? t('world.floor2Hint') : t(home ? 'world.help.home' : 'world.help.outside')}
       </div>
 
       {hud.siege && (
-        <div className="absolute left-1/2 top-14 w-72 -translate-x-1/2 rounded-xl bg-red-950/85 px-4 py-2 text-white shadow-lg">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold">🧟 {t(hud.siege.ambush ? 'world.ambush' : 'world.siege', { n: hud.siege.left })}</div>
+        <div className="absolute left-1/2 top-14 w-80 -translate-x-1/2 overflow-hidden rounded-md bg-[#2a0f0c]/90 px-4 py-2 text-[#f4ecdc] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-[#e2553f]/40">
+          <Grain />
+          <div className="relative flex items-center justify-between gap-2">
+            <div className="text-[15px] font-bold tracking-wide" style={{ fontFamily: SERIF }}>🧟 {t(hud.siege.ambush ? 'world.ambush' : 'world.siege', { n: hud.siege.left })}</div>
             <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
-              className="rounded-md bg-orange-600 px-2 py-0.5 text-xs font-semibold shadow disabled:opacity-40">
+              className="rounded-sm bg-[#c2551f] px-2 py-0.5 text-xs font-semibold ring-1 ring-white/15 hover:bg-[#d8652b] disabled:opacity-40">
               {t('world.molotov', { n: hud.molotovs })}
             </button>
           </div>
           {hud.siege.layer && (
-            <div className="mt-1 flex items-center gap-2 text-xs">
+            <div className="relative mt-1 flex items-center gap-2 text-xs">
               <span className="w-12 shrink-0">{t(`world.layer.${hud.siege.layer}` as UiKey)}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.round((hud.siege.hp / hud.siege.max) * 100)}%` }} />
+              <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-[#e8c98a]" style={{ width: `${Math.round((hud.siege.hp / hud.siege.max) * 100)}%` }} />
               </div>
               <span className="tabular-nums">{Math.ceil(hud.siege.hp)}</span>
             </div>
@@ -425,11 +432,12 @@ export default function WorldView() {
       )}
 
       {hud.log.length > 0 && (
-        <div className="pointer-events-none absolute right-3 top-14 w-64 rounded-xl bg-amber-50/90 px-3 py-2 text-xs shadow">
-          <div className="mb-1 font-semibold text-amber-900">📔 {t('world.diary')}</div>
+        <div className="pointer-events-none absolute right-3 top-14 w-64 overflow-hidden rounded-sm bg-[#ece2cb]/95 px-3 py-2 text-xs shadow-[0_8px_24px_rgba(0,0,0,0.35)] ring-1 ring-[#b9a77f]/70">
+          <Grain opacity={0.45} />
+          <div className="relative mb-1 border-b border-[#8a6a48]/30 pb-0.5 text-[13px] font-bold tracking-wide text-[#5a3b22]" style={{ fontFamily: SERIF }}>📔 {t('world.diary')}</div>
           {hud.log.slice(0, 4).map((l, k) => (
-            <div key={`${l.day}-${l.hour}-${k}`} className={`mb-1 line-clamp-3 leading-snug ${k ? 'text-zinc-500' : 'text-zinc-800'}`}>
-              <span className="mr-1 text-[10px] text-amber-800">{calendarLabel({ day: l.day, hour: l.hour })}</span>
+            <div key={`${l.day}-${l.hour}-${k}`} className={`relative mb-1 line-clamp-3 leading-snug ${k ? 'text-[#6b5a45]' : 'text-[#2f2418]'}`} style={{ fontFamily: SERIF }}>
+              <span className="mr-1 text-[10px] text-[#8a5a2b]">{calendarLabel({ day: l.day, hour: l.hour })}</span>
               {t(l.key as UiKey, l.vars)}
             </div>
           ))}
@@ -437,30 +445,30 @@ export default function WorldView() {
       )}
 
       <details className="absolute bottom-3 right-3 mb-24 text-xs">
-        <summary className="cursor-pointer list-none rounded-full bg-white/70 px-3 py-1 text-zinc-600 shadow">{t('world.debug')}</summary>
+        <summary className={`cursor-pointer list-none px-2.5 py-1 text-[#a99d88] ${CHIP}`}>{t('world.debug')}</summary>
         <div className="mt-1 flex flex-col gap-1">
-          <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
-          <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
-          <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.jiangye')}</button>
-          <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.shenyan')}</button>
-          <button onClick={() => world.current?.debugVisitor('guchen_visit')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.guchenVisit')}</button>
-          <button onClick={() => world.current?.debugVisitor('xielin_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.xielinMeet')}</button>
-          <button onClick={() => world.current?.debugCourier('guchen')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.guchen')}</button>
-          <button onClick={() => world.current?.debugCourier('xielin')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.xielin')}</button>
-          <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
-          <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
-          <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
-          <button onClick={() => world.current?.togglePeople()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.people')}</button>
-          <button onClick={() => world.current?.toggleHard()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>
-          <button onClick={() => world.current?.debugDie()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.die')}</button>
-          <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
+          <button onClick={() => world.current?.debugNight(false)} className={DBG}>{t('world.debug.night')}</button>
+          <button onClick={() => world.current?.debugNight(true)} className={DBG}>{t('world.debug.crisis')}</button>
+          <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className={DBG}>{t('world.debug.jiangye')}</button>
+          <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className={DBG}>{t('world.debug.shenyan')}</button>
+          <button onClick={() => world.current?.debugVisitor('guchen_visit')} className={DBG}>{t('world.debug.guchenVisit')}</button>
+          <button onClick={() => world.current?.debugVisitor('xielin_meet')} className={DBG}>{t('world.debug.xielinMeet')}</button>
+          <button onClick={() => world.current?.debugCourier('guchen')} className={DBG}>{t('world.debug.guchen')}</button>
+          <button onClick={() => world.current?.debugCourier('xielin')} className={DBG}>{t('world.debug.xielin')}</button>
+          <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className={DBG}>{t('world.debug.visitor')}</button>
+          <button onClick={() => world.current?.debugVisitor('beggar')} className={DBG}>{t('world.debug.beggar')}</button>
+          <button onClick={() => world.current?.debugVisitor('crow_tax')} className={DBG}>{t('world.debug.crow')}</button>
+          <button onClick={() => world.current?.togglePeople()} className={DBG}>{t('world.debug.people')}</button>
+          <button onClick={() => world.current?.toggleHard()} className={DBG}>{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>
+          <button onClick={() => world.current?.debugDie()} className={DBG}>{t('world.debug.die')}</button>
+          <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className={`${DBG} text-[#ff8f7a]`}>{t('world.debug.restart')}</button>
         </div>
       </details>
 
       {(hud.fishing.near || hud.fishing.active) && !hud.siege && (
         <div className="absolute bottom-44 left-1/2 -translate-x-1/2">
           <button onClick={() => world.current?.searchHere()}
-            className={`rounded-full px-4 py-2 text-sm font-semibold shadow-lg ${hud.fishing.active ? 'bg-sky-700 text-white' : 'bg-sky-400 text-zinc-900'}`}>
+            className={`px-4 py-2 text-sm ${hud.fishing.active ? `${CHIP} text-[#bfe3f2]` : BTN_GOLD}`}>
             {t(hud.fishing.active ? 'world.fish.doing' : 'world.fish.go', { n: hud.fishing.caught })}
           </button>
         </div>
@@ -469,24 +477,24 @@ export default function WorldView() {
       {hud.search && !hud.siege && !hud.fishing.near && (
         <div className="absolute bottom-44 left-1/2 -translate-x-1/2">
           {hud.search.state === 'doing' ? (
-            <div className="w-56 rounded-full bg-zinc-900/80 px-4 py-2 text-center text-sm text-white shadow">
+            <div className={`w-56 px-4 py-2 text-center text-sm ${PANEL}`}>
               {t('world.search.doing', { p: hud.search.progress ?? 0 })}
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-amber-400" style={{ width: `${hud.search.progress ?? 0}%` }} />
+              <div className="mt-1 h-[4px] overflow-hidden rounded-full bg-white/15">
+                <div className="h-full rounded-full bg-[#e8c98a]" style={{ width: `${hud.search.progress ?? 0}%` }} />
               </div>
             </div>
           ) : hud.search.state === 'ok' ? (
-            <button onClick={() => world.current?.searchHere()} className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-900 shadow-lg">
+            <button onClick={() => world.current?.searchHere()} className={`px-4 py-2 text-sm ${BTN_GOLD}`}>
               {t('world.search.go', { where: t(`world.spot.${hud.search.kind}` as UiKey) })}
             </button>
           ) : (
-            <div className="rounded-full bg-zinc-900/70 px-4 py-2 text-sm text-white shadow">{t(`world.search.${hud.search.state}` as UiKey)}</div>
+            <div className={`px-4 py-2 text-sm ${PANEL}`}>{t(`world.search.${hud.search.state}` as UiKey)}</div>
           )}
         </div>
       )}
 
       {hud.toast && (
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-md bg-[#1d1915]/90 px-4 py-1.5 text-sm text-[#efe4d0] shadow-[0_6px_18px_rgba(0,0,0,0.45)] ring-1 ring-[#e8c98a]/35" style={{ fontFamily: SERIF }}>
           {t(hud.toast as UiKey, hud.toastVars ?? undefined)}
         </div>
       )}
@@ -495,15 +503,26 @@ export default function WorldView() {
 
       {hud.visit && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/50 to-transparent pb-6 pt-24">
-          <div className="flex w-[min(640px,92vw)] gap-4 rounded-2xl bg-[#f6efdc] p-4 text-zinc-800 shadow-2xl">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-amber-200/70 text-5xl">{hud.visit.icon}</div>
-            <div className="flex-1">
-              <div className="text-sm font-bold">{hud.visit.name}</div>
-              <p className="mt-1 text-sm leading-relaxed">{t(hud.visit.textKey as UiKey, hud.visit.vars)}</p>
+          <div className={`flex w-[min(660px,92vw)] gap-4 p-4 ${PANEL} bg-[#1d1915]/95`}>
+            <Grain opacity={0.4} />
+            <div className="relative flex h-28 w-24 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-gradient-to-b from-[#3a3128] to-[#15110e] text-5xl ring-1 ring-[#e8c98a]/30">
+              {hud.visit.face ? (
+                <>
+                  <div className="absolute inset-0 bg-cover bg-top" style={{ backgroundImage: `url(${hud.visit.face})`, filter: 'grayscale(0.55) sepia(0.3) contrast(1.12) brightness(0.95)' }} />
+                  <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.5 }} />
+                  <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_18px_rgba(0,0,0,0.7)]" />
+                  <span className="absolute bottom-0.5 right-1 text-base drop-shadow">{hud.visit.icon}</span>
+                </>
+              ) : <span className="drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">{hud.visit.icon}</span>}
+            </div>
+            <div className="relative flex-1">
+              <div className="text-[10px] tracking-[0.3em] text-[#e8c98a]/70">{t('world.visit.knock')}</div>
+              <div className="text-lg font-bold tracking-wide text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{hud.visit.name}</div>
+              <p className="mt-1 text-[13px] leading-relaxed text-[#ddd1ba]" style={{ fontFamily: SERIF }}>{t(hud.visit.textKey as UiKey, hud.visit.vars)}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {hud.visit.choices.map((c) => (
                   <button key={c.id} disabled={!c.ok} onClick={() => world.current?.answerVisitor(c.id)}
-                    className="rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-amber-50 shadow disabled:opacity-40">
+                    className="rounded-sm bg-white/5 px-3 py-1.5 text-[13px] text-[#f4ecdc] ring-1 ring-[#e8c98a]/40 transition hover:bg-[#e8c98a] hover:text-[#1d1915] disabled:opacity-35 disabled:hover:bg-white/5 disabled:hover:text-[#f4ecdc]">
                     {t(`world.visit.${hud.visit!.id}.choice.${c.id}` as UiKey, hud.visit!.vars)}
                   </button>
                 ))}
@@ -515,13 +534,14 @@ export default function WorldView() {
 
       {hud.report && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35">
-          <div className={`w-[min(420px,90vw)] rounded-2xl p-5 shadow-2xl ${hud.report.won ? 'bg-[#f6efdc] text-zinc-800' : 'bg-zinc-900 text-zinc-100'}`}>
-            <div className="text-lg font-bold">{t(hud.report.won ? 'world.report.won' : 'world.report.lost')}</div>
-            <div className="mt-0.5 text-xs opacity-70">{t(hud.report.crisis ? 'world.report.crisis' : 'world.report.normal')}</div>
-            <ul className="mt-3 space-y-1 text-sm">
+          <div className={`w-[min(420px,90vw)] p-5 ${PANEL} bg-[#1d1915]/95 ${hud.report.won ? '' : 'ring-[#e2553f]/50'}`}>
+            <Grain opacity={0.4} />
+            <div className="relative text-[10px] tracking-[0.3em] text-[#a99d88]">{t(hud.report.crisis ? 'world.report.crisis' : 'world.report.normal')}</div>
+            <div className={`relative mt-0.5 text-2xl font-bold tracking-wide ${hud.report.won ? 'text-[#e8c98a]' : 'text-[#ff8f7a]'}`} style={{ fontFamily: SERIF }}>{t(hud.report.won ? 'world.report.won' : 'world.report.lost')}</div>
+            <ul className="relative mt-3 space-y-1 border-t border-[#e8c98a]/15 pt-3 text-sm text-[#e6dac4]">
               <li>🧟 {t('world.report.kills', { n: hud.report.kills })}</li>
               {(hud.report.trapKills > 0 || hud.report.fireKills > 0 || hud.report.bruteKills > 0) && (
-                <li className="pl-5 text-xs text-zinc-600">{[
+                <li className="pl-5 text-xs text-[#a99d88]">{[
                   hud.report.bruteKills > 0 ? t('world.report.bruteKills', { n: hud.report.bruteKills }) : '',
                   hud.report.trapKills > 0 ? t('world.report.trapKills', { n: hud.report.trapKills }) : '',
                   hud.report.fireKills > 0 ? t('world.report.fireKills', { n: hud.report.fireKills }) : '',
@@ -533,14 +553,14 @@ export default function WorldView() {
                 <li key={l.id}>🚪 {t(l.broken ? 'world.report.broken' : 'world.report.damaged', { what: t(`world.layer.${l.id}` as UiKey), n: Math.round(l.lost) })}</li>
               ))}
               {hud.report.hurt.map((h) => <li key={h.name}>🩹 {t('world.report.hurt', { who: h.name, n: h.lost })}</li>)}
-              {hud.report.died.map((n) => <li key={n} className="font-bold text-red-700">🕯 {t('world.report.died', { who: n })}</li>)}
+              {hud.report.died.map((n) => <li key={n} className="font-bold text-[#ff8f7a]">🕯 {t('world.report.died', { who: n })}</li>)}
               {(hud.report.food > 0.05 || hud.report.water > 0.05) && (
                 <li>📦 {t('world.report.loss', { food: hud.report.food.toFixed(1), water: hud.report.water.toFixed(1) })}</li>
               )}
             </ul>
-            {hud.report.layers.some((l) => l.id === 'gate') && <div className="mt-3 text-xs opacity-70">{t('world.report.repairHint')}</div>}
+            {hud.report.layers.some((l) => l.id === 'gate') && <div className="relative mt-3 text-xs text-[#a99d88]">{t('world.report.repairHint')}</div>}
             <button onClick={() => world.current?.clearReport()}
-              className="mt-4 w-full rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50">{t('world.report.ok')}</button>
+              className={`relative mt-4 w-full py-2 text-sm tracking-widest ${hud.report.won ? BTN_GOLD : BTN_RED}`} style={{ fontFamily: SERIF }}>{t('world.report.ok')}</button>
           </div>
         </div>
       )}
@@ -562,7 +582,7 @@ export default function WorldView() {
             <p className="mt-2 text-sm text-white/60">{t('world.over.when', { when: hud.over.when, days: hud.over.days })}</p>
             {hud.over.mourned.length > 0 && <p className="mt-2 text-sm text-white/60">🕯 {t('world.over.mourned', { names: hud.over.mourned.join('、') })}</p>}
             <p className="mt-4 text-sm text-amber-200">{t('world.over.points', { days: hud.over.days, kills: hud.over.kills, points: hud.over.points })}</p>
-            <div className="mt-3 rounded-xl bg-white/10 p-3 text-left font-sans">
+            <div className="mt-3 rounded-md bg-white/5 p-3 text-left font-sans ring-1 ring-[#e8c98a]/20">
               <div className="mb-2 text-xs text-white/70">{t('world.over.shop', { n: rebirthPoints() })}</div>
               <div className="flex flex-wrap gap-1.5">
                 {PERK_DEFS.map((p) => {
@@ -570,7 +590,7 @@ export default function WorldView() {
                   return (
                     <button key={p.id} onClick={() => { togglePerk(p.id); setShopTick((n) => n + 1) }}
                       disabled={!have && rebirthPoints() < p.cost}
-                      className={`rounded-lg px-2 py-1 text-xs ${have ? 'bg-amber-400 text-zinc-900' : 'bg-white/15 text-white hover:bg-white/25'} disabled:opacity-35`}>
+                      className={`rounded-sm px-2 py-1 text-xs ${have ? 'bg-[#e8c98a] text-[#1d1915]' : 'bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20'} disabled:opacity-35`}>
                       {have ? '✓ ' : ''}{t(`world.perk.${p.id}` as UiKey)} · {p.cost}
                     </button>
                   )
@@ -579,7 +599,7 @@ export default function WorldView() {
             </div>
             <p className="mt-5 text-sm leading-relaxed text-white/70">{t('world.over.again')}</p>
             <button onClick={() => world.current?.rebirth()}
-              className="mt-6 rounded-xl bg-amber-500 px-6 py-2.5 text-base font-bold text-zinc-900 shadow-lg hover:bg-amber-400">
+              className={`mt-6 px-6 py-2.5 text-base tracking-widest ${BTN_GOLD}`}>
               {t('world.over.button', { n: hud.life + 1 })}
             </button>
           </div>
@@ -596,24 +616,61 @@ export default function WorldView() {
         </div>
       )}
 
-      {welcome && !hud.loading && !hud.intro && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
-          <div className="w-[min(560px,92vw)] rounded-2xl bg-[#f6efdc] p-6 font-serif text-zinc-800 shadow-2xl">
-            <div className="text-xl font-bold">{t('world.welcome.title')}</div>
-            <div className="mt-1 text-sm text-zinc-600">{t('world.welcome.sub')}</div>
-            <ul className="mt-4 space-y-2 text-sm leading-relaxed">
-              {WELCOME_ITEMS.map((k) => <li key={k}>{t(k)}</li>)}
-            </ul>
-            <div className="mt-4 rounded-lg bg-white/60 p-3 text-xs leading-relaxed text-zinc-700">{t('world.welcome.keys')}</div>
-            <div className="mt-5 flex gap-2">
-              <button onClick={() => closeWelcome(false)} className="flex-1 rounded-lg bg-emerald-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.start')}</button>
-              {hud.prologue && (
-                <button onClick={() => closeWelcome(true)} className="flex-1 rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.zombies')}</button>
+      {welcome && !hud.loading && !hud.intro && (() => {
+        const face = hud.people[0] ? hud.portraits[hud.people[0].name] : undefined
+        return (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-3">
+            <div className={`w-[min(640px,94vw)] max-h-[92vh] overflow-y-auto ${PANEL} bg-[#1d1915]/95`}>
+              {face && (
+                <div className="pointer-events-none absolute right-0 top-0 h-56 w-48 bg-cover bg-top opacity-55"
+                  style={{ backgroundImage: `url(${face})`, filter: 'grayscale(0.85) sepia(0.35) contrast(1.15)',
+                    maskImage: FACE_MASK, WebkitMaskImage: FACE_MASK }} />
               )}
+              <Grain opacity={0.4} />
+              <div className="relative px-6 pb-5 pt-6">
+                <div className="text-[11px] tracking-[0.35em] text-[#e8c98a]/80">{t('app.title')}</div>
+                <div className="mt-1 text-2xl font-bold tracking-wide text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{t('world.welcome.title')}</div>
+                <div className="mt-1 text-xs text-[#a99d88]">{t('world.welcome.sub')}</div>
+
+                <div className="mt-4 border-l-2 border-[#e8c98a] bg-[#e8c98a]/10 py-2 pl-3 pr-3">
+                  <div className="text-[13px] font-bold text-[#e8c98a]" style={{ fontFamily: SERIF }}>✦ {t('world.welcome.todayH')}</div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-[#e6dac4]">{t('world.welcome.today')}</p>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+                  {WELCOME_ITEMS.map((k) => (
+                    <div key={k}>
+                      <div className="flex items-center gap-2 text-[13px] font-bold text-[#f4ecdc]" style={{ fontFamily: SERIF }}>
+                        <span className="h-px w-3 bg-[#e8c98a]/70" />{t(`world.welcome.${k}H` as UiKey)}
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-[#cbbfa8]">{t(`world.welcome.${k}` as UiKey)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 border-t border-[#e8c98a]/15 pt-3">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[11px] text-[#cbbfa8]">
+                    {WELCOME_KEYS.map((k) => (
+                      <span key={k} className="flex items-center gap-1">
+                        <kbd className="rounded-sm bg-white/10 px-1.5 py-px font-sans text-[10px] font-semibold text-[#f4ecdc] ring-1 ring-white/15">{t(`world.welcome.key.${k}` as UiKey)}</kbd>
+                        {t(`world.welcome.keyd.${k}` as UiKey)}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 text-[11px] text-[#8a7f6d]">{t('world.welcome.debug')}</div>
+                </div>
+
+                <div className="mt-5 flex gap-2">
+                  <button onClick={() => closeWelcome(false)} className={`flex-1 py-2.5 text-sm tracking-widest ${BTN_GOLD}`} style={{ fontFamily: SERIF }}>{t('world.welcome.start')}</button>
+                  {hud.prologue && (
+                    <button onClick={() => closeWelcome(true)} className={`flex-1 py-2.5 text-sm ${BTN_RED}`} style={{ fontFamily: SERIF }}>{t('world.welcome.zombies')}</button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {map && (
         <MapPanel prologue={hud.prologue} check={(id, van) => (van ? mapData.vanChecks : mapData.checks)[id] ?? 'busy'}
@@ -629,8 +686,10 @@ export default function WorldView() {
       )}
 
       {hud.loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-sky-200/80 text-sm">
-          {t(style === 'paradise' ? 'world.loadingParadise' : 'world.loading')}
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#15110e] text-[#cbbfa8]">
+          <Grain opacity={0.5} />
+          <div className="relative text-3xl font-bold tracking-[0.3em] text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{t('app.title')}</div>
+          <div className="relative mt-3 animate-pulse text-sm tracking-widest">{t(style === 'paradise' ? 'world.loadingParadise' : 'world.loading')}</div>
         </div>
       )}
       {hud.error && (

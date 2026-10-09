@@ -4,6 +4,7 @@ import { memoriesYear1 } from '../content/memories'
 import { DAYS_PER_MONTH, PROLOGUE_DAYS, SUNSET, calendarLabel } from './life'
 import type { LogEntry } from './residents'
 import { currentLife, lastDeath, rebirthPoints } from './save'
+import { Grain } from './ui'
 
 export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean; home?: boolean; canStay?: boolean }
 
@@ -25,7 +26,8 @@ export function DiaryPanel({ day, hour, log, people, onClose }: {
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="flex max-h-[86vh] w-[min(760px,92vw)] overflow-hidden rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="w-10 shrink-0 bg-gradient-to-b from-red-800 to-red-950" />
-        <div className="flex-1 overflow-y-auto bg-[#f6efdc] px-6 py-5 font-serif text-zinc-800">
+        <div className="relative flex-1 overflow-y-auto bg-[#f1e8d2] px-6 py-5 font-serif text-zinc-800">
+          <Grain opacity={0.4} />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xl font-bold tracking-wide">{t('world.diary.title')}</div>

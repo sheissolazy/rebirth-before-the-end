@@ -130,6 +130,11 @@ class StreetWalker extends Walker {
     this.root.position.set(at.x, 0, at.z)
   }
 
+  /** 真人模型（拍头像用）；还是代码画的小人时为 null */
+  get model3d(): THREE.Object3D | null {
+    return this.driver ? this.inner : null
+  }
+
   /** 还是代码画的小人吗（来的时候真人模型还没加载好） */
   get placeholder(): boolean {
     return !this.driver

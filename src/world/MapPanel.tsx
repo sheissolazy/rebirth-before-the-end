@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { t, lt, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
 import { TRIPS, VAN, tripCost, tripHours, vanAllowed } from './expedition'
+import { Grain, SERIF } from './ui'
 
 export interface MapMember { name: string; health: number }
 type Check = 'ok' | 'phase' | 'money' | 'late' | 'busy' | 'cores' | 'fuel'
@@ -30,7 +31,8 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
   const toggle = (n: string) => setWho((w) => (w.includes(n) ? w.filter((x) => x !== n) : [...w, n]))
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="flex w-[min(980px,94vw)] gap-4 rounded-2xl bg-[#efe6cf] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative flex w-[min(980px,94vw)] gap-4 overflow-hidden rounded-md bg-[#ece2cb] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-[#b9a77f]/70" onClick={(e) => e.stopPropagation()}>
+        <Grain opacity={0.45} />
         <div className="relative aspect-[4/3] flex-1 overflow-hidden rounded-xl border-2 border-[#b9a77f] bg-[#f4ecd6]">
           <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 75" preserveAspectRatio="none">
             {/* 临江：从东北流到东南的一条江 */}
@@ -59,16 +61,16 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
           })}
         </div>
 
-        <div className="flex w-64 shrink-0 flex-col">
+        <div className="relative flex w-64 shrink-0 flex-col">
           <div className="flex items-start justify-between">
-            <div className="text-lg font-bold">{t('world.map.title')}</div>
+            <div className="text-xl font-bold tracking-wide text-[#3a2a1a]" style={{ fontFamily: SERIF }}>{t('world.map.title')}</div>
             <button onClick={onClose} className="rounded-full px-2 text-lg text-zinc-500 hover:bg-black/5">✕</button>
           </div>
           {!trip || !loc ? (
             <p className="mt-3 text-sm leading-relaxed text-zinc-600">{t('world.map.pick')}</p>
           ) : (
             <div className="mt-2 flex flex-1 flex-col">
-              <div className="text-base font-semibold">{loc.icon} {lt(loc.name)}</div>
+              <div className="text-base font-bold text-[#3a2a1a]" style={{ fontFamily: SERIF }}>{loc.icon} {lt(loc.name)}</div>
               <div className="mt-1 text-xs text-zinc-600">{lt(loc.desc)}</div>
               <div className="mt-2 rounded-lg bg-white/60 p-2 text-sm leading-relaxed">{t(`world.tripInfo.${trip.id}` as UiKey)}</div>
               <ul className="mt-2 space-y-0.5 text-xs text-zinc-700">
@@ -96,7 +98,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {members.map((m) => (
                   <button key={m.name} onClick={() => toggle(m.name)}
-                    className={`rounded-full px-2.5 py-1 text-xs shadow-sm ${who.includes(m.name) ? 'bg-amber-400 font-semibold' : 'bg-white/80'}`}>
+                    className={`rounded-sm px-2.5 py-1 text-xs ring-1 transition ${who.includes(m.name) ? 'bg-[#3a2a1a] font-semibold text-[#f4ecdc] ring-[#3a2a1a]' : 'bg-white/50 text-[#3a2a1a] ring-[#b9a77f] hover:bg-white/80'}`}>
                     {m.name}{m.health < 60 ? ' 🩹' : ''}
                   </button>
                 ))}
@@ -105,7 +107,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
               {status !== 'ok' && <div className="mt-2 text-xs text-red-700">{t(`world.map.why.${status}` as UiKey)}</div>}
               <button disabled={status !== 'ok' || who.length === 0}
                 onClick={() => onGo(trip.id, who, byVan)}
-                className="mt-2 rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50 shadow disabled:opacity-40">
+                className="mt-2 rounded-sm bg-[#7c2d24] py-2 text-sm font-semibold tracking-widest text-[#f4ecdc] shadow transition hover:bg-[#93372c] disabled:opacity-40" style={{ fontFamily: SERIF }}>
                 {t('world.map.go')}
               </button>
             </div>

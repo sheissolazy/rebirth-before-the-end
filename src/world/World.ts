@@ -98,7 +98,7 @@ export interface Hud {
   /** 全新开局的片头正在放 */
   intro: boolean
   /** 有人在门口等回话 */
-  visit: { id: string; icon: string; name: string; textKey: string; choices: { id: string; ok: boolean }[]; vars: Record<string, string> } | null
+  visit: { id: string; icon: string; face: string | null; name: string; textKey: string; choices: { id: string; ok: boolean }[]; vars: Record<string, string> } | null
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -2196,7 +2196,7 @@ export class World {
     const npc = lead ? npcs.find((n) => n.id === lead) : null
     const vars = this.life.visitVars()
     return {
-      id: def.id, icon: def.id === 'beggar' && vars.ta === '她' ? '👩' : def.icon, vars,
+      id: def.id, icon: def.id === 'beggar' && vars.ta === '她' ? '👩' : def.icon, vars, face: this.visitorFace(),
       name: npc ? `${lt(npc.name)} · ${lt(npc.title)}` : t(`world.visit.${def.id}.name` as UiKey),
       textKey: def.id === 'jiangye_care' ? `world.visit.jiangye_care.text${this.life.careVariant}` : `world.visit.${def.id}.text`,
       choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })),
@@ -2389,11 +2389,27 @@ export class World {
 
   /** 给人物卡拍头像：把这个人的模型复制一份放进小摄影棚（暖色侧光、深色背景），摆站姿，拍胸像 */
   private portraitOf(a: Actor): string | null {
-    if (!a.driver) return null
-    const model = cloneSkinned(a.mesh)
+    return a.driver ? this.shootPortrait(a.mesh) : null
+  }
+
+  /** 来客头像：每个来客的模型拍一次 */
+  private visitorFaces = new WeakMap<THREE.Object3D, string>()
+  private visitorFace(): string | null {
+    const m = this.life.visitor?.model3d
+    if (!m) return null
+    let p = this.visitorFaces.get(m)
+    if (!p) {
+      try { p = this.shootPortrait(m) } catch (e) { console.warn('portrait', e) }
+      if (p) this.visitorFaces.set(m, p)
+    }
+    return p ?? null
+  }
+
+  private shootPortrait(src: THREE.Object3D): string {
+    const model = cloneSkinned(src)
     model.position.set(0, 0, 0)
     model.rotation.set(0, -0.3, 0)
-    model.scale.copy(a.mesh.scale)
+    model.scale.copy(src.scale)
     const studio = new THREE.Scene()
     studio.background = new THREE.Color('#3a332c')
     const key = new THREE.DirectionalLight('#ffe4c4', 2.6)
