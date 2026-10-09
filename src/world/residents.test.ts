@@ -6,6 +6,7 @@ import { Zombie } from './siege'
 import { restore, snapshot } from './save'
 import { Courier, VISITORS, Visitor } from './visitors'
 import { SCAVENGE } from './scavenge'
+import { settleTrip } from './expedition'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -274,6 +275,41 @@ describe('出门', () => {
     expect(back).toBe('我们回来啦～')
     expect(life.trip).toBeNull()
     expect(hero.task?.kind).not.toBe('greet')
+  })
+
+  it('末日后去趟工厂带回钢板：爸爸找个白天把面包车改装了，存档后还在；改装过的车出门更安全', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 8 }
+    life.speed = 3
+    const [hero, mom, dad] = life.actors
+    life.startTrip('factory', [hero, mom], true)
+    let modded = false
+    const dt = 0.1
+    for (let i = 0; i < (9 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      if (dad.task?.kind === 'modvan') modded = true
+      if (life.vanArmor) break
+    }
+    expect(life.log.some((l) => l.key === 'world.log.vanKit')).toBe(true)
+    expect(modded).toBe(true)
+    expect(life.vanArmor).toBe(true)
+    expect(life.log.some((l) => l.key === 'world.log.vanArmor')).toBe(true)
+    const snap = JSON.parse(JSON.stringify(snapshot(life)))
+    const { life: again } = simulate('paradise', 0)
+    restore(again, snap)
+    expect(again.vanArmor).toBe(true)
+  })
+
+  it('改装过的面包车：撞上丧尸、受重伤都少很多', () => {
+    let seed = 7
+    const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+    const hurt = (armored: boolean) => {
+      let n = 0
+      for (let i = 0; i < 4000; i++) if (settleTrip('hospital', 2, false, r, true, false, armored).hurt.some((h) => h >= 15)) n++
+      return n
+    }
+    expect(hurt(true)).toBeLessThan(hurt(false) * 0.55)
   })
 
   it('没油、车不在家、去上班都不能开车；加油站末日前花钱买油，末日后不要钱', () => {

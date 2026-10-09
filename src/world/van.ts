@@ -2,6 +2,7 @@
 // 平时停在院子西南角，出门搜刮时一家人上车、开出铁门；回来时倒车进院子停好，车顶绑着搜来的箱子。
 // 车怎么动全看游戏时间（Household.van），这里只负责摆姿势，快进、存档读档都不会对不上。
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { VAN_IN_H, VAN_OUT_H, VAN_PARK, type VanMove } from './layout'
 
 const L = 1.8 // 半车长（车身轮廓 x 从 -L 到 L）
@@ -148,6 +149,8 @@ export interface VanParts {
   /** 车灯：天黑开车时亮 */
   lamps: THREE.MeshStandardMaterial
   beam: THREE.SpotLight
+  /** 末日改装：车窗铁栏、车头防撞杠、车门钢板、车顶备胎（改装好了才显示） */
+  armor: THREE.Group
 }
 
 export function buildVan(): VanParts {
@@ -256,6 +259,54 @@ export function buildVan(): VanParts {
   }
   body.add(rack)
 
+  // 末日改装（平时藏着）：所有铁条合成一个网格，省绘制次数
+  const armor = new THREE.Group()
+  const steel = mat('#4a4c4e', 0.55, 0.6)
+  const plateMat = mat('#8a8f94', 0.55, 0.15)
+  const bars: THREE.BufferGeometry[] = []
+  const bar = (w: number, h: number, d: number, x: number, y: number, z: number, rx = 0) => {
+    const g = new THREE.BoxGeometry(w, h, d)
+    if (rx) g.rotateX(rx)
+    g.translate(x, y, z)
+    bars.push(g)
+  }
+  for (const side of [1, -1]) {
+    const x = side * (W / 2 + 0.03)
+    // 侧窗竖铁条 + 上下两根横条
+    for (let z = -1.6; z <= 1.42; z += 0.13) if (Math.abs(z - 0.5) > 0.05 && Math.abs(z + 0.48) > 0.05) bar(0.018, 0.56, 0.018, x, 1.405, z)
+    bar(0.022, 0.025, 3.08, x, 1.13, -0.12)
+    bar(0.022, 0.025, 3.08, x, 1.68, -0.12)
+    // 车门下半截焊一块钢板，四边一圈铆钉
+    armor.add(sidePatch([[-0.72, 0.44], [0.62, 0.44], [0.62, 0.95], [-0.72, 0.95]], plateMat, side, 0.012))
+    const rx = side * (W / 2 + 0.018)
+    for (let z = -0.66; z <= 0.57; z += 0.123) { bar(0.012, 0.025, 0.025, rx, 0.48, z); bar(0.012, 0.025, 0.025, rx, 0.91, z) }
+    for (const z of [-0.66, 0.57]) bar(0.012, 0.025, 0.025, rx, 0.695, z)
+  }
+  // 前挡风玻璃的铁栏：顺着斜面
+  {
+    const a = new THREE.Vector2(L - 0.06, SEAM + 0.12)
+    const b = new THREE.Vector2(1.2, 1.74)
+    const len = a.distanceTo(b)
+    const n = new THREE.Vector2(b.y - a.y, -(b.x - a.x)).normalize()
+    const mid = a.clone().add(b).multiplyScalar(0.5).add(n.clone().multiplyScalar(BEVEL + 0.035))
+    const tilt = Math.atan2(b.x - a.x, b.y - a.y)
+    for (let x = -0.6; x <= 0.61; x += 0.15) bar(0.018, len - 0.04, 0.018, x, mid.y, mid.x, tilt)
+  }
+  // 车头防撞杠：两根竖管 + 两根横管
+  for (const x of [-0.5, 0.5]) bar(0.05, 0.62, 0.05, x, 0.58, front + 0.16)
+  bar(W + 0.1, 0.05, 0.05, 0, 0.36, front + 0.17)
+  bar(W - 0.2, 0.05, 0.05, 0, 0.86, front + 0.16)
+  for (const x of [-0.5, 0.5]) bar(0.04, 0.04, 0.2, x, 0.6, front + 0.07)
+  armor.add(new THREE.Mesh(mergeGeometries(bars), steel))
+  // 车顶前头一个备胎
+  const spare = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.09, 10, 20), mat('#232220', 0.9))
+  spare.rotation.x = Math.PI / 2
+  spare.position.set(0, 2.05, 0.75)
+  armor.add(spare)
+  armor.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
+  armor.visible = false
+  body.add(armor)
+
   // 回来时车顶的货：两个纸箱 + 一桶油，捆一根带子
   const load = new THREE.Group()
   const cardboard = mat('#b98c5a', 0.85)
@@ -303,7 +354,7 @@ export function buildVan(): VanParts {
 
   root.position.set(VAN_PARK.x, 0, VAN_PARK.z)
   root.rotation.y = VAN_PARK.rot
-  return { root, body, wheels, load, lamps, beam }
+  return { root, body, wheels, load, lamps, beam, armor }
 }
 
 // --- 开车路线 ------------------------------------------------------------------
@@ -368,8 +419,9 @@ export class VanView {
     this.last.copy(parts.root.position)
   }
 
-  update(dt: number, pose: VanPose, dark: number): void {
-    const { root, body, wheels, load, lamps, beam } = this.parts
+  update(dt: number, pose: VanPose, dark: number, armored = false): void {
+    const { root, body, wheels, load, lamps, beam, armor } = this.parts
+    armor.visible = armored
     root.visible = pose.visible
     if (!pose.visible) return
     root.position.set(pose.x, 0, pose.z)

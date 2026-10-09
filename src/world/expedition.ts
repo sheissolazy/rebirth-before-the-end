@@ -42,7 +42,7 @@ export const TRIPS: TripDef[] = [
 ]
 
 /** 开面包车：快四成（按半小时取整）、多装一半、烧一桶油；末日后动静大，更容易撞上丧尸，但撞上了跑得掉 */
-export const VAN = { time: 0.6, load: 1.5, danger: 1.3, hurt: 0.5 }
+export const VAN = { time: 0.6, load: 1.5, danger: 1.3, hurt: 0.5, armorDanger: 1.0, armorHurt: 0.3 }
 /** 去上班不用开车 */
 export const vanAllowed = (id: string) => id !== 'office'
 
@@ -70,7 +70,7 @@ export interface TripResult {
 const int = (r: () => number, a: number, b: number) => a + Math.floor(r() * (b - a + 1))
 
 /** 结算一趟出门。people 是去的人数，armed 表示带没带枪（女主带着霰弹枪），van 是开没开面包车 */
-export function settleTrip(id: string, people: number, armed: boolean, r: () => number, van = false, prologue = TRIPS.find((x) => x.id === id)!.phase === 'prologue'): TripResult {
+export function settleTrip(id: string, people: number, armed: boolean, r: () => number, van = false, prologue = TRIPS.find((x) => x.id === id)!.phase === 'prologue', armored = false): TripResult {
   const hurt = Array.from({ length: people }, () => 0)
   const trip = TRIPS.find((x) => x.id === id)!
   const car = van && vanAllowed(id) ? VAN.load : 1
@@ -104,8 +104,9 @@ export function settleTrip(id: string, people: number, armed: boolean, r: () => 
   }
   // 末日后：先看有没有撞上丧尸
   let fight = ''
-  if (r() < Math.min(0.9, trip.danger * (van ? VAN.danger : 1))) {
-    const bad = (armed ? 0.35 : 0.7) * (van ? VAN.hurt : 1)
+  // 改装过的面包车：铁栏挡着、防撞杠撞得开，动静大也不怎么怕
+  if (r() < Math.min(0.9, trip.danger * (van ? (armored ? VAN.armorDanger : VAN.danger) : 1))) {
+    const bad = (armed ? 0.35 : 0.7) * (van ? (armored ? VAN.armorHurt : VAN.hurt) : 1)
     const who = int(r, 0, people - 1)
     hurt[who] = r() < bad ? int(r, 15, 35) : int(r, 0, 10)
     fight = hurt[who] >= 15 ? 'hurt' : 'fought'

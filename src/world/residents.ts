@@ -25,7 +25,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan'
 
 interface Task {
   kind: TaskKind
@@ -319,6 +319,10 @@ export class Household {
   vanAway = false
   /** 车正在开出去 / 开回来 */
   vanMove: VanMove | null = null
+  /** 改装面包车的材料带回来了（等爸爸动手） */
+  vanKit = false
+  /** 面包车改装过了：铁栏、防撞杠、钢板 */
+  vanArmor = false
   /** 女主正在街上搜东西 */
   search: { spot: ScavengeSpot; left: number } | null = null
   /** 每个地方哪天搜过 */
@@ -1242,7 +1246,8 @@ export class Household {
       this.trip = null
     } else if (t.phase === 'back' && t.members.every((a) => !a.path.length)) {
       const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
-      const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand(), !!t.van, this.clock.day < PROLOGUE_DAYS)
+      const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand(), !!t.van, this.clock.day < PROLOGUE_DAYS, !!t.van && this.vanArmor)
+      const hadBow = this.crossbow
       const g = r.gain
       // 拾荒老手跟着去：多带回一份吃的一份水
       if (t.members.some((m) => m.trait === 'trait_scavenger')) { g.food = (g.food ?? 0) + 1; g.water = (g.water ?? 0) + 1 }
@@ -1265,6 +1270,11 @@ export class Household {
         this.crossbow = true
         this.equipCrossbow()
         this.note('world.log.crossbow', { who: this.actors.find((a) => a.weapon === 'crossbow')?.name ?? '爸爸' })
+      }
+      // 改装面包车的材料：末日后第一次去工厂，或者末日前第二次去五金店（第一次拿了弩）
+      if ((t.def.id === 'factory' || (t.def.id === 'hardware' && hadBow)) && !this.vanKit && !this.vanArmor) {
+        this.vanKit = true
+        this.note('world.log.vanKit', { where: placeName(t.def.id) })
       }
       if (r.gateBonus) {
         this.gateBonus = Math.min(120, this.gateBonus + r.gateBonus)
@@ -1579,6 +1589,7 @@ export class Household {
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
+    if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
 
@@ -1617,6 +1628,8 @@ export class Household {
     if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
       const r = this.rand()
       if (r < 0.5) task = this.companyTask(a)
+      // 材料带回来了：会修东西的人（爸爸）找个白天把面包车改装了
+      if (r < 0.9 && a.handy && this.vanKit && !this.vanArmor && !night) task = this.modVanTask()
       // 爸爸闲了爱去擦擦那辆面包车
       if (!task && r < 0.68 && !night && a === this.actors[2]) task = this.washTask()
       if (!task && r < 0.85) task = this.tidyTask(a)
@@ -1709,6 +1722,13 @@ export class Household {
       return (a.task as Task | null)?.kind === 'pet'
     }
     return false
+  }
+
+  /** 改装面包车：蹲在车边焊钢板、装铁栏，干一个多小时 */
+  private modVanTask(): Task | null {
+    if (this.vanAway || this.vanMove) return null
+    const spot: Spot = { kind: 'stroll', x: VAN_PARK.x + 0.3, z: 10.62, floor: 0, face: 0, pose: 'work' }
+    return { kind: 'modvan', spot, phase: 'go', hours: 1.2, manual: false }
   }
 
   /** 擦车：站到车北边，面朝车 */
@@ -1823,8 +1843,8 @@ export class Household {
       if (b.away || b.dead || b.floor !== a.floor || Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) > 2.2) return true
     }
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
-    // 车开走了就不擦了
-    if (t.kind === 'wash' && (this.vanAway || this.vanMove)) return true
+    // 车开走了就不擦了、不改了
+    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trip) return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
@@ -1849,6 +1869,11 @@ export class Household {
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
+    if (t.kind === 'modvan' && t.hours <= 0) {
+      this.vanArmor = true
+      this.vanKit = false
+      this.note('world.log.vanArmor', { who: a.name })
+    }
     this.release(a)
     a.task = null
     const next = t.then?.() ?? null

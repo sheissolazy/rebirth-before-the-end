@@ -92,7 +92,7 @@ export default function WorldView() {
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
   const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
   const [diaryPeople, setDiaryPeople] = useState<ReturnType<World['diaryPeople']>>([])
-  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; van: { fuel: number; home: boolean } }>({ checks: {}, vanChecks: {}, members: [], van: { fuel: 0, home: true } })
+  const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; van: { fuel: number; home: boolean; armored: boolean } }>({ checks: {}, vanChecks: {}, members: [], van: { fuel: 0, home: true, armored: false } })
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }

@@ -11,7 +11,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
   prologue: boolean
   check: (id: string, van: boolean) => Check
   members: MapMember[]
-  van: { fuel: number; home: boolean }
+  van: { fuel: number; home: boolean; armored: boolean }
   onGo: (id: string, names: string[], van: boolean) => void
   onClose: () => void
 }) {
@@ -75,7 +75,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
                 <li>⏱ {t('world.map.hours', { h: tripHours(trip, byVan) })}</li>
                 <li>💰 {tripCost(trip, prologue) ? t('world.map.cost', { n: tripCost(trip, prologue) }) : t('world.map.free')}</li>
                 <li>🧟 {trip.danger && !prologue
-                  ? t('world.map.danger', { n: Math.round(Math.min(0.9, trip.danger * (byVan ? VAN.danger : 1)) * 100) })
+                  ? t('world.map.danger', { n: Math.round(Math.min(0.9, trip.danger * (byVan ? (van.armored ? VAN.armorDanger : VAN.danger) : 1)) * 100) })
                   : t('world.map.safe')}</li>
               </ul>
               {vanAllowed(trip.id) && (
@@ -85,7 +85,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
                     <span>
                       <span className="font-semibold">{t('world.map.van')}</span>
                       <span className="block text-zinc-600">{t('world.map.vanInfo', { n: van.fuel })}</span>
-                      {!prologue && <span className="block text-zinc-500">{t('world.map.vanNoise')}</span>}
+                      {!prologue && <span className="block text-zinc-500">{t(van.armored ? 'world.map.vanArmored' : 'world.map.vanNoise')}</span>}
                     </span>
                   </label>
                 ) : (

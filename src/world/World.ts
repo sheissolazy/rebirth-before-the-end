@@ -1402,7 +1402,7 @@ export class World {
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
     const vp = vanPose(this.life.vanMove, this.life.vanAway, this.life.absHour)
-    this.van.update(Math.min(sim, 0.1), vp, this.nightness)
+    this.van.update(Math.min(sim, 0.1), vp, this.nightness, this.life.vanArmor)
     // 发动机声：离家越远越小（开出去上了街、开回来刚进街口时听得见）
     const vanFar = Math.hypot(vp.x - VAN_PARK.x, vp.z - VAN_PARK.z)
     // 铁门：车要过就全开，家里人走到门口开一半，过去了再关上（打丧尸时不开）
@@ -1917,8 +1917,8 @@ export class World {
   }
 
   /** 地图上"开面包车去"要用：还剩几桶油、车在不在家 */
-  vanInfo(): { fuel: number; home: boolean } {
-    return { fuel: this.life.fuel, home: !this.life.vanAway && !this.life.vanMove }
+  vanInfo(): { fuel: number; home: boolean; armored: boolean } {
+    return { fuel: this.life.fuel, home: !this.life.vanAway && !this.life.vanMove, armored: this.life.vanArmor }
   }
 
   /** 在家、能出门的人 */
