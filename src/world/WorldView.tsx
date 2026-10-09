@@ -4,6 +4,7 @@ import { EMPTY_HUD, World, type Hud } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel, type NeedKey } from './life'
 import type { PersonHud } from './residents'
+import { DiaryPanel } from './DiaryPanel'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
 const SPEEDS = [0, 1, 2, 3] as const
@@ -56,11 +57,21 @@ export default function WorldView() {
   const world = useRef<World | null>(null)
   const [hud, setHud] = useState<Hud>(EMPTY_HUD)
   const [style, setStyle] = useState<ArtStyle>(loadStyle)
+  const [diary, setDiaryState] = useState(false)
+  // 翻日记时游戏暂停，合上再接着走
+  const resume = useRef(1)
+  const setDiary = (open: boolean) => {
+    const w = world.current
+    if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
+    if (w && !open && w.speed === 0) w.setSpeed(resume.current)
+    setDiaryState(open)
+  }
 
   useEffect(() => {
     let w: World | null = null
     try {
       w = new World(host.current!, setHud, style)
+      w.onDiary = () => setDiary(true)
       world.current = w
     } catch (e) {
       // 不支持 WebGL 等情况：下一拍再显示错误
@@ -119,6 +130,10 @@ export default function WorldView() {
           <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
             🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })}
           </div>
+          <button onClick={() => setDiary(true)}
+            className="mt-1.5 rounded-md bg-red-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-red-700">
+            {t('world.diary.open')}
+          </button>
         </div>
         {hud.crisis && (
           <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">{t('world.crisis')}</div>
@@ -201,6 +216,10 @@ export default function WorldView() {
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
           {t(hud.toast as UiKey)}
         </div>
+      )}
+
+      {diary && (
+        <DiaryPanel day={hud.day} hour={hud.hour} log={world.current?.diaryLog() ?? []} onClose={() => setDiary(false)} />
       )}
 
       {hud.loading && (

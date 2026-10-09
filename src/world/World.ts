@@ -46,6 +46,8 @@ export interface Hud {
   siege: { left: number; layer: LayerId | null; hp: number; max: number } | null
   log: LogEntry[]
   muted: boolean
+  day: number
+  hour: number
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -67,7 +69,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0,
 }
 
 export class World {
@@ -92,6 +94,7 @@ export class World {
   private viewFloor: Floor = 0
   private tweenT = TWEEN_S
   private tweenFrom: Pose | null = null
+  private floorTween = false
   private homeness = 1
   private zoom = { home: 1, outside: 1 }
   private readonly pan = new THREE.Vector3()
@@ -457,6 +460,7 @@ export class World {
           const book = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.32), new THREE.MeshStandardMaterial({ color: '#a83232', roughness: 0.7 }))
           book.position.set(o.position.x + 0.15, y + 0.83, o.position.z + 0.05)
           book.castShadow = true
+          book.userData.piece = 'diary'
           o.parent?.add(book)
         }
         doomed.push(o)
@@ -600,8 +604,10 @@ export class World {
       this.pose.elev = THREE.MathUtils.lerp(this.tweenFrom.elev, want.elev, k)
       this.pose.dist = THREE.MathUtils.lerp(this.tweenFrom.dist, want.dist, k)
       this.pose.fov = THREE.MathUtils.lerp(this.tweenFrom.fov, want.fov, k)
-      this.homeness = this.mode === 'home' ? k : 1 - k
+      // 换楼层的过渡只挪镜头，屋顶和墙不跟着变
+      this.homeness = this.floorTween ? (this.mode === 'home' ? 1 : 0) : this.mode === 'home' ? k : 1 - k
     } else {
+      this.floorTween = false
       const a = 1 - Math.exp(-dt * 6)
       this.pose.target.lerp(want.target, a)
       this.pose.elev += (want.elev - this.pose.elev) * a
@@ -647,6 +653,7 @@ export class World {
     if (mode === this.mode) return
     this.tweenFrom = { target: this.pose.target.clone(), elev: this.pose.elev, dist: this.pose.dist, fov: this.pose.fov }
     this.tweenT = 0
+    this.floorTween = false
     this.mode = mode
     if (mode === 'outside') {
       this.selected = this.heroine
@@ -666,6 +673,7 @@ export class World {
     if (this.mode !== 'home' || f === this.viewFloor) return
     this.tweenFrom = { target: this.pose.target.clone(), elev: this.pose.elev, dist: this.pose.dist, fov: this.pose.fov }
     this.tweenT = TWEEN_S * 0.4
+    this.floorTween = true
     this.viewFloor = f
     this.setHud({ floor: f })
   }
@@ -867,8 +875,11 @@ export class World {
         }
       }
       if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
+      // 书桌上的红本子：打开重生日记
+      const hit = this.furnitureUnder(floor)
+      if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
       // 点家具：让选中的人去用（坐沙发、做饭、睡觉…）
-      const spot = this.spotUnder(floor)
+      const spot = hit && this.spotNear(hit, floor)
       if (spot) {
         if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
         else this.toast('world.toast.busy')
@@ -884,7 +895,8 @@ export class World {
     this.flashMarker(end.x, floor * FLOOR_H, end.z)
   }
 
-  private spotUnder(floor: Floor): Spot | null {
+  /** 鼠标下面第一件看得见的家具（只算当前看的这一层） */
+  private furnitureUnder(floor: Floor): THREE.Object3D | null {
     const hits = this.raycaster.intersectObjects(this.clickables, true)
     for (const h of hits) {
       let root: THREE.Object3D | null = h.object
@@ -892,18 +904,29 @@ export class World {
       if (!root || this.floorOf(root) !== floor) continue
       let shown = true
       for (let q: THREE.Object3D | null = root; q; q = q.parent) if (!q.visible) shown = false
-      if (!shown) continue
-      const at = root.getWorldPosition(new THREE.Vector3())
-      let best: Spot | null = null
-      let bestD = 1.4
-      for (const s of this.life.allSpots) {
-        if (s.floor !== floor || s.kind === 'stroll') continue
-        const d = Math.hypot(s.x - at.x, s.z - at.z)
-        if (d < bestD) { bestD = d; best = s }
-      }
-      return best
+      if (shown) return root
     }
     return null
+  }
+
+  /** 家具旁边能用的位置 */
+  private spotNear(root: THREE.Object3D, floor: Floor): Spot | null {
+    const at = root.getWorldPosition(new THREE.Vector3())
+    let best: Spot | null = null
+    let bestD = 1.4
+    for (const s of this.life.allSpots) {
+      if (s.floor !== floor || s.kind === 'stroll') continue
+      const d = Math.hypot(s.x - at.x, s.z - at.z)
+      if (d < bestD) { bestD = d; best = s }
+    }
+    return best
+  }
+
+  /** 界面设置：点了日记本 */
+  onDiary: (() => void) | null = null
+
+  diaryLog(): LogEntry[] {
+    return [...this.life.log]
   }
 
   private flashMarker(x: number, y: number, z: number): void {
@@ -963,6 +986,8 @@ export class World {
       water: this.life.stock.water,
       people: this.life.hud(),
       muted: this.sound.muted,
+      day: c.day,
+      hour: c.hour,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),
