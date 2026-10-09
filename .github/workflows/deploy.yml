@@ -4,6 +4,7 @@ name: Deploy to GitHub Pages
 #   /       ← main 分支（稳定测试版）
 #   /next/  ← next 分支（测试版二，存档前缀 rbte-next）
 #   /dev/   ← dev 分支（最新开发版，存档前缀 rbte-dev）
+#   /proto/ ← proto-2.5d 分支（2.5D 原型，存档前缀 rbte-proto）
 # 只在 main 上运行（github-pages 环境只允许 main 部署）；next 推送时由 trigger-deploy.yml 触发这里。
 on:
   push:
@@ -35,6 +36,10 @@ jobs:
         with:
           ref: dev
           path: dev
+      - uses: actions/checkout@v4
+        with:
+          ref: proto-2.5d
+          path: proto
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -60,12 +65,21 @@ jobs:
           npm ci
           npm test
           npm run build
+      - name: Build proto
+        working-directory: proto
+        env:
+          VITE_SAVE_PREFIX: rbte-proto
+        run: |
+          npm ci
+          npm test
+          npm run build
       - name: Assemble site
         run: |
-          mkdir -p site/next site/dev
+          mkdir -p site/next site/dev site/proto
           cp -r main/dist/. site/
           cp -r next/dist/. site/next/
           cp -r dev/dist/. site/dev/
+          cp -r proto/dist/. site/proto/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
