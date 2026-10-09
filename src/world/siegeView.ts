@@ -104,7 +104,7 @@ export class SiegeView {
     pts.frustumCulled = false
     this.scene.add(pts)
     this.embers = { pts, pos, vel: new Float32Array(n * 3), life: new Float32Array(n), next: 0 }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < LAYERS[0].posts.length; k++) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 28), new THREE.MeshBasicMaterial({
         color: k === 0 ? '#7cc4ff' : '#ffb35c', transparent: true, opacity: 0.75, depthWrite: false,
       }))

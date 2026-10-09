@@ -6,7 +6,7 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
+  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
@@ -190,7 +190,7 @@ export interface Trip {
 }
 
 /** 住进来的人叫什么 */
-const NEWCOMERS = ['阿杰', '老秦']
+const NEWCOMERS = ['阿杰', '老秦', '小周', '阿梅', '老郑', '小林', '阿彬']
 
 const placeName = (id: string) => lt(locations.find((l) => l.id === id)?.name ?? { zh: id })
 
@@ -262,7 +262,7 @@ export class Household {
   helmet = false
   /** 顾沉的对讲机提醒过：今晚少来几只 */
   fewerTonight = false
-  private careDay = -1
+  careDay = -1
   warnedJiangye = false
   /** 这次江野来送的是哪一样（0 罐头 / 1 斧子 / 2 焊铁门） */
   careVariant = 0
@@ -284,12 +284,14 @@ export class Household {
   spaceCap = 6
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
-  private flooded = -1
+  flooded = -1
   spawnVisitor: ((def: VisitorDef, at: Pt) => Visitor) | null = null
   /** World 提供：做一个新的家庭成员（带 3D 模型） */
   makeActor: ((name: string, model: string, at: Pt) => Actor) | null = null
   onKnock: (() => void) | null = null
   private visitCheck = -1
+  /** 今天已经来过访客了 */
+  visitDay = -1
   private readonly spots: Spot[]
   private readonly beds: Spot[]
   private readonly taken = new Map<Spot, Actor>()
@@ -366,7 +368,7 @@ export class Household {
       const hour = Math.floor(this.absHour)
       if (hour === this.visitCheck || !this.spawnVisitor || (this.siege && !this.siege.done)) return
       this.visitCheck = hour
-      if (Object.values(this.seen).includes(this.clock.day)) return
+      if (this.visitDay === this.clock.day) return
       const ctx = this.visitorCtx()
       const def = VISITORS.find((d) => d.when(ctx) && this.rand() < d.chance)
       if (def) this.startVisit(def)
@@ -392,7 +394,8 @@ export class Household {
     const v = this.spawnVisitor(def, at)
     v.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4 + (this.rand() - 0.5) * 0.6, z: 14.1, floor: 0 }) ?? [])
     this.visitor = v
-    this.seen[def.id] = this.clock.day
+    // 一天最多来一个；"来过"等回完话再记（路上刷新网页的话，这个访客以后还会来）
+    this.visitDay = this.clock.day
   }
 
   /** 最多住 5 个人 */
@@ -407,7 +410,7 @@ export class Household {
   /** 这个地方现在能不能搜：'ok' / 'prologue'（末日前邻居还住着）/ 'empty'（刚搜过）/ 'busy' */
   canSearch(spot: ScavengeSpot): 'ok' | 'prologue' | 'empty' | 'busy' {
     if (this.clock.day < PROLOGUE_DAYS) return 'prologue'
-    if ((this.siege && !this.siege.done) || this.search) return 'busy'
+    if (this.siege || this.search || this.fishing) return 'busy'
     const last = this.searched[spot.id]
     if (last !== undefined && this.clock.day - last < SCAVENGE_COOLDOWN_DAYS) return 'empty'
     return 'ok'
@@ -449,7 +452,7 @@ export class Household {
 
   /** 开始钓鱼（要站在江边钓鱼点附近） */
   startFishing(): boolean {
-    if (this.fishing || this.search || (this.siege && !this.siege.done)) return false
+    if (this.fishing || this.search || this.siege) return false
     const hero = this.actors[0]
     hero.path = []
     hero.pose = 'fish'
@@ -495,12 +498,14 @@ export class Household {
 
   /** 街上遇袭：一两只丧尸从附近冒出来扑向女主和跟着的人 */
   private ambush(spot: ScavengeSpot): void {
-    if (!this.spawnZombie || (this.siege && !this.siege.done)) return
+    if (!this.spawnZombie || this.siege) return
     const n = this.rand() < 0.4 ? 2 : 1
     const at = Array.from({ length: n }, (_, k) => ({ x: spot.at.x + (k ? -5 : 6), z: spot.at.z + (k ? 1.5 : 2) }))
-    const party = this.actors.filter((a) => !a.away && !a.lost && !a.runaway && !this.isHomeBody(a))
+    const party = this.actors.filter((a) => !a.away && !a.lost && !a.runaway && !this.onTrip(a) && !this.isHomeBody(a))
+    // 女主不在外面（比如被派出门了）就不会遇袭
+    if (!party.length) return
     this.siege = new Siege({
-      count: n, crisis: false, navs: this.navs, defenders: party.length ? party : [this.actors[0]],
+      count: n, crisis: false, navs: this.navs, defenders: party,
       barriers: { gate: 0, door: 0, stairs: 0 }, ammo: this.ammo, ambushAt: at,
       spawn: this.spawnZombie, emit: (e) => this.onSiegeEvent(e),
     })
@@ -530,6 +535,7 @@ export class Household {
     const v = this.visitor
     const def = this.talking
     if (!v || !def) return
+    this.seen[def.id] = this.clock.day
     const all = (d: number) => { for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, Math.min(100, a.needs.mood + d)) } }
     const food = (d: number) => { this.stock = { ...this.stock, food: Math.max(0, this.stock.food + d) } }
     if (def.id === 'neighbor_rice') {
@@ -542,7 +548,9 @@ export class Household {
       if (choice === 'give') { food(-1); all(5); this.tip = 'ruin_market' }
       else if (choice === 'invite') {
         // 让他住进来：门口的人直接变成家里人，走进院子
-        const name = NEWCOMERS.find((n) => !this.actors.some((a) => a.name === n)) ?? '新来的人'
+        const taken = (n: string) => this.actors.some((a) => a.name === n)
+        let name = NEWCOMERS.find((n) => !taken(n)) ?? '新来的人'
+        for (let k = 2; taken(name); k++) name = `新来的人${k}`
         const a = this.addResident(name, 'stranger', { x: v.pos.x, z: v.pos.z })
         if (a) {
           a.health = 70
@@ -822,7 +830,10 @@ export class Household {
 
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
   startTrip(id: string, members: Actor[]): boolean {
+    // 来帮忙的客人、出走的人不能派出去
+    members = members.filter((a) => !a.guest && !a.away && !a.lost && !a.runaway)
     if (!members.length || this.tripCheck(id) !== 'ok') return false
+    if (members.includes(this.actors[0])) { this.cancelSearch(); this.stopFishing() }
     const def = TRIPS.find((t) => t.id === id)!
     this.money -= def.cost
     for (const a of members) {
@@ -926,7 +937,7 @@ export class Household {
       this.note('world.log.guestCome')
     }
     // 天亮了、仗也打完了：他摆摆手走了
-    if (g && !g.runaway && c.hour >= 6.5 && c.hour < 12 && (!this.siege || this.siege.done)) {
+    if (g && !g.runaway && !this.onTrip(g) && c.hour >= 6.5 && c.hour < 12 && !this.siege) {
       this.cancel(g)
       g.runaway = { back: Infinity }
       g.setPath(route(this.navs, g.pos, EXIT) ?? [])
@@ -988,8 +999,16 @@ export class Household {
     const s = this.siege
     if (!s) return
     s.tick(simSeconds)
-    if (!s.done && c.hour >= SUNRISE && c.hour < 12) s.dawn()
+    if (!s.done && !s.ambush && c.hour >= SUNRISE && c.hour < 12) s.dawn()
     if (s.finished) this.siege = null
+  }
+
+  /** 原型调试用：下一个（危机）夜是哪一天——只往后，不倒回去 */
+  static nextNightDay(c: Clock, crisis: boolean): number {
+    let d = Math.max(c.day, PROLOGUE_DAYS)
+    if (d === c.day && c.hour > 20.8) d++
+    if (crisis) while ((d - PROLOGUE_DAYS) % DAYS_PER_MONTH !== DAYS_PER_MONTH - 1) d++
+    return d
   }
 
   /** 原型调试：重新允许今晚来丧尸 */
@@ -999,7 +1018,9 @@ export class Household {
 
   /** 原型调试用：马上来一波 */
   startSiege(count: number, crisis: boolean, raid = false): void {
-    if (!this.spawnZombie || (this.siege && !this.siege.done)) return
+    if (!this.spawnZombie || this.siege) return
+    this.cancelSearch()
+    this.stopFishing()
     for (const a of this.actors) {
       if (a.away) continue
       this.cancel(a)
@@ -1176,7 +1197,9 @@ export class Household {
     const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
     let task: Task | null = null
     // 白天爸爸有空就去修被丧尸砸坏的门
-    const handy = a.handy && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
+    // 会修门的人（爸爸）不在了，就换一个大人（不是女主、不是客人）来修
+    const fixer = a.handy || (a !== this.actors[0] && !a.guest && !this.actors.some((x) => x.handy && !x.away && !x.lost && !x.runaway))
+    const handy = fixer && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
     if (handy) task = this.repairTask()
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
     if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()

@@ -60,13 +60,14 @@ export function settleTrip(id: string, people: number, armed: boolean, r: () => 
       case 'office': return { gain: { money: 3000 }, hurt, key: 'world.trip.office', vars: { money: 3000 } }
       case 'supermarket': {
         const f = Math.round(5 * more)
-        return { gain: { money: -trip.cost, food: f, water: f }, hurt, key: 'world.trip.supermarket', vars: { food: f, water: f } }
+        return { gain: { food: f, water: f }, hurt, key: 'world.trip.supermarket', vars: { food: f, water: f } }
       }
-      case 'pharmacy': return { gain: { money: -trip.cost, medkits: 2 }, hurt, key: 'world.trip.pharmacy', vars: { n: 2 } }
-      case 'hardware': return { gain: { money: -trip.cost, molotovs: 3 }, gateBonus: 60, hurt, key: 'world.trip.hardware', vars: { n: 60 } }
+      // 钱在出发时已经付过了（Household.startTrip），这里只结算带回来的东西
+      case 'pharmacy': return { gain: { medkits: 2 }, hurt, key: 'world.trip.pharmacy', vars: { n: 2 } }
+      case 'hardware': return { gain: { molotovs: 3 }, gateBonus: 60, hurt, key: 'world.trip.hardware', vars: { n: 60 } }
       case 'blackmarket': {
-        if (r() < 0.15) return { gain: { money: -trip.cost }, hurt, key: 'world.trip.scammed', vars: { money: trip.cost } }
-        return { gain: { money: -trip.cost, ammo: 12 }, hurt, key: 'world.trip.blackmarket', vars: { n: 12 } }
+        if (r() < 0.15) return { gain: {}, hurt, key: 'world.trip.scammed', vars: { money: trip.cost } }
+        return { gain: { ammo: 12 }, hurt, key: 'world.trip.blackmarket', vars: { n: 12 } }
       }
     }
   }

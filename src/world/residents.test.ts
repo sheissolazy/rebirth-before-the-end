@@ -174,6 +174,8 @@ describe('出门', () => {
     expect(life.stock.food).toBeGreaterThan(food0 + 5)
     expect(hero.away || mom.away).toBe(false)
     expect(life.log.some((l) => l.key === 'world.trip.supermarket')).toBe(true)
+    // 钱只在出发时扣一次
+    expect(life.money).toBe(18000 - 1200)
     // 文字版超市事件里的一段见闻
     const scene = life.log.find((l) => l.key === 'world.log.scene')
     expect(scene?.vars?.title).toBeTruthy()
@@ -598,5 +600,62 @@ describe('钓鱼', () => {
     expect(life.stock.food).toBeGreaterThan(food - 1)
     life.stopFishing()
     expect(life.fishing).toBeNull()
+  })
+})
+
+
+describe('审查找到的问题（回归测试）', () => {
+  it('来帮忙的客人不能派出门', () => {
+    const { life } = simulate('paradise', 0)
+    const guest = new Actor('江野', '#888', '#222', 1, { x: 4, z: 10 }, { hunger: 90, thirst: 90, energy: 90, mood: 90 })
+    guest.guest = true
+    life.actors.push(guest)
+    life.clock = { day: 1, hour: 8 }
+    expect(life.startTrip('supermarket', [guest])).toBe(false)
+  })
+
+  it('访客还在路上时存档：读档后他以后还会来（回完话才算来过）', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: 1, hour: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'jiangye_meet')!)
+    const s = JSON.parse(JSON.stringify(snapshot(life)))
+    expect(s.seen.jiangye_meet).toBeUndefined()
+  })
+
+  it('早上在街上遇袭不会被"天亮"直接结束；上一场还在收尾时不会再遇袭', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 7 }
+    const house = SCAVENGE.find((x) => x.id === 'house_m')!
+    life.actors[0].root.position.set(house.at.x, 0, house.at.z)
+    life.startSearch({ ...house, danger: 1, hours: 0.01 })
+    for (let i = 0; i < 20 && !life.siege; i++) life.tick(0.05, () => false)
+    expect(life.siege?.ambush).toBe(true)
+    for (let i = 0; i < 10; i++) life.tick(0.05, () => false)
+    expect(life.siege?.done).toBe(false)
+    expect(life.canSearch(SCAVENGE[0])).toBe('busy')
+  })
+
+  it('调试跳到丧尸夜只往后跳', () => {
+    expect(Household.nextNightDay({ day: 1, hour: 9 }, true)).toBe(PROLOGUE_DAYS + 3)
+    expect(Household.nextNightDay({ day: 15, hour: 9 }, true)).toBe(15)
+    expect(Household.nextNightDay({ day: 15, hour: 22 }, true)).toBe(19)
+    expect(Household.nextNightDay({ day: 9, hour: 9 }, false)).toBe(9)
+  })
+
+  it('住进来的人名字不会重复', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _m, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    const names: string[] = []
+    for (let k = 0; k < 2; k++) {
+      life.clock = { day: PROLOGUE_DAYS + 1 + k * 4, hour: 10 }
+      life.startVisit(VISITORS.find((v) => v.id === 'beggar')!)
+      for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+      life.answerVisitor('invite')
+      names.push(life.actors[life.actors.length - 1].name)
+    }
+    expect(new Set(names).size).toBe(2)
   })
 })

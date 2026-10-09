@@ -857,7 +857,8 @@ export class World {
     } else {
       // 回到家里时，跟在后面的人也一起进门
       const h = this.heroine.pos
-      this.actors.filter((a) => a !== this.heroine && !isHome(a.pos.x, a.pos.z, false)).forEach((a, k) => {
+      this.actors.filter((a) => a !== this.heroine && !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)
+        && !isHome(a.pos.x, a.pos.z, false)).forEach((a, k) => {
         this.life.commandWalk(a, { x: h.x + (k ? -1 : 1), z: h.z - 1.2, floor: 0 })
       })
     }
@@ -1013,8 +1014,9 @@ export class World {
     }
     const heroOut = this.life.onTrip(this.heroine)
     this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
-    if (this.selected.away) {
-      const other = this.actors.find((a) => !a.away)
+    // 选中的人出门了、走了（客人离开、离家出走）就换一个在家的人
+    if (this.selected.away || !this.actors.includes(this.selected)) {
+      const other = this.actors.find((a) => !a.away && !a.lost)
       if (other) this.select(other)
     }
     this.updateCamera(dt)
@@ -1081,7 +1083,7 @@ export class World {
     const h = this.heroine.root
     const back = new THREE.Vector2(-Math.sin(h.rotation.y), -Math.cos(h.rotation.y))
     // 睡着的人不跟出去
-    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !a.away && !a.runaway && !a.lost).forEach((a, k) => {
+    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)).forEach((a, k) => {
       const side = k === 0 ? 1 : -1
       const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8, floor: 0 as const }
       const d = Math.hypot(a.pos.x - h.position.x, a.pos.z - h.position.z)
@@ -1249,7 +1251,7 @@ export class World {
 
   /** 在家、能出门的人 */
   homeMembers(): { name: string; health: number }[] {
-    return this.actors.filter((a) => !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
+    return this.actors.filter((a) => !a.away && !a.runaway && !a.lost && !a.guest && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
   }
 
   startTrip(id: string, names: string[]): boolean {
@@ -1277,8 +1279,9 @@ export class World {
 
   /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
   debugNight(crisis: boolean): void {
-    if (this.life.siege && !this.life.siege.done) return
-    this.life.clock = { day: PROLOGUE_DAYS + (crisis ? 3 : 0), hour: 20.85 }
+    if (this.life.siege) return
+    // 只往后跳，不倒回去（倒回去的话出门、访客、菜地这些按时间算的东西都会乱）
+    this.life.clock = { day: Household.nextNightDay(this.life.clock, crisis), hour: 20.85 }
     this.life.resetNight()
     this.pushLifeHud()
   }

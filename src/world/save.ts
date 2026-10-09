@@ -54,6 +54,12 @@ export interface WorldSave {
   xielinNotes?: number
   garden?: { built: boolean; growth: number; watered: number }
   cameoSeen?: boolean
+  /** 一天只发生一次的事：暴雨后进水、早上送东西、今天来过访客；街上哪里搜过；今晚少来丧尸 */
+  flooded?: number
+  careDay?: number
+  visitDay?: number
+  searched?: Record<string, number>
+  fewerTonight?: boolean
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -90,6 +96,11 @@ export function snapshot(life: Household): WorldSave {
     xielinNotes: life.xielinNotes,
     garden: { ...life.garden },
     cameoSeen: life.cameoSeen,
+    flooded: life.flooded,
+    careDay: life.careDay,
+    visitDay: life.visitDay,
+    searched: { ...life.searched },
+    fewerTonight: life.fewerTonight,
   }
 }
 
@@ -116,6 +127,11 @@ export function restore(life: Household, s: WorldSave): void {
   life.xielinNotes = s.xielinNotes ?? 0
   if (s.garden) life.garden = { ...s.garden }
   life.cameoSeen = !!s.cameoSeen
+  life.flooded = s.flooded ?? -1
+  life.careDay = s.careDay ?? -1
+  life.visitDay = s.visitDay ?? -1
+  life.searched = { ...(s.searched ?? {}) }
+  life.fewerTonight = !!s.fewerTonight
   life.guchenMet = !!s.guchenMet
   life.helmet = !!s.helmet
   if (life.helmet && life.actors[0]) life.actors[0].helmet = true

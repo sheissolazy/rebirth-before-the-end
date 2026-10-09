@@ -70,16 +70,15 @@ export default function WorldView() {
   const [welcome, setWelcome] = useState(() => {
     try { return localStorage.getItem(WELCOME_KEY) !== '1' } catch { return true }
   })
-  const welcomeOpen = useRef(welcome)
   const closeWelcome = (night: boolean) => {
     try { localStorage.setItem(WELCOME_KEY, '1') } catch { /* 隐私模式 */ }
-    welcomeOpen.current = false
-    world.current?.setSpeed(resume.current || 1)
     setWelcome(false)
     if (night) world.current?.debugNight(true)
   }
-  // 翻日记时游戏暂停，合上再接着走
+  // 欢迎卡、日记、地图、门口的对话框：任何一个开着游戏就暂停，全关了再回到原来的速度
+  // （原来就是手动暂停的，关掉以后还是暂停）
   const resume = useRef(1)
+  const uiPaused = useRef(false)
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
   const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
   const [diaryPeople, setDiaryPeople] = useState<ReturnType<World['diaryPeople']>>([])
@@ -87,15 +86,11 @@ export default function WorldView() {
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()) }
-    if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
-    if (w && !open && w.speed === 0) w.setSpeed(resume.current)
     setDiaryState(open)
   }
   const setMap = (open: boolean) => {
     const w = world.current
     if (w && open) setMapData({ checks: Object.fromEntries(TRIPS.map((x) => [x.id, w.tripCheck(x.id)])), members: w.homeMembers() })
-    if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
-    if (w && !open && w.speed === 0) w.setSpeed(resume.current)
     setMapState(open)
   }
 
@@ -103,8 +98,8 @@ export default function WorldView() {
     let w: World | null = null
     try {
       w = new World(host.current!, setHud, style)
-      // 欢迎卡开着时先暂停
-      if (welcomeOpen.current) w.setSpeed(0)
+      // 换画风重建世界时，如果有面板开着，接着暂停
+      if (uiPaused.current) w.setSpeed(0)
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
       world.current = w
@@ -118,15 +113,20 @@ export default function WorldView() {
     }
   }, [style])
 
-  // 有人来敲门：先暂停，回完话再接着走
   const visitId = hud.visit?.id ?? null
+  const blocking = welcome || diary || map || !!visitId
   useEffect(() => {
     const w = world.current
     if (!w) return
-    if (visitId && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
-    else if (!visitId && w.speed === 0 && !diary && !map && !welcome) w.setSpeed(resume.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId])
+    if (blocking && !uiPaused.current) {
+      uiPaused.current = true
+      resume.current = w.speed
+      w.setSpeed(0)
+    } else if (!blocking && uiPaused.current) {
+      uiPaused.current = false
+      w.setSpeed(resume.current)
+    }
+  }, [blocking])
 
   // 空格暂停，1/2/3 调速
   useEffect(() => {
@@ -255,7 +255,7 @@ export default function WorldView() {
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
           {hud.muted ? '🔇' : '🔊'}
         </button>
-        <button onClick={() => { const w = world.current; if (w && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) } welcomeOpen.current = true; setWelcome(true) }} title={t('world.helpAgain')}
+        <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
           className={`rounded-full bg-white/90 px-2.5 py-1 text-xs shadow ${hud.music ? '' : 'opacity-40'}`}>
@@ -415,7 +415,9 @@ export default function WorldView() {
             <div className="mt-4 rounded-lg bg-white/60 p-3 text-xs leading-relaxed text-zinc-700">{t('world.welcome.keys')}</div>
             <div className="mt-5 flex gap-2">
               <button onClick={() => closeWelcome(false)} className="flex-1 rounded-lg bg-emerald-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.start')}</button>
-              <button onClick={() => closeWelcome(true)} className="flex-1 rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.zombies')}</button>
+              {hud.prologue && (
+                <button onClick={() => closeWelcome(true)} className="flex-1 rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.zombies')}</button>
+              )}
             </div>
           </div>
         </div>
