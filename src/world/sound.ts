@@ -2,6 +2,12 @@
 // 还有环境声：白天鸟叫、夜里蛐蛐、远处的江水。浏览器要求第一次点击/按键之后才能出声。
 
 const MUTE_KEY = 'rbte-proto-mute'
+const MUSIC_KEY = 'rbte-proto-music'
+
+/** 和弦（MIDI 音高）：白天温柔一点，夜里低一点暗一点 */
+const DAY_CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]] // Am F C G
+const NIGHT_CHORDS = [[45, 48, 52], [40, 43, 47], [41, 45, 48], [40, 43, 47]] // Am Em F Em
+const hz = (m: number) => 440 * 2 ** ((m - 69) / 12)
 
 export class Sound {
   private ctx: AudioContext | null = null
@@ -12,11 +18,79 @@ export class Sound {
   private nextBird = 0
   private lastBash = 0
   muted: boolean
+  music: boolean
+  private musicBus: GainNode | null = null
+  private nextChord = 0
+  private chordIdx = 0
+  private nextBeat = 0
 
   constructor() {
     let m = false
-    try { m = localStorage.getItem(MUTE_KEY) === '1' } catch { /* 隐私模式 */ }
+    let mu = true
+    try {
+      m = localStorage.getItem(MUTE_KEY) === '1'
+      mu = localStorage.getItem(MUSIC_KEY) !== '0'
+    } catch { /* 隐私模式 */ }
     this.muted = m
+    this.music = mu
+  }
+
+  setMusic(on: boolean): void {
+    this.music = on
+    try { localStorage.setItem(MUSIC_KEY, on ? '1' : '0') } catch { /* 隐私模式 */ }
+  }
+
+  /** 背景音乐：白天四个和弦慢慢换（Am F C G），夜里更低更暗；打丧尸时换成低沉的嗡鸣 + 心跳 */
+  private musicTick(ctx: AudioContext, mode: 'day' | 'night' | 'siege'): void {
+    if (!this.musicBus) {
+      const lp = ctx.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.value = 1100
+      this.musicBus = ctx.createGain()
+      this.musicBus.gain.value = 0
+      this.musicBus.connect(lp).connect(this.master!)
+    }
+    const want = !this.music ? 0 : mode === 'siege' ? 0.09 : mode === 'night' ? 0.05 : 0.06
+    this.musicBus.gain.setTargetAtTime(want, ctx.currentTime, 1.2)
+    if (!this.music) return
+    const t = ctx.currentTime
+    if (mode === 'siege') {
+      // 心跳一样的低音，一秒一下
+      if (t > this.nextBeat) {
+        this.nextBeat = t + 1.05
+        for (const [dt, f] of [[0, 55], [0.22, 49]] as const) {
+          const o = ctx.createOscillator()
+          o.type = 'sine'
+          o.frequency.setValueAtTime(f * 1.4, t + dt)
+          o.frequency.exponentialRampToValueAtTime(f, t + dt + 0.15)
+          const g = ctx.createGain()
+          this.env(g, t + dt, 0.9, 0.01, 0.3)
+          o.connect(g).connect(this.musicBus)
+          o.start(t + dt)
+          o.stop(t + dt + 0.4)
+        }
+      }
+      this.nextChord = Math.min(this.nextChord, t + 0.5)
+      return
+    }
+    if (t < this.nextChord) return
+    const chords = mode === 'night' ? NIGHT_CHORDS : DAY_CHORDS
+    const chord = chords[this.chordIdx++ % chords.length]
+    const len = 7
+    this.nextChord = t + len - 1.5
+    for (const m of chord) for (const detune of [-4, 4]) {
+      const o = ctx.createOscillator()
+      o.type = 'triangle'
+      o.frequency.value = hz(m)
+      o.detune.value = detune
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.linearRampToValueAtTime(0.16, t + 2.2)
+      g.gain.linearRampToValueAtTime(0.0001, t + len)
+      o.connect(g).connect(this.musicBus)
+      o.start(t)
+      o.stop(t + len + 0.1)
+    }
   }
 
   /** 第一次点击或按键时调用 */
@@ -229,6 +303,7 @@ export class Sound {
     const ctx = this.ready
     if (!ctx) return
     this.rainSound(ctx, rain)
+    this.musicTick(ctx, !calm ? 'siege' : night > 0.5 ? 'night' : 'day')
     const t = ctx.currentTime
     if (rain > 0.3) return // 下雨天没有鸟和蛐蛐
     // 夜里的蛐蛐：一串很快的高音

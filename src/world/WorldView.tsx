@@ -244,6 +244,10 @@ export default function WorldView() {
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
           {hud.muted ? '🔇' : '🔊'}
         </button>
+        <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
+          className={`rounded-full bg-white/90 px-2.5 py-1 text-xs shadow ${hud.music ? '' : 'opacity-40'}`}>
+          🎵
+        </button>
         <button onClick={toggleStyle} className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
           {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
         </button>

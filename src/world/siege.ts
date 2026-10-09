@@ -223,6 +223,7 @@ export class Siege {
     while (!this.done && this.queue.length && this.queue[0].t <= this.t) {
       const q = this.queue.shift()!
       const z = this.o.spawn(q.at, !!this.o.raid)
+      z.cool = this.rand() * ZOMBIE.cool
       if (this.o.raid) { z.raider = true; z.hp = 75; z.speed = 1.35 }
       z.id = this.nextId++
       this.zombies.push(z)
@@ -428,7 +429,7 @@ export class Siege {
     }
     a.face(target.pos.x - a.pos.x, target.pos.z - a.pos.z, dt)
     a.pose = w.range ? 'shoot' : 'melee'
-    const c = (this.cool.get(a) ?? Math.random() * 0.5) - dt
+    const c = (this.cool.get(a) ?? this.rand() * 0.5) - dt
     if (c > 0) { this.cool.set(a, c); return }
     this.cool.set(a, w.cool)
     let dmg = w.dmg

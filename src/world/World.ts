@@ -56,6 +56,7 @@ export interface Hud {
   siege: { left: number; layer: LayerId | null; hp: number; max: number; ambush: boolean } | null
   log: LogEntry[]
   muted: boolean
+  music: boolean
   day: number
   hour: number
   money: number
@@ -93,7 +94,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 },
 }
 
 export class World {
@@ -148,6 +149,8 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
+  private readonly torch = new THREE.SpotLight('#fff1cf', 0, 20, 0.5, 0.45, 1.4)
   private readonly bubbles = new Bubbles()
   /** 菜地：一块土 + 两排苗（苗按长势缩放），熟了头上冒 🥬 */
   private readonly gardenObj = new THREE.Group()
@@ -211,7 +214,7 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
-    this.scene.add(this.rain.lines, ...this.spotMarks)
+    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target)
     this.buildGarden()
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
@@ -865,6 +868,13 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    // 手电筒：夜里在屋外，照向女主前方
+    const hp = this.heroine.root.position
+    const fwd = new THREE.Vector3(Math.sin(this.heroine.root.rotation.y), 0, Math.cos(this.heroine.root.rotation.y))
+    this.torch.position.set(hp.x + fwd.x * 0.3, hp.y + 1.3, hp.z + fwd.z * 0.3)
+    this.torch.target.position.set(hp.x + fwd.x * 6, hp.y, hp.z + fwd.z * 6)
+    const wantTorch = this.mode === 'outside' && this.nightness > 0.5 && !this.heroine.away ? 60 : 0
+    this.torch.intensity += (wantTorch - this.torch.intensity) * Math.min(1, dt * 4)
     // 江野来帮忙守夜：提示一下
     if (!!this.life.guest !== this.hadGuest) {
       this.hadGuest = !!this.life.guest
@@ -1273,6 +1283,12 @@ export class World {
     this.pushLifeHud()
   }
 
+  toggleMusic(): void {
+    this.sound.unlock()
+    this.sound.setMusic(!this.sound.music)
+    this.setHud({ music: this.sound.music })
+  }
+
   toggleMute(): void {
     this.sound.unlock()
     this.sound.setMuted(!this.sound.muted)
@@ -1301,6 +1317,7 @@ export class World {
       water: this.life.stock.water,
       people: this.life.hud(),
       muted: this.sound.muted,
+      music: this.sound.music,
       day: c.day,
       hour: c.hour,
       money: this.life.money,
