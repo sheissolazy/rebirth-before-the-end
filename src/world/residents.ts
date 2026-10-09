@@ -1035,6 +1035,8 @@ export class Household {
     const k = `${a.name}:${what}`
     if (this.warned.get(k) === this.clock.day) return
     this.warned.set(k, this.clock.day)
+    // 读档后"今天记过没有"的记忆没了：看一眼日记里今天是不是已经写过同一句
+    if (this.log.some((l) => l.day === this.clock.day && l.key === key && l.vars?.who === a.name)) return
     this.note(key, { who: a.name })
   }
 

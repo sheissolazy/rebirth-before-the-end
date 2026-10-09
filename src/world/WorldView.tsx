@@ -383,7 +383,7 @@ export default function WorldView() {
         <button onClick={() => world.current?.snapshot()} title={t('world.photo')}
           className={`${CHIP} px-2 py-1 text-xs`}>📷</button>
         <button onClick={() => { setDayStart(world.current?.dayStartLabel() ?? null); setMenu((m) => (m ? null : 'open')) }}
-          className={`${CHIP} px-2.5 py-1 text-xs ${menu ? 'ring-[#e8c98a]/70' : ''}`}>{t('world.menu')}</button>
+          className={`${CHIP} px-2.5 py-1 text-xs font-semibold text-[#e8c98a] ring-[#e8c98a]/60 ${menu ? 'bg-[#3a3024]' : ''}`}>{t('world.menu')}</button>
         <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
           className={`${CHIP} px-2 py-1 text-xs`}>❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}

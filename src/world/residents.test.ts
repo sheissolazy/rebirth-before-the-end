@@ -509,6 +509,23 @@ describe('出门', () => {
 })
 
 describe('需求归零的后果', () => {
+  it('读档后同一天不会把"渴得嘴唇裂开"再记一遍', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 0, water: 0 }
+    life.medkits = 40
+    life.clock = { day: 0, hour: 8 }
+    life.speed = 3
+    for (const a of life.actors) a.needs = { hunger: 0, thirst: 0, energy: 60, mood: 60 }
+    const step = () => { for (let i = 0; i < 40; i++) life.tick(0.1, (a) => life.isHomeBody(a)) }
+    step()
+    const count = () => life.log.filter((l) => l.key === 'world.log.thirsty' && l.vars?.who === life.actors[0].name).length
+    expect(count()).toBe(1)
+    // 刷新页面 = "今天警告过谁"的记忆丢了，但日记还在
+    ;(life as unknown as { warned: Map<string, number> }).warned.clear()
+    step()
+    expect(count()).toBe(1)
+  })
+
   it('家里断粮断水：饿着渴着掉健康，（有急救包吊着命）熬久了有人抑郁离家出走（女主不会走）', () => {
     const { life } = simulate('paradise', 0)
     life.stock = { food: 0, water: 0 }
