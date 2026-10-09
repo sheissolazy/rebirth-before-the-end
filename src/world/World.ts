@@ -422,10 +422,16 @@ export class World {
       else if (e.kind === 'fire') this.sound.fire()
       else if (e.kind === 'trapBroken') this.sound.crash()
       else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1, 0.55) }
+      // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
+      // （开打的事件在 Siege 构造时就发了，那时 life.siege 还没赋值，所以看防线耐久）
+      const fightFloor = () => (this.life.barriers.gate > 0 || this.life.barriers.door > 0 ? 0 : 1)
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
-        if (this.mode === 'home') this.setViewFloor(0)
-      } else if (e.kind === 'broken') this.toast(`world.log.broken.${e.layer}` as ToastKey, 3)
+        if (this.mode === 'home' && !e.ambush) this.setViewFloor(fightFloor())
+      } else if (e.kind === 'broken') {
+        this.toast(`world.log.broken.${e.layer}` as ToastKey, 3)
+        if (this.mode === 'home' && e.layer === 'door') this.setViewFloor(1)
+      }
       else if (e.kind === 'end') this.toast(e.won ? 'world.toast.won' : 'world.toast.lost', 4)
     }
 
