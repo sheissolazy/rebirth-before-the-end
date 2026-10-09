@@ -1492,7 +1492,10 @@ export class World {
   }
 
   moveToSpace(kind: 'food' | 'water', n: number): void {
-    this.life.moveToSpace(kind, n)
+    if (this.life.moveToSpace(kind, n)) {
+      this.siegeView.sparkle(this.heroine.root.position)
+      this.sound.squelch()
+    }
     this.pushLifeHud()
   }
 

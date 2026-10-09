@@ -265,6 +265,26 @@ export class SiegeView {
     })
   }
 
+  /** 空间异能：女主身边一圈往上飘的紫色光点 */
+  sparkle(at: { x: number; y: number; z: number }): void {
+    const n = 26
+    const pos = new Float32Array(n * 3)
+    const ang = Array.from({ length: n }, (_, k) => (k / n) * Math.PI * 2)
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    const mat = new THREE.PointsMaterial({ color: '#c9a6ff', size: 0.08, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+    this.add(new THREE.Points(geo, mat), 1.1, (k) => {
+      const p = geo.attributes.position as THREE.BufferAttribute
+      for (let i = 0; i < n; i++) {
+        const a = ang[i] + k * 3
+        const r = 0.45 + Math.sin(i * 1.7) * 0.1
+        p.setXYZ(i, at.x + Math.cos(a) * r, at.y + 0.2 + k * 1.6 + (i % 3) * 0.15, at.z + Math.sin(a) * r)
+      }
+      p.needsUpdate = true
+      mat.opacity = 1 - k * k
+    })
+  }
+
   /** 水花（钓鱼时鱼咬钩） */
   splash(at: { x: number; y: number; z: number }): void {
     const n = 18
