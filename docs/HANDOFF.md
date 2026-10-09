@@ -95,3 +95,16 @@ fuser -k 4173/tcp                   # 关预览；别用 pkill -f，会把自己
 - 小红书调研已完成：`docs/research/xhs-ai-gamedev.md`（共 78 篇）。
 - 2.5D 方向的讨论结论写在 `docs/DESIGN-2.5D.md`：three.js；屋里固定 45°、屋外像海岛钓鱼游戏那样跟拍；"家"是一层层的地盘；第一版只做小别墅；美术只用代码 + Blender + 免费素材；卡牌换成日记、地图、对话框。
 - 还有 11 个问题等用户回答，见 `DESIGN-2.5D.md` §2。前 5 题答完后，开 `proto-2.5d` 分支做原型。
+
+## 9. 2026-10-09 夜里（囤囤一个人做）：2.5D 原型做到能玩
+
+- 分支 `proto-2.5d` → https://sheissolazy.github.io/rebirth-before-the-end/proto/ 。每一步做了什么、为什么、怎么验证的，按时间记在 `docs/DEVLOG.md`（开头有"早上先看这里"的总结和"下一步"）。
+- 代码地图（`src/world/`）：
+  - `life.ts` 时钟/需求/自主决策（纯函数）· `residents.ts` 一家人（Actor、Household：任务、出门、访客、丧尸夜调度、种田、空间、存货）· `walker.ts` 走路
+  - `siege.ts` 丧尸夜的逻辑（防线、守位、武器、燃烧瓶、街上遇袭）· `siegeView.ts` 丧尸夜的画面（模型、特效、血条、铁门/大门）
+  - `visitors.ts` 来敲门的人 · `expedition.ts` 地图出门 · `scavenge.ts` 街上搜东西 · `weather.ts` 下雨 · `daylight.ts` 昼夜 · `sound.ts` 合成音效和音乐 · `bubbles.ts` 想法泡泡 · `save.ts` 自动存档
+  - `World.ts` 把以上接到 three.js 场景、镜头、输入、HUD 数据 · `WorldView.tsx` / `DiaryPanel.tsx` / `MapPanel.tsx` 界面
+- 3D 里的台词和数据尽量直接读文字版 `src/content/`（memories、locations、npcs、events），没在 3D 里另写一套世界观。
+- 测试：`npx vitest run src/world`（80+ 个，含不渲染跑 10 天的长跑测试）。改了逻辑先跑这个。
+- 预览面板读不了 `~/Documents`：用 `VITE_SAVE_PREFIX=rbte-proto npx vite build --outDir <scratchpad>/proto-dist` 再用 python http.server 看；页面带 `?debug` 时可以在控制台用 `window.__world`。
+- 还没做、等用户拍板的见 `docs/DEVLOG.md` 文末"下一步"。
