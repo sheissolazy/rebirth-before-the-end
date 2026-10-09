@@ -771,3 +771,40 @@ describe('长得不一样的陌生人、男主送东西上门', () => {
     expect(life.log.some((l) => l.key.startsWith('world.army.care'))).toBe(true)
   })
 })
+
+describe('铁门外的钉板', () => {
+  it('末日前花 1500 元铺；踩烂之前不能重复铺；末日后用 2 颗晶核', () => {
+    const { life } = simulate('paradise', 0)
+    const money = life.money
+    expect(life.buildTrap()).toBe(true)
+    expect(life.money).toBe(money - 1500)
+    expect(life.trap.hp).toBe(100)
+    expect(life.buildTrap()).toBe(false)
+    life.trap.hp = 0
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    life.cores = 1
+    expect(life.buildTrap()).toBe(false)
+    life.cores = 2
+    expect(life.buildTrap()).toBe(true)
+    expect(life.cores).toBe(0)
+  })
+
+  it('丧尸砸铁门时站在钉板上：一直掉血、钉板磨损，最后被踩烂', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.ammo.n = 0
+    life.trap.hp = 30
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(6, false)
+    const dt = 0.05
+    let slowedSeen = false
+    for (let i = 0; i < 40000 && life.siege && !life.siege.done && life.trap.hp > 0; i++) {
+      life.tick(dt, () => false)
+      for (const z of life.siege?.zombies ?? []) { z.follow(dt, z.speed); if (z.slowed) slowedSeen = true }
+      for (const a of life.actors) a.follow(dt, 2.2)
+    }
+    expect(slowedSeen).toBe(true)
+    expect(life.trap.hp).toBe(0)
+    expect(life.log.some((l) => l.key === 'world.log.trapGone')).toBe(true)
+  })
+})

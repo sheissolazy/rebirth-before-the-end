@@ -56,6 +56,10 @@ const WEAPONS = {
 }
 const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 1.15 }
 
+/** 铁门外铺的钉板和铁丝网：踩进去走得慢、一直掉血；每有一只丧尸在上面待一秒就磨损一点 */
+export const TRAP = { x0: 2.2, x1: 5.8, z0: 13.6, z1: 16.0, dps: 2, wear: 1, slow: 0.55 }
+export const inTrap = (p: Pt) => p.x > TRAP.x0 && p.x < TRAP.x1 && p.z > TRAP.z0 && p.z < TRAP.z1
+
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
   /** 黑鸦的人（不是丧尸）：走得快、皮厚、打不过会跑 */
@@ -72,6 +76,8 @@ export class Zombie extends Walker {
   hitT = 0
   /** 还要烧几秒 */
   burn = 0
+  /** 正踩在钉板上（走得慢） */
+  slowed = false
   driver: PoseDriver | null = null
   private inner: THREE.Object3D
 
@@ -113,6 +119,7 @@ export type SiegeEvent =
   | { kind: 'start'; count: number; crisis: boolean; raid: boolean; ambush: boolean }
   | { kind: 'broken'; layer: LayerId }
   | { kind: 'kill'; at: Pt; by: string; raider: boolean }
+  | { kind: 'trapBroken' }
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
   | { kind: 'bash'; layer: LayerId; at: Pt }
@@ -135,6 +142,8 @@ export interface SiegeOpts {
   ammo: { n: number }
   /** 防线耐久上限（铁门可能加固过） */
   maxOf?: (id: LayerId) => number
+  /** 铁门外的钉板（耐久 0~100，打仗时会磨损，和 Household 共用一个对象） */
+  trap?: { hp: number }
   spawn: (at: Pt, raider: boolean) => Zombie
   emit: (e: SiegeEvent) => void
 }
@@ -312,6 +321,15 @@ export class Siege {
       z.burn -= dt
       z.hp -= 9 * dt
       if (z.hp <= 0) { this.kill(z, 'fire'); return }
+    }
+    // 踩在钉板上：走得慢、掉血、钉板磨损
+    const trap = this.o.trap
+    z.slowed = !!trap && trap.hp > 0 && z.state !== 'leave' && !this.o.ambushAt && inTrap(z.pos)
+    if (z.slowed && trap) {
+      trap.hp = Math.max(0, trap.hp - TRAP.wear * dt)
+      z.hp -= TRAP.dps * dt
+      if (trap.hp <= 0) this.o.emit({ kind: 'trapBroken' })
+      if (z.hp <= 0) { this.kill(z, 'trap'); return }
     }
     if (z.state === 'leave') {
       if (!z.path.length) { z.state = 'dead'; z.deadT = 7 }

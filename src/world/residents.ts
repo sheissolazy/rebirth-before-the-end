@@ -265,6 +265,8 @@ export class Household {
   xielinNotes = 0
   /** 院子砌了石头院墙：铁门更结实，隔着栏杆被抓伤的事也没了 */
   wall = false
+  /** 铁门外的钉板（耐久 0~100；0 = 没铺或者踩烂了） */
+  readonly trap = { hp: 0 }
   /** 第一个尸潮危机夜街尽头那个人（阿寂的伏笔），看过就不再出现 */
   cameoSeen = false
   /** 菜地：开了没有、长到多少（1 = 能收）、哪天浇过水 */
@@ -841,6 +843,24 @@ export class Household {
     return LAYERS.find((l) => l.id === id)!.max + (id === 'gate' ? this.gateBonus + (this.wall ? 100 : 0) : 0)
   }
 
+  static readonly TRAP_COST = 1500
+  static readonly TRAP_CORES = 2
+
+  /** 铁门外铺钉板、拉铁丝网（末日前花钱买，末日后用晶核换）；踩烂了可以重新铺 */
+  buildTrap(): boolean {
+    if (this.trap.hp > 0 || (this.siege && !this.siege.done)) return false
+    if (this.clock.day < PROLOGUE_DAYS) {
+      if (this.money < Household.TRAP_COST) return false
+      this.money -= Household.TRAP_COST
+    } else {
+      if (this.cores < Household.TRAP_CORES) return false
+      this.cores -= Household.TRAP_CORES
+    }
+    this.trap.hp = 100
+    this.note('world.log.trap')
+    return true
+  }
+
   static readonly WALL_COST = 6000
   static readonly WALL_CORES = 6
 
@@ -1154,7 +1174,7 @@ export class Household {
     }
     this.siege = new Siege({
       count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
-      maxOf: (id) => this.maxOf(id),
+      maxOf: (id) => this.maxOf(id), trap: this.trap,
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
     })
@@ -1171,6 +1191,7 @@ export class Household {
   }
 
   private onSiegeEvent(e: SiegeEvent): void {
+    if (e.kind === 'trapBroken') { this.note('world.log.trapGone'); this.onSiege?.(e); return }
     if (e.kind === 'start') this.note(e.ambush ? 'world.log.ambush' : e.raid ? 'world.log.raid' : e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
     else if (e.kind === 'broken') {
       this.note(`world.log.broken.${e.layer}`)

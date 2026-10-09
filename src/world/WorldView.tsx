@@ -214,6 +214,15 @@ export default function WorldView() {
               {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
             </button>
           </div>
+          {hud.trap > 0 ? (
+            <div className="mt-1.5 w-fit rounded-md bg-white/70 px-2 py-0.5 text-xs text-zinc-700">{t('world.trap.left', { n: hud.trap })}</div>
+          ) : (
+            <button onClick={() => world.current?.buildGateTrap()}
+              disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2}
+              className="mt-1.5 w-fit rounded-md bg-zinc-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
+              {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
+            </button>
+          )}
           {!hud.wall && (
             <button onClick={() => world.current?.buildYardWall()}
               disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6}

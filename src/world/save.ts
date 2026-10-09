@@ -61,6 +61,7 @@ export interface WorldSave {
   visitDay?: number
   searched?: Record<string, number>
   fishCaught?: number
+  trap?: number
   fewerTonight?: boolean
   wall?: boolean
 }
@@ -104,6 +105,7 @@ export function snapshot(life: Household): WorldSave {
     visitDay: life.visitDay,
     searched: { ...life.searched },
     fishCaught: life.fishCaught,
+    trap: life.trap.hp,
     fewerTonight: life.fewerTonight,
     wall: life.wall,
   }
@@ -137,6 +139,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.visitDay = s.visitDay ?? -1
   life.searched = { ...(s.searched ?? {}) }
   life.fishCaught = s.fishCaught ?? 0
+  life.trap.hp = s.trap ?? 0
   life.fewerTonight = !!s.fewerTonight
   life.wall = !!s.wall
   life.guchenMet = !!s.guchenMet

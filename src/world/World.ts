@@ -18,7 +18,7 @@ import {
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
 import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
-import { LAYERS, type LayerId } from './siege'
+import { LAYERS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -68,6 +68,8 @@ export interface Hud {
   molotovs: number
   /** 院墙砌了没有 */
   wall: boolean
+  /** 钉板耐久（0 = 没有） */
+  trap: number
   /** 末日前要做的事（做完打勾） */
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
@@ -112,14 +114,14 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -236,6 +238,7 @@ export class World {
   private bite = 0
   /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
   private cameo: { obj: THREE.Object3D; until: number } | null = null
+  private trapMesh: THREE.Group | null = null
   /** 送东西的人放在铁门外的箱子 / 纸条 */
   private dropped: THREE.Object3D | null = null
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
@@ -383,6 +386,7 @@ export class World {
       else if (e.kind === 'kill') this.sound.squelch()
       else if (e.kind === 'hit') this.sound.hurt()
       else if (e.kind === 'fire') this.sound.fire()
+      else if (e.kind === 'trapBroken') this.sound.crash()
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home') this.setViewFloor(0)
@@ -525,6 +529,50 @@ export class World {
     this.scene.add(this.gardenObj)
   }
 
+  /** 铁门外的钉板（几块钉满钉子的木板）和一卷螺旋铁丝网 */
+  private makeTrap(): THREE.Group {
+    const g = new THREE.Group()
+    const wood = this.pmats?.textured('wood') ?? toon('#6b5236')
+    const metal = new THREE.MeshStandardMaterial({ color: '#9a9ea4', metalness: 0.7, roughness: 0.4 })
+    const boards = [[2.7, 14.15, 0.2], [3.75, 14.75, -0.12], [4.85, 14.2, 0.08], [5.2, 15.05, 0.3], [3.0, 15.2, -0.25]] as const
+    const nails = new THREE.InstancedMesh(new THREE.ConeGeometry(0.016, 0.08, 4), metal, boards.length * 10)
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    let n = 0
+    for (const [x, z, r] of boards) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.035, 0.3), wood)
+      b.position.set(x, 0.018, z)
+      b.rotation.y = r
+      b.receiveShadow = true
+      g.add(b)
+      for (let k = 0; k < 10; k++) {
+        const lx = -0.28 + (k % 5) * 0.14
+        const lz = k < 5 ? -0.07 : 0.07
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r)
+        const off = new THREE.Vector3(lx, 0, lz).applyQuaternion(q)
+        m.compose(new THREE.Vector3(x + off.x, 0.075, z + off.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))
+        nails.setMatrixAt(n++, m)
+      }
+    }
+    g.add(nails)
+    // 螺旋铁丝网：横在钉板外面，两头各一根木桩
+    const pts: THREE.Vector3[] = []
+    for (let i = 0; i <= 260; i++) {
+      const u = i / 260
+      const a = u * Math.PI * 2 * 22
+      pts.push(new THREE.Vector3(2.2 + u * 3.6, 0.3 + Math.sin(a) * 0.26, 15.75 + Math.cos(a) * 0.26))
+    }
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 520, 0.009, 4), metal)
+    wire.castShadow = true
+    g.add(wire)
+    for (const x of [2.15, 5.85]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.75, 6), wood)
+      post.position.set(x, 0.37, 15.75)
+      g.add(post)
+    }
+    return g
+  }
+
   /** 砌一圈石头院墙（铁门那两米留着），靠近镜头的南墙、东墙在家里视角下压低 */
   private raiseStoneWall(): void {
     const mat = this.pmats?.textured('stone') ?? toon(COLORS.stone)
@@ -554,6 +602,11 @@ export class World {
     this.stoneWall = g
     this.scene.add(g)
     this.collectClickables()
+  }
+
+  buildGateTrap(): void {
+    if (this.life.buildTrap()) this.toast('world.toast.trap', 3)
+    this.pushLifeHud()
   }
 
   buildYardWall(): void {
@@ -1076,7 +1129,7 @@ export class World {
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
-      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed) || walking
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed * (z.slowed ? TRAP.slow : 1)) || walking
       z.animate(Math.min(sim, 0.1), walking)
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
@@ -1200,6 +1253,12 @@ export class World {
       this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
       this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
     }
+    // 钉板：铺了才出现，踩烂了就收起来
+    if (this.life.trap.hp > 0 && !this.trapMesh && !this.hud.loading) {
+      this.trapMesh = this.makeTrap()
+      this.scene.add(this.trapMesh)
+    }
+    if (this.trapMesh) this.trapMesh.visible = this.life.trap.hp > 0
     SCAVENGE.forEach((sp, k) => {
       const m = this.spotMarks[k]
       m.visible = this.mode === 'outside' && this.life.canSearch(sp) === 'ok'
@@ -1698,6 +1757,7 @@ export class World {
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
       wall: this.life.wall,
+      trap: Math.ceil(this.life.trap.hp),
       fishing: { active: !!this.life.fishing, near: this.mode === 'outside' && nearFishing(this.heroine.pos), caught: this.life.fishCaught },
       ammo: this.life.ammo.n,
       cores: this.life.cores,
