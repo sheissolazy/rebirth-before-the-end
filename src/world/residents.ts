@@ -1,7 +1,7 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { BEDS, FLOOR_H, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -527,6 +527,11 @@ export class Household {
   /** 女主正坐在面包车里自己开（这段时间不派活、不能派出门、别人不来找她） */
   heroDriving = false
 
+  /** 今晚的丧尸夜快到了还没打（末日后 20:45 起，到打完为止） */
+  get nightPending(): boolean {
+    return this.clock.day >= PROLOGUE_DAYS && this.clock.hour >= 20.75 && this.nightDone !== this.clock.day
+  }
+
   /** 能借出去的家人：不算女主、来帮忙的客人、不在家的；已经借出去一个就不能再借 */
   lendable(): Actor[] {
     if (this.lent) return []
@@ -700,7 +705,8 @@ export class Household {
   private streetCheck = -1
   private streetTick(): void {
     const hero = this.actors[0]
-    if (this.clock.day < PROLOGUE_DAYS || this.siege || hero.away || this.isHomeBody(hero)) return
+    // 女主在车里开着：不算在街上走（不会被围）
+    if (this.clock.day < PROLOGUE_DAYS || this.siege || hero.away || this.heroDriving || this.isHomeBody(hero)) return
     const hour = Math.floor(this.absHour)
     if (hour === this.streetCheck) return
     this.streetCheck = hour
@@ -1598,6 +1604,9 @@ export class Household {
 
   /** 开菜地：末日前花钱买种子和工具，末日后用晶核（跟军区换种子） */
   buildGarden(): boolean {
+    // 车停在那块地上：先挪车
+    const v = this.vanAt
+    if (v && v.x > GARDEN.x0 - 2 && v.x < GARDEN.x1 + 2 && v.z > GARDEN.z0 - 1.2 && v.z < GARDEN.z1 + 1.2) return false
     if (this.garden.built) return false
     if (this.clock.day < PROLOGUE_DAYS) {
       if (this.money < Household.GARDEN_COST) return false

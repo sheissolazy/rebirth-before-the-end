@@ -165,6 +165,27 @@ describe('晾衣服', () => {
   })
 })
 
+describe('女主自己开车', () => {
+  it('开车在街上时不会被围（不算走在街上）；不能被派出门', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 9 }
+    life.speed = 3
+    const hero = life.actors[0]
+    life.cancel(hero)
+    hero.root.position.set(14, 0, 18)
+    hero.floor = 0
+    life.heroDriving = true
+    const dt = 0.1
+    for (let i = 0; i < (8 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a) && a !== hero)
+      hero.root.position.set(14, 0, 18)
+    }
+    expect(life.siege).toBeNull()
+    expect(life.startTrip('river', [hero])).toBe(false)
+  })
+})
+
 describe('陪聊', () => {
   it('妈妈坐在沙发上歇着：爸爸能找到她身边一块空地过去陪她说话（不会站进墙里、桌子里）', () => {
     for (const style of ['paradise', 'toon'] as const) {

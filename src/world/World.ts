@@ -460,9 +460,9 @@ export class World {
     }
     // 开着车的时候存的档：女主的位置就在车里，读档后让她站到车门边
     const va = this.life.vanAt
-    if (va && Math.hypot(this.heroine.pos.x - va.x, this.heroine.pos.z - va.z) < 2) {
-      const c = this.navs[0].nearestFree(va.x + Math.cos(va.rot) * 1.3, va.z - Math.sin(va.rot) * 1.3)
-      if (c) { const p = this.navs[0].centerOf(c[0], c[1]); this.heroine.root.position.set(p.x, 0, p.z) }
+    if (va && Math.hypot(this.heroine.pos.x - va.x, this.heroine.pos.z - va.z) < 0.3) {
+      const p = this.exitSpot(va, true)
+      if (p) this.heroine.root.position.set(p.x, 0, p.z)
     }
     this.life.onDoomsday = () => {
       this.sound.siren()
@@ -1407,7 +1407,7 @@ export class World {
     // 时钟按真实时间走（掉帧时也不变慢），走路按小步算
     const sim = raw * this.life.speed
     // 天黑前（末日后 20:45，丧尸要来了）还在开车：先下车回家守着
-    if (this.driving && this.life.clock.day >= PROLOGUE_DAYS && this.life.clock.hour >= 20.75 && this.life.clock.hour < 21.5) {
+    if (this.driving && this.life.nightPending) {
       this.exitVan(true)
       this.toast('world.toast.nightExit', 3)
     }
@@ -1866,7 +1866,7 @@ export class World {
   /** 现在能不能上车：车在、没出门、没打丧尸、女主在一楼 */
   private canDrive(): boolean {
     const l = this.life
-    return !l.vanAway && !l.vanMove && !l.trip?.van && !(l.siege && !l.siege.done) && !l.onTrip(this.heroine)
+    return !l.vanAway && !l.vanMove && !l.trip?.van && !l.siege && !l.nightPending && !l.onTrip(this.heroine)
       && this.heroine.floor === 0 && !this.heroine.away && l.speed > 0
   }
 
@@ -1899,27 +1899,11 @@ export class World {
     const d = this.driving
     if (!d) return
     if (!force && Math.abs(d.speed) > 0.6) { this.toast('world.toast.stopFirst', 1.5); return }
-    const fx = Math.sin(d.rot)
-    const fz = Math.cos(d.rot)
-    const nav = this.navs[0]
     this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
-    const wall = this.carBlocked
-    const home = isHome(d.x, d.z, false)
-    // 车门边一个走得到的点：不隔着围栏、墙（中间连线上没有挡的），跟车在院子同一边
-    const reach = (p: { x: number; z: number }) => {
-      if (nav.isBlockedAt(p.x, p.z) || isHome(p.x, p.z, false) !== home) return false
-      for (let k = 1; k <= 8; k++) if (wall(d.x + (p.x - d.x) * k / 8, d.z + (p.z - d.z) * k / 8)) return false
-      return true
-    }
-    const spots = [[fz * 1.25, -fx * 1.25], [-fz * 1.25, fx * 1.25], [-fx * 2.6, -fz * 2.6], [fx * 2.6, fz * 2.6]]
-    const at = spots.map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find(reach)
-    if (!at && !force) { this.toast('world.toast.noExit', 1.5); return }
-    if (!at) {
-      // 硬下车（天黑、打丧尸）：找最近的空格子
-      const c = nav.nearestFree(d.x + fz * 1.25, d.z - fx * 1.25)
-      const p = c ? nav.centerOf(c[0], c[1]) : { x: d.x, z: d.z }
-      this.heroine.root.position.set(p.x, 0, p.z)
-    } else this.heroine.root.position.set(at.x, 0, at.z)
+    // 车卡死了（比如菜地开在车底下）也让她下来
+    const at = this.exitSpot(d, force || this.vanStuck(d))
+    if (!at) { this.toast('world.toast.noExit', 1.5); return }
+    this.heroine.root.position.set(at.x, 0, at.z)
     this.heroine.floor = 0
     this.driving = null
     this.life.heroDriving = false
@@ -1932,6 +1916,26 @@ export class World {
       this.toast('world.toast.parked', 2)
     }
     else this.life.vanAt = { x: d.x, z: d.z, rot: d.rot }
+  }
+
+  /** 下车站哪：车门边一个走得到的点（不隔着围栏、墙，跟车在院子同一边）；force 时找不到就找最近的空格子 */
+  private exitSpot(d: { x: number; z: number; rot: number }, force: boolean): { x: number; z: number } | null {
+    const nav = this.navs[0]
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    const wall = this.carBlocked
+    const fx = Math.sin(d.rot)
+    const fz = Math.cos(d.rot)
+    const home = isHome(d.x, d.z, false)
+    const reach = (p: { x: number; z: number }) => {
+      if (nav.isBlockedAt(p.x, p.z) || isHome(p.x, p.z, false) !== home) return false
+      for (let k = 1; k <= 8; k++) if (wall(d.x + (p.x - d.x) * k / 8, d.z + (p.z - d.z) * k / 8)) return false
+      return true
+    }
+    const spots = [[fz * 1.25, -fx * 1.25], [-fz * 1.25, fx * 1.25], [-fx * 2.6, -fz * 2.6], [fx * 2.6, fz * 2.6]]
+    const at = spots.map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find(reach)
+    if (at || !force) return at ?? null
+    const c = nav.nearestFree(d.x + fz * 1.25, d.z - fx * 1.25)
+    return c ? nav.centerOf(c[0], c[1]) : { x: d.x, z: d.z }
   }
 
   /** 车停的地方压着东西（换了画风以后可能）：一点都挪不动 */
