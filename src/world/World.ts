@@ -17,14 +17,14 @@ import {
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
-import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
+import { PROLOGUE_DAYS, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
-import { applyPerks, awardRebirthPoints, clearWorld, currentLife, loadWorld, nextLife, saveWorld } from './save'
+import { applyPerks, awardRebirthPoints, clearWorld, currentLife, hardPref, loadWorld, nextLife, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -147,7 +147,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -414,6 +414,9 @@ export class World {
     // 没有存档 = 全新开局：先放一段片头
     if (!loadWorld(this.life)) {
       this.introT = 0
+      // 困难模式是跨存档的设置
+      this.life.hard = hardPref()
+      this.applyHardAmmo()
       // 上一世用重生点买的开局加成
       const perks = applyPerks(this.life)
       if (perks.length) this.life.logNote('world.log.perks', { list: perks.map((p) => t(`world.perk.${p}` as UiKey)).join('、') })
@@ -1340,9 +1343,9 @@ export class World {
     }
     // 末日后：危机夜当天早上提醒一次；每天傍晚提醒丧尸要来了
     const ck = this.life.clock
-    if (ck.day >= PROLOGUE_DAYS && !this.life.siege && this.introT < 0) {
+    if (ck.day >= PROLOGUE_DAYS && !this.life.siege && this.introT < 0 && this.life.speed > 0) {
       const left = this.life.available
-      if (ck.hour >= 8 && ck.hour < 9 && this.warned.crisis !== ck.day && isCrisisNight({ day: ck.day, hour: 21 })) {
+      if (ck.hour >= 8 && ck.hour < SUNSET && this.warned.crisis !== ck.day && isCrisisNight({ day: ck.day, hour: 21 })) {
         this.warned.crisis = ck.day
         this.toast('world.toast.crisisDay', 6)
       } else if (ck.hour >= 9 && ck.hour < 10 && this.warned.stock !== ck.day && (left.water < 3 || left.food < 3)) {
@@ -1351,7 +1354,7 @@ export class World {
         this.toast(left.water < 3 ? 'world.toast.lowWater' : 'world.toast.lowFood', 6)
       } else if (ck.hour >= 19.5 && ck.hour < 20.5 && this.warned.dusk !== ck.day) {
         this.warned.dusk = ck.day
-        this.toast(this.life.ammo.n < 8 ? 'world.toast.duskLowAmmo' : 'world.toast.dusk', 5)
+        this.toast(this.life.raidTonight ? 'world.toast.duskRaid' : this.life.ammo.n < 8 ? 'world.toast.duskLowAmmo' : 'world.toast.dusk', 5)
       }
     }
     // 有人快饿死、有人走了：日记里新出现这种记录就弹提示（只看新的）
@@ -1741,14 +1744,27 @@ export class World {
 
   /** 原型调试：普通 / 困难切换（切到困难时子弹减半） */
   toggleHard(): void {
+    // 打仗的时候不能切（这一场的丧尸已经按原来的难度来了）
+    if (this.life.siege && !this.life.siege.done) return
     this.life.hard = !this.life.hard
-    if (this.life.hard) this.life.ammo.n = Math.ceil(this.life.ammo.n / 2)
+    setHardPref(this.life.hard)
+    this.applyHardAmmo()
     saveWorld(this.life)
     this.setHud({ hard: this.life.hard })
   }
 
+  /** 困难模式开局子弹减半：每一局只减一次 */
+  private applyHardAmmo(): void {
+    if (!this.life.hard || this.life.hardHalved) return
+    this.life.hardHalved = true
+    this.life.ammo.n = Math.ceil(this.life.ammo.n / 2)
+  }
+
   /** 原型调试：看看"你又死了一次"那一屏 */
   debugDie(): void {
+    // 正在打仗就先收场（不然存不了档，重生点也对不上）
+    const sg = this.life.siege
+    if (sg) { for (const z of sg.zombies) z.root.removeFromParent(); this.life.siege = null }
     this.life.die(this.actors[0], 'crisis')
     this.pushLifeHud()
   }
@@ -1944,8 +1960,7 @@ export class World {
   /** 这一世结束的那一屏；顺便发重生点（撑过的天数 + 每打倒 5 只 1 点，至少 1 点；同一世只发一次） */
   private overHud(o: NonNullable<Household['over']>): Hud['over'] {
     const days = Math.max(0, o.day - PROLOGUE_DAYS + 1)
-    const points = Math.max(1, days + Math.floor(this.life.kills / 5))
-    awardRebirthPoints(points)
+    const points = awardRebirthPoints(Math.max(1, days + Math.floor(this.life.kills / 5)))
     const mourned = this.actors.filter((a) => a.dead && a !== this.heroine).map((a) => a.name)
     return { when: calendarLabel({ day: o.day, hour: o.hour }), cause: o.cause, days, points, kills: this.life.kills, mourned }
   }

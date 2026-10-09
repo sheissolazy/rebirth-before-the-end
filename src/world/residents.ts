@@ -437,6 +437,11 @@ export class Household {
   /** 困难模式（给设计者对比用：丧尸多一半、更狠、大块头更多、开局子弹减半） */
   hard = false
 
+  /** 这一局已经因为困难模式减过一次子弹（来回切换不会一直减） */
+  hardHalved = false
+  /** 新开局用上了重生加成（第一次存档后清掉商店里买的） */
+  perksApplied = false
+
   /** 疫病夜以后沈砚哪天来送药（-1 = 不来） */
   medicTomorrow = -1
 

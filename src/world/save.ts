@@ -66,6 +66,7 @@ export interface WorldSave {
   trap?: number
   kills?: number
   hard?: boolean
+  hardHalved?: boolean
   medicTomorrow?: number
   lent?: { name: string; back: number } | null
   fewerTonight?: boolean
@@ -118,6 +119,7 @@ export function snapshot(life: Household): WorldSave {
     trap: life.trap.hp,
     kills: life.kills,
     hard: life.hard,
+    hardHalved: life.hardHalved,
     medicTomorrow: life.medicTomorrow,
     lent: life.lent,
     fewerTonight: life.fewerTonight,
@@ -158,6 +160,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.trap.hp = s.trap ?? 0
   life.kills = s.kills ?? 0
   life.hard = !!s.hard
+  life.hardHalved = !!s.hardHalved
   life.medicTomorrow = s.medicTomorrow ?? -1
   life.lent = s.lent ?? null
   life.fewerTonight = !!s.fewerTonight
@@ -199,7 +202,12 @@ export function restore(life: Household, s: WorldSave): void {
 
 export function saveWorld(life: Household): void {
   if (life.siege && !life.siege.done) return
-  try { localStorage.setItem(KEY, JSON.stringify(snapshot(life))) } catch { /* 隐私模式或存满了 */ }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(snapshot(life)))
+    // 新开局用上的重生加成：第一次存档成功以后才清掉（开发模式会建两次世界，提前清掉第二次就没了）。
+    // 女主死了停在结束画面时不清——那时候正在买下一世的加成
+    if (!life.over && life.perksApplied) localStorage.setItem(`${PREFIX}-perks`, '[]')
+  } catch { /* 隐私模式或存满了 */ }
 }
 
 export function loadWorld(life: Household): boolean {
@@ -252,12 +260,23 @@ export function rebirthPoints(): number {
   return Math.max(0, Number(read(POINTS)) || 0)
 }
 
-/** 这一世的重生点（同一世只发一次，刷新页面不会重复拿） */
-export function awardRebirthPoints(n: number): void {
+/** 这一世的重生点（同一世只发一次，刷新页面不会重复拿）；返回这一世实际拿到的点数 */
+export function awardRebirthPoints(n: number): number {
   const life = String(currentLife())
-  if (read(AWARDED) === life) return
-  write(AWARDED, life)
+  const [was, got] = (read(AWARDED) ?? '').split(':')
+  if (was === life) return Number(got) || 0
+  write(AWARDED, `${life}:${n}`)
   write(POINTS, String(rebirthPoints() + n))
+  return n
+}
+
+const HARD = `${PREFIX}-hard`
+/** 困难模式是一个设置：换存档、进入下一世都保留 */
+export function hardPref(): boolean {
+  return read(HARD) === '1'
+}
+export function setHardPref(on: boolean): void {
+  write(HARD, on ? '1' : '0')
 }
 
 export function boughtPerks(): PerkId[] {
@@ -288,7 +307,8 @@ export function applyPerks(life: Household): PerkId[] {
     else if (id === 'space') life.spaceCap += 4
     else if (id === 'jiangye') life.affection.jiangye = Math.min(100, (life.affection.jiangye ?? 0) + 20)
   }
-  write(PERKS, '[]')
+  // 不在这里清掉，等第一次存档成功（见 saveWorld）
+  life.perksApplied = have.length > 0
   return have
 }
 

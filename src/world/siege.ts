@@ -395,7 +395,7 @@ export class Siege {
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }
-    } else if ((z.repath -= dt) <= 0 || !z.path.length) {
+    } else if ((z.repath -= dt) <= 0 || (!z.path.length && z.repath < 0.75)) {
       // 正在往别的楼层走（爬楼梯）就别重新找路：爬一趟要两三秒，每秒重算会被拉回楼梯口，永远上不去
       if (z.path.length && z.path.some((p) => p.floor !== z.floor)) return
       z.repath = 1

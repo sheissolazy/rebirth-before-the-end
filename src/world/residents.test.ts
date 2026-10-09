@@ -912,9 +912,13 @@ describe('重生点', () => {
     expect(save.applyPerks(life)).toEqual(['space', 'jiangye'])
     expect(life.spaceCap).toBe(before.cap + 4)
     expect(life.affection.jiangye).toBe(before.aff + 20)
+    // 第一次存档成功以后才清掉（开发模式会建两次世界）
+    expect(save.boughtPerks()).toEqual(['space', 'jiangye'])
+    save.saveWorld(life)
     expect(save.boughtPerks()).toEqual([])
-    // 下一世死了又能拿
-    save.awardRebirthPoints(3)
+    // 下一世死了又能拿；同一世重复调用返回同样的点数，但只加一次
+    expect(save.awardRebirthPoints(3)).toBe(3)
+    expect(save.awardRebirthPoints(9)).toBe(3)
     expect(save.rebirthPoints()).toBe(3)
     vi.unstubAllGlobals()
   })

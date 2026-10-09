@@ -94,7 +94,7 @@ export const VISITORS: VisitorDef[] = [
   // 男主：谢临（同为重生者）。塞过两张纸条以后，某个傍晚他会亲自站到铁门外（只来这一次）
   {
     id: 'xielin_meet', model: 'xielin', icon: '⏳', chance: 0.35,
-    when: (c) => !c.prologue && c.xielinNotes >= 2 && c.hour >= 17 && c.hour < 19.5 && c.seen.xielin_meet === undefined,
+    when: (c) => !c.prologue && c.xielinNotes >= 2 && c.hour >= 17 && c.hour < 18.5 && c.seen.xielin_meet === undefined,
     choices: [{ id: 'ask' }, { id: 'dinner', need: (c) => c.food >= 1 }, { id: 'shut' }],
   },
   {
