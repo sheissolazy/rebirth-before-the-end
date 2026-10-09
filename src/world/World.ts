@@ -157,6 +157,9 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 帧率自适应：连续几秒太卡就把渲染分辨率降一档 */
+  private slowT = 0
+  private dprSteps = 0
   /** 院子的木围栏（砌了院墙就藏起来）、院墙、世外桃源的材质 */
   private readonly fences: THREE.Object3D[] = []
   private stoneWall: THREE.Group | null = null
@@ -972,7 +975,17 @@ export class World {
   private loop = (): void => {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
-    const raw = Math.min(this.clock.getDelta(), 0.25)
+    const frame = this.clock.getDelta()
+    const raw = Math.min(frame, 0.25)
+    // 连续 4 秒低于约 28 帧（又不是在后台被暂停）：分辨率降一档，最多降两档
+    if (frame > 0.036 && frame < 0.5 && !this.hud.loading) this.slowT += frame
+    else this.slowT = Math.max(0, this.slowT - frame * 0.5)
+    if (this.slowT > 4 && this.dprSteps < 2) {
+      this.slowT = 0
+      this.dprSteps++
+      this.renderer.setPixelRatio(Math.max(0.75, this.renderer.getPixelRatio() * 0.7))
+      this.fit()
+    }
     const dt = Math.min(raw, 0.05)
     this.elapsed += dt
     this.petals?.update(dt, this.elapsed)
