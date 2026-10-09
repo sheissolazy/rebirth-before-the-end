@@ -94,6 +94,8 @@ const WALK_SPEED = 2.2
 const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
+const TMP_FWD = new THREE.Vector3()
+const TMP_TIP = new THREE.Vector3()
 
 type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
@@ -167,11 +169,14 @@ export class World {
   /** 白天天上慢慢飞过的一小群鸟（扇翅膀的折线） */
   private readonly birds = (() => {
     const g = new THREE.Group()
-    const mat = new THREE.LineBasicMaterial({ color: '#3a3a3a', transparent: true, opacity: 0.75 })
-    const list: { obj: THREE.Line; off: THREE.Vector3; ph: number }[] = []
+    const mat = new THREE.MeshBasicMaterial({ color: '#2f2f33', side: THREE.DoubleSide })
+    const list: { obj: THREE.Mesh; off: THREE.Vector3; ph: number }[] = []
     for (let i = 0; i < 7; i++) {
-      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.35, 0, 0), new THREE.Vector3(0, 0, 0.08), new THREE.Vector3(0.35, 0, 0)])
-      const obj = new THREE.Line(geo, mat)
+      // 两片三角形翅膀：0 左翼尖，1 身子前，2 身子后，3 右翼尖
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.6, 0, 0.05, 0, 0, 0.18, 0, 0, -0.12, 0.6, 0, 0.05]), 3))
+      geo.setIndex([0, 1, 2, 1, 3, 2])
+      const obj = new THREE.Mesh(geo, mat)
       const off = new THREE.Vector3((i % 3) * 1.4 - 1.4 + (i > 3 ? 0.7 : 0), Math.sin(i) * 0.5, -Math.floor(i / 2) * 1.2)
       g.add(obj)
       list.push({ obj, off, ph: i * 0.9 })
@@ -204,6 +209,9 @@ export class World {
   /** 全新开局的片头：镜头从江面上空慢慢滑到老宅（秒；<0 表示没有片头） */
   private introT = -1
   static readonly INTRO_S = 7
+  /** 片头被跳过后还没转回来的角度、雾的淡化系数（慢慢回到 1） */
+  private yawOffset = 0
+  private fogK = 1
   /** 钓鱼竿、鱼线、浮漂 */
   private readonly rod = new THREE.Group()
   private readonly rodTip = new THREE.Object3D()
@@ -848,7 +856,9 @@ export class World {
     this.scene.fog?.color.copy(s.fog).lerp(grey, rain * 0.75)
     // 片头的高空镜头离得远，雾先淡一点，降下来以后恢复
     const introK = this.introT >= 0 ? 0.35 + 0.65 * Math.min(1, this.introT / World.INTRO_S) : 1
-    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.fogBase * (1 + rain * 1.3) * introK
+    this.fogK = this.introT >= 0 ? introK : this.fogK + (1 - this.fogK) * 0.04
+    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.fogBase * (1 + rain * 1.3) * this.fogK
+    else if (this.scene.fog instanceof THREE.Fog) { this.scene.fog.near = 55 / this.fogK; this.scene.fog.far = 110 / this.fogK }
     for (const g of this.glass) (g as THREE.MeshStandardMaterial).emissive?.setRGB(1, 0.72, 0.38).multiplyScalar(s.lamps * 0.55)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const l of this.lamps) {
@@ -895,10 +905,14 @@ export class World {
       this.pose.dist = THREE.MathUtils.lerp(from.dist, want.dist, k)
       this.pose.fov = THREE.MathUtils.lerp(from.fov, want.fov, k)
       const yaw = YAW - (1 - k) * 1.3
+      this.yawOffset = yaw - YAW
       this.applyPose(yaw)
       if (this.introT >= World.INTRO_S) this.endIntro()
       return
     }
+    // 片头被跳过时剩下的转角，慢慢转回来
+    this.yawOffset *= Math.exp(-dt * 2.5)
+    if (Math.abs(this.yawOffset) < 1e-4) this.yawOffset = 0
     if (this.tweenT < TWEEN_S && this.tweenFrom) {
       this.tweenT += dt
       const k = ease(Math.min(1, this.tweenT / TWEEN_S))
@@ -917,7 +931,7 @@ export class World {
       this.pose.fov += (want.fov - this.pose.fov) * a
       this.homeness = this.mode === 'home' ? 1 : 0
     }
-    this.applyPose(YAW)
+    this.applyPose(YAW + this.yawOffset)
   }
 
   private applyPose(yaw: number): void {
@@ -1027,13 +1041,15 @@ export class World {
     this.birds.g.visible = dayCalm
     if (dayCalm) {
       const cycle = (this.elapsed * 1.6) % 140
-      this.birds.g.position.set(-50 + cycle, 13, -2 + Math.sin(this.elapsed * 0.05) * 6)
+      // 在屋后江面上空、离镜头远一点，看起来是小小的一群
+      this.birds.g.position.set(-50 + cycle, 10, -2.5 + Math.sin(this.elapsed * 0.05) * 3)
       this.birds.g.rotation.y = -Math.PI / 2
+      this.birds.g.scale.setScalar(0.4)
       for (const b of this.birds.list) {
-        const flap = Math.sin(this.elapsed * 6 + b.ph) * 0.18
+        const flap = Math.sin(this.elapsed * 6 + b.ph) * 0.3
         const p = b.obj.geometry.attributes.position as THREE.BufferAttribute
         p.setY(0, flap)
-        p.setY(2, flap)
+        p.setY(3, flap)
         p.needsUpdate = true
         b.obj.position.copy(b.off)
       }
@@ -1061,10 +1077,10 @@ export class World {
     this.bobber.visible = fishing
     if (fishing) {
       const hr = this.heroine.root
-      const f = new THREE.Vector3(Math.sin(hr.rotation.y), 0, Math.cos(hr.rotation.y))
+      const f = TMP_FWD.set(Math.sin(hr.rotation.y), 0, Math.cos(hr.rotation.y))
       this.bite = Math.max(0, this.bite - dt)
       this.bobber.position.set(hr.position.x + f.x * 3.4, -0.12 + Math.sin(this.elapsed * 2.2) * 0.015 - (this.bite > 0 ? 0.08 : 0), hr.position.z + f.z * 3.4)
-      const tip = this.rodTip.getWorldPosition(new THREE.Vector3())
+      const tip = this.rodTip.getWorldPosition(TMP_TIP)
       const pts = this.fishLine.geometry.attributes.position as THREE.BufferAttribute
       pts.setXYZ(0, tip.x, tip.y, tip.z)
       pts.setXYZ(1, this.bobber.position.x, this.bobber.position.y + 0.04, this.bobber.position.z)
@@ -1121,7 +1137,7 @@ export class World {
       visitor.animate(Math.min(sim, 0.1), walking)
     }
     for (const w of this.weapons) w.visible = fighting
-    this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS)
+    this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     if (this.life.wall && !this.stoneWall && !this.hud.loading) this.raiseStoneWall()
     const g = this.life.garden
     this.gardenObj.visible = g.built
@@ -1290,8 +1306,8 @@ export class World {
     }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'blur', (() => this.keys.clear()) as EventListener)
-    this.on(window, 'pagehide', (() => saveWorld(this.life)) as EventListener)
-    this.on(document, 'visibilitychange', (() => { if (document.hidden) saveWorld(this.life) }) as EventListener)
+    this.on(window, 'pagehide', (() => { if (!this.disposed) saveWorld(this.life) }) as EventListener)
+    this.on(document, 'visibilitychange', (() => { if (document.hidden && !this.disposed) saveWorld(this.life) }) as EventListener)
   }
 
   private pointerSpread(): number {
@@ -1517,10 +1533,9 @@ export class World {
   searchHere(): void {
     if (this.mode === 'outside' && nearFishing(this.heroine.pos)) {
       if (this.life.fishing) this.life.stopFishing()
-      else {
-        // 站到钓鱼点上，面朝江
+      else if (this.life.startFishing()) {
+        // 能钓才站到钓鱼点上，面朝江
         this.heroine.root.position.set(FISHING.at.x, 0, FISHING.at.z)
-        this.life.startFishing()
       }
       this.pushLifeHud()
       return
@@ -1553,10 +1568,13 @@ export class World {
     this.pushLifeHud()
   }
 
-  /** 片头放完（或者被点掉） */
+  /** 片头放完（或者被点掉）：从当前镜头平滑过渡到平常的视角 */
   endIntro(): void {
     if (this.introT < 0) return
     this.introT = -1
+    this.tweenFrom = { target: this.pose.target.clone(), elev: this.pose.elev, dist: this.pose.dist, fov: this.pose.fov }
+    this.tweenT = 0
+    this.floorTween = true
     this.setHud({ intro: false })
   }
 
@@ -1661,7 +1679,8 @@ export class World {
   }
 
   dispose(): void {
-    if (!this.disposed) saveWorld(this.life)
+    // 还在加载就被卸掉（比如开发模式的 StrictMode）：别把空白新局存下来
+    if (!this.disposed && !this.hud.loading) saveWorld(this.life)
     this.disposed = true
     cancelAnimationFrame(this.raf)
     this.resize.disconnect()

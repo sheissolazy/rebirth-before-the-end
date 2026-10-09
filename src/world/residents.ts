@@ -732,6 +732,7 @@ export class Household {
     }
     // 累到底：就地倒下睡着
     if (n.energy <= 0 && a.task?.kind !== 'sleep') {
+      if (a === this.actors[0]) { this.stopFishing(); this.cancelSearch() }
       this.cancel(a)
       a.task = { kind: 'sleep', spot: null, phase: 'use', hours: 0, manual: false }
       a.pose = 'down'
@@ -1134,7 +1135,11 @@ export class Household {
       if (e.raider) this.ammo.n += 2
       else this.cores += 1
     }
-    else if (e.kind === 'end' && e.ambush) {
+    if (e.kind === 'end') {
+      // 打完了：还站着的人放下武器（屋外的女主没人管她的姿势，不然会一直端着枪）
+      for (const a of this.actors) if (a.pose === 'shoot' || a.pose === 'melee') a.pose = 'idle'
+    }
+    if (e.kind === 'end' && e.ambush) {
       // 街上遇袭：打跑了就继续；被扑倒了，缓过来自己爬起来（没有拿家里的东西）
       this.siege?.revive()
       this.note(e.won ? 'world.log.ambushWon' : 'world.log.ambushLost', { kills: e.kills })

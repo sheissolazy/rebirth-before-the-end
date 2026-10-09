@@ -60,21 +60,24 @@ export function thoughtOf(a: Actor, fighting: boolean): string | null {
 }
 
 /** 一句话的气泡（canvas 画的圆角框） */
-const lineCache = new Map<string, THREE.SpriteMaterial>()
+const lineCache = new Map<string, { mat: THREE.SpriteMaterial; aspect: number }>()
 function lineMaterial(text: string): { mat: THREE.SpriteMaterial; aspect: number } {
+  // 先查缓存：每帧都会调用，别每次都新建画布
+  const hit = lineCache.get(text)
+  if (hit) return hit
   const font = '28px "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif'
   const probe = document.createElement('canvas').getContext('2d')!
   probe.font = font
   const w = Math.min(560, Math.ceil(probe.measureText(text).width) + 36)
-  const hit = lineCache.get(text)
-  if (hit) return { mat: hit, aspect: w / 60 }
   const c = document.createElement('canvas')
   c.width = w
   c.height = 60
   const g = c.getContext('2d')!
   g.fillStyle = 'rgba(255,255,255,0.94)'
   g.beginPath()
-  g.roundRect(2, 2, w - 4, 46, 18)
+  // 老 Safari 没有 roundRect
+  if (typeof g.roundRect === 'function') g.roundRect(2, 2, w - 4, 46, 18)
+  else g.rect(2, 2, w - 4, 46)
   g.fill()
   g.beginPath()
   g.moveTo(w / 2 - 8, 46)
@@ -89,8 +92,9 @@ function lineMaterial(text: string): { mat: THREE.SpriteMaterial; aspect: number
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })
-  lineCache.set(text, mat)
-  return { mat, aspect: w / 60 }
+  const out = { mat, aspect: w / 60 }
+  lineCache.set(text, out)
+  return out
 }
 
 const tr = t
@@ -103,9 +107,9 @@ export class Bubbles {
   private readonly saying = new Map<Actor, { text: string; until: number }>()
   private nextLine = 4
 
-  update(actors: Actor[], fighting: boolean, show: boolean, t: number, doom = false): void {
-    // 聊天的人隔一会儿说一句（末日前后说的不一样）
-    if (t > this.nextLine) {
+  update(actors: Actor[], fighting: boolean, show: boolean, t: number, doom = false, paused = false): void {
+    // 聊天的人隔一会儿说一句（末日前后说的不一样）；暂停时不说新的
+    if (t > this.nextLine && !paused) {
       this.nextLine = t + 5 + Math.random() * 6
       const talkers = actors.filter((a) => a.chatting && a.root.visible)
       const who = talkers[Math.floor(Math.random() * talkers.length)]

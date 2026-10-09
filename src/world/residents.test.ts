@@ -704,3 +704,35 @@ describe('打仗时救人', () => {
     expect(life.siege!.isDown(mom)).toBe(false)
   })
 })
+
+describe('第二轮审查（回归测试）', () => {
+  it('钓到的鱼数会存进存档', () => {
+    const { life } = simulate('paradise', 0)
+    life.fishCaught = 7
+    const b = simulate('paradise', 0).life
+    b.makeActor = life.makeActor
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.fishCaught).toBe(7)
+  })
+
+  it('女主累倒了就不再钓鱼', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 6 }
+    expect(life.startFishing()).toBe(true)
+    life.actors[0].needs = { ...life.actors[0].needs, energy: 0 }
+    life.tick(0.05, () => false)
+    expect(life.fishing).toBeNull()
+    expect(life.actors[0].pose).toBe('down')
+  })
+
+  it('打完仗还站着的人放下武器', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.startSiege(1, false)
+    life.actors[0].pose = 'shoot'
+    life.actors[1].pose = 'melee'
+    ;(life as unknown as { onSiegeEvent: (e: unknown) => void }).onSiegeEvent({ kind: 'end', won: true, kills: 1, broken: [], ambush: true })
+    expect(life.actors[0].pose).toBe('idle')
+    expect(life.actors[1].pose).toBe('idle')
+  })
+})

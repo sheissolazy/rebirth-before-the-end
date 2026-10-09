@@ -83,6 +83,8 @@ export default function WorldView() {
   // （原来就是手动暂停的，关掉以后还是暂停）
   const resume = useRef(1)
   const uiPaused = useRef(false)
+  /** 换画风前的速度，新世界接着用 */
+  const keptSpeed = useRef<number | null>(null)
   // 打开面板时从游戏里抄一份数据（游戏这时是暂停的）
   const [diaryLog, setDiaryLog] = useState<LogEntry[]>([])
   const [diaryPeople, setDiaryPeople] = useState<ReturnType<World['diaryPeople']>>([])
@@ -102,8 +104,9 @@ export default function WorldView() {
     let w: World | null = null
     try {
       w = new World(host.current!, setHud, style)
-      // 换画风重建世界时，如果有面板开着，接着暂停
+      // 换画风重建世界时，如果有面板开着，接着暂停；否则沿用之前的速度（包括手动暂停）
       if (uiPaused.current) w.setSpeed(0)
+      else if (keptSpeed.current !== null) w.setSpeed(keptSpeed.current)
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
       world.current = w
@@ -112,6 +115,7 @@ export default function WorldView() {
       queueMicrotask(() => setHud((h) => ({ ...h, loading: false, error: String(e) })))
     }
     return () => {
+      if (w) keptSpeed.current = w.speed
       w?.dispose()
       world.current = null
     }
@@ -132,6 +136,14 @@ export default function WorldView() {
     }
   }, [blocking])
 
+  // 调速：有面板挡着时只记下来，等面板关了再生效（不然对话框开着游戏就偷偷跑起来了）
+  const changeSpeed = (n: number) => {
+    const w = world.current
+    if (!w) return
+    if (uiPaused.current) resume.current = n
+    else w.setSpeed(n)
+  }
+
   // 空格暂停，1/2/3 调速
   useEffect(() => {
     let last = 1
@@ -140,8 +152,12 @@ export default function WorldView() {
       if (!w || e.target instanceof HTMLInputElement) return
       if (e.key === ' ') {
         e.preventDefault()
+        if (uiPaused.current) return
         if (w.speed > 0) { last = w.speed; w.setSpeed(0) } else w.setSpeed(last)
-      } else if (e.key === '1' || e.key === '2' || e.key === '3') w.setSpeed(Number(e.key))
+      } else if (e.key === '1' || e.key === '2' || e.key === '3') {
+        if (uiPaused.current) resume.current = Number(e.key)
+        else w.setSpeed(Number(e.key))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -169,7 +185,7 @@ export default function WorldView() {
           </div>
           <div className="mt-1.5 flex items-center gap-1">
             {SPEEDS.map((n) => (
-              <button key={n} title={t(`world.speed.${n}` as UiKey)} onClick={() => world.current?.setSpeed(n)}
+              <button key={n} title={t(`world.speed.${n}` as UiKey)} onClick={() => changeSpeed(n)}
                 className={`rounded-md px-2 py-0.5 text-xs font-medium ${hud.speed === n ? 'bg-amber-400 text-zinc-900' : hud.night ? 'bg-white/15' : 'bg-zinc-100'}`}>
                 {SPEED_ICON[n]}
               </button>
