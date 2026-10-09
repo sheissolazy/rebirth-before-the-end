@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, WALLS, WORLD, YARD,
+  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
@@ -65,6 +65,8 @@ export interface Hud {
   /** 空间异能里放了多少、最多放多少 */
   space: { food: number; water: number; cap: number }
   molotovs: number
+  /** 菜地：开了没有、长到多少 */
+  garden: { built: boolean; growth: number }
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 有人在门口等回话 */
@@ -84,14 +86,14 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 },
 }
 
 export class World {
@@ -146,6 +148,10 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private readonly bubbles = new Bubbles()
+  /** 菜地：一块土 + 两排苗（苗按长势缩放），熟了头上冒 🥬 */
+  private readonly gardenObj = new THREE.Group()
+  private readonly sprouts: THREE.Object3D[] = []
+  private readonly ripeMark = new THREE.Sprite(bubbleMaterial('🥬'))
   /** 街上能搜的地方头顶的放大镜 */
   private readonly spotMarks: THREE.Sprite[] = SCAVENGE.map((sp) => {
     const m = new THREE.Sprite(bubbleMaterial('🔍'))
@@ -205,6 +211,7 @@ export class World {
     this.buildStreet()
     this.spawnActors()
     this.scene.add(this.rain.lines, ...this.spotMarks)
+    this.buildGarden()
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
     this.life.spawnVisitor = (def, at) => {
@@ -340,6 +347,46 @@ export class World {
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
     }
+  }
+
+  private buildGarden(): void {
+    const w = GARDEN.x1 - GARDEN.x0
+    const d = GARDEN.z1 - GARDEN.z0
+    const soil = new THREE.MeshStandardMaterial({ color: '#4a3324', roughness: 1 })
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), soil)
+    bed.position.set((GARDEN.x0 + GARDEN.x1) / 2, 0.03, (GARDEN.z0 + GARDEN.z1) / 2)
+    bed.receiveShadow = true
+    this.gardenObj.add(bed)
+    const leaf = new THREE.MeshStandardMaterial({ color: '#5f9a3a', roughness: 0.8 })
+    for (let r = 0; r < 2; r++) {
+      const ridge = new THREE.Mesh(new THREE.BoxGeometry(w - 0.3, 0.08, 0.4), soil)
+      ridge.position.set(bed.position.x, 0.1, GARDEN.z0 + 0.55 + r * 0.9)
+      this.gardenObj.add(ridge)
+      for (let k = 0; k < 4; k++) {
+        // 一棵苗：几片叶子（卡通小锥体）
+        const plant = new THREE.Group()
+        for (let l = 0; l < 4; l++) {
+          const blade = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 5), leaf)
+          blade.position.y = 0.2
+          blade.rotation.set(0.5 * Math.cos(l * 1.6), 0, 0.5 * Math.sin(l * 1.6))
+          blade.castShadow = true
+          plant.add(blade)
+        }
+        plant.position.set(GARDEN.x0 + 0.45 + k * 0.57, 0.12, GARDEN.z0 + 0.55 + r * 0.9)
+        this.sprouts.push(plant)
+        this.gardenObj.add(plant)
+      }
+    }
+    this.ripeMark.position.set(bed.position.x, 1.3, bed.position.z)
+    this.ripeMark.scale.setScalar(0.6)
+    this.gardenObj.add(this.ripeMark)
+    this.gardenObj.visible = false
+    this.scene.add(this.gardenObj)
+  }
+
+  buildGardenPlot(): void {
+    if (this.life.buildGarden()) this.toast('world.toast.garden')
+    this.pushLifeHud()
   }
 
   /** 额外模型加载好以后：给住进来的人换上真人模型，再预热一帧（武器、丧尸、特效） */
@@ -825,6 +872,14 @@ export class World {
     }
     for (const w of this.weapons) w.visible = fighting
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed)
+    const g = this.life.garden
+    this.gardenObj.visible = g.built
+    if (g.built) {
+      const sc = 0.2 + g.growth * 0.8
+      this.sprouts.forEach((p, k) => { p.scale.setScalar(sc * (0.9 + (k % 3) * 0.08)); p.rotation.y = Math.sin(this.elapsed * 0.8 + k) * 0.05 })
+      this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
+      this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
+    }
     SCAVENGE.forEach((sp, k) => {
       const m = this.spotMarks[k]
       m.visible = this.mode === 'outside' && this.life.canSearch(sp) === 'ok'
@@ -1250,6 +1305,7 @@ export class World {
       space: { ...this.life.space, cap: this.life.spaceCap },
       molotovs: this.life.molotovs,
       search: this.searchHud(),
+      garden: { built: this.life.garden.built, growth: this.life.garden.growth },
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

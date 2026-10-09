@@ -535,3 +535,26 @@ describe('沈砚和谢临', () => {
     expect(life.affection.shenyan).toBe(10)
   })
 })
+
+describe('种田', () => {
+  it('开菜地要钱；爸妈会去浇水，两三天熟了收一茬', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 500
+    expect(life.buildGarden()).toBe(false)
+    life.money = 2000
+    expect(life.buildGarden()).toBe(true)
+    expect(life.money).toBe(1200)
+    life.speed = 3
+    for (const a of life.actors) a.needs = { hunger: 95, thirst: 95, energy: 95, mood: 95 }
+    const dt = 0.1
+    let watered = 0
+    for (let i = 0; i < (3.2 * DAY_SECONDS) / (dt * 3) && !life.log.some((l) => l.key === 'world.log.harvest'); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * 3, 2.2); a.updateSettle(dt * 3) }
+      if (life.garden.watered === life.clock.day) watered++
+    }
+    expect(watered).toBeGreaterThan(0)
+    expect(life.log.some((l) => l.key === 'world.log.harvest')).toBe(true)
+  })
+})

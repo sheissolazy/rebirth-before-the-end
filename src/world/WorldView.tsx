@@ -192,6 +192,17 @@ export default function WorldView() {
               {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
             </button>
           </div>
+          {!hud.garden.built ? (
+            <button onClick={() => world.current?.buildGardenPlot()}
+              disabled={hud.prologue ? hud.money < 800 : hud.cores < 2}
+              className="mt-1.5 w-fit rounded-md bg-lime-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm disabled:opacity-40">
+              {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
+            </button>
+          ) : (
+            <div className={`mt-1 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+              {t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}
+            </div>
+          )}
           {spaceOpen && (
             <div className={`mt-2 w-64 rounded-lg p-2 text-xs ${hud.night ? 'bg-white/10' : 'bg-indigo-50'}`}>
               <div className="mb-1 leading-snug opacity-80">{t('world.space.hint')}</div>

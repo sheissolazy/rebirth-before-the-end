@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
-import { HOUSE, STREET, WORLD, YARD, GATE, PROPS } from './layout'
+import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN } from './layout'
 
 export type ArtStyle = 'toon' | 'paradise'
 
@@ -296,6 +296,8 @@ function blocked(x: number, z: number): boolean {
   if (z > STREET.z0 - 1.4 && z < STREET.z1 + 1.4) return true
   for (const p of PROPS) if (p.kind !== 'tree' && Math.abs(x - p.x) < p.w / 2 + 0.6 && Math.abs(z - p.z) < p.d / 2 + 0.6) return true
   if (Math.abs(z - YARD.z0) < 0.25 || Math.abs(z - YARD.z1) < 0.25 || Math.abs(x - YARD.x0) < 0.25 || Math.abs(x - YARD.x1) < 0.25) return true
+  // 菜地那一块不长草（开不开地都留着）
+  if (x > GARDEN.x0 - 0.15 && x < GARDEN.x1 + 0.15 && z > GARDEN.z0 - 0.15 && z < GARDEN.z1 + 0.15) return true
   return false
 }
 

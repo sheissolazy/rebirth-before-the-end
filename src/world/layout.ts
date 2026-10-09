@@ -201,7 +201,7 @@ export const SPOTS: Spot[] = [
   { kind: 'stroll', x: 2, z: 9, floor: 0, face: 160, pose: 'idle' },
   { kind: 'stroll', x: 9.5, z: 2.5, floor: 0, face: 90, pose: 'idle' },
   { kind: 'stroll', x: -2, z: 6, floor: 0, face: -90, pose: 'idle' },
-  { kind: 'stroll', x: 10, z: 8, floor: 0, face: 45, pose: 'idle' },
+  { kind: 'stroll', x: 9.5, z: 10.2, floor: 0, face: 45, pose: 'idle' },
   { kind: 'stroll', x: 5.5, z: 11, floor: 0, face: 0, pose: 'idle' },
   { kind: 'stroll', x: 3, z: -1.8, floor: 0, face: 180, pose: 'idle' },
 ]
@@ -230,3 +230,7 @@ export const BEDS: Record<'toon' | 'paradise', Spot[]> = {
     { kind: 'sleep', x: 6.9, z: 2.1, floor: 1, face: 90, pose: 'sleep', y: -0.48, ax: 5.6, az: 2.4 },
   ],
 }
+
+/** 菜地：院子东边一块 2.6 × 2 米的地（镜头从东南看过来，正好看得见），蹲在南边照料 */
+export const GARDEN = { x0: 8.8, z0: 6.6, x1: 11.4, z1: 8.6 }
+export const GARDEN_SPOT: Spot = { kind: 'stroll', x: 10.1, z: 9.05, floor: 0, face: 180, pose: 'work' }

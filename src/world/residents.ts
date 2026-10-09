@@ -1,6 +1,6 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
-import { BEDS, FLOOR_H, HOUSE, PARADISE_SPOTS, SPOTS, YARD, inRect, type Floor, type Spot, type StairPoint } from './layout'
+import { BEDS, FLOOR_H, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, YARD, inRect, type Floor, type Spot, type StairPoint } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -22,7 +22,7 @@ import { lt, t, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
-export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard'
+export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
 
 interface Task {
   kind: TaskKind
@@ -249,6 +249,8 @@ export class Household {
   affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0 }
   /** 谢临塞进来的第几张纸条 */
   xielinNotes = 0
+  /** 菜地：开了没有、长到多少（1 = 能收）、哪天浇过水 */
+  garden: { built: boolean; growth: number; watered: number } = { built: false, growth: 0, watered: -1 }
   /** 末日前去军区门口见过顾沉 */
   guchenMet = false
   /** 顾沉送的头盔：女主被咬伤害减半 */
@@ -312,6 +314,7 @@ export class Household {
     this.careTick()
     this.runawayTick()
     this.rainTick(hours)
+    this.gardenGrow(hours)
     this.searchTick(hours)
     this.chatTick(hours)
     this.visitorTick()
@@ -771,7 +774,7 @@ export class Household {
       t.members.forEach((a, k) => {
         a.away = false
         a.carrying = true
-        a.root.position.set(EXIT.x + k * 0.8, 0, EXIT.z + k * 0.5)
+        a.root.position.set(EXIT.x - k * 0.8, 0, EXIT.z + (k % 2) * 0.6)
         a.floor = 0
         a.setPath(route(this.navs, a.pos, { ...HOME_IN, x: HOME_IN.x + (k - 1) * 0.9 }) ?? [])
       })
@@ -961,6 +964,56 @@ export class Household {
     this.onSiege?.(e)
   }
 
+  // --- 种田 -----------------------------------------------------------------
+
+  static readonly GARDEN_COST = 800
+  static readonly GARDEN_CORES = 2
+
+  /** 开菜地：末日前花钱买种子和工具，末日后用晶核（跟军区换种子） */
+  buildGarden(): boolean {
+    if (this.garden.built) return false
+    if (this.clock.day < PROLOGUE_DAYS) {
+      if (this.money < Household.GARDEN_COST) return false
+      this.money -= Household.GARDEN_COST
+    } else {
+      if (this.cores < Household.GARDEN_CORES) return false
+      this.cores -= Household.GARDEN_CORES
+    }
+    this.garden = { built: true, growth: 0, watered: -1 }
+    this.note('world.log.gardenBuilt')
+    return true
+  }
+
+  private gardenTask(): Task | null {
+    const g = this.garden
+    if (!g.built || this.taken.has(GARDEN_SPOT)) return null
+    const ripe = g.growth >= 1
+    if (!ripe && (g.watered === this.clock.day || this.available.water < 0.4)) return null
+    return { kind: 'garden', spot: GARDEN_SPOT, phase: 'go', hours: ripe ? 0.6 : 0.4, manual: false }
+  }
+
+  /** 每个游戏小时长一点：浇过水（或者下雨）长得快 */
+  private gardenGrow(hours: number): void {
+    const g = this.garden
+    if (!g.built || g.growth >= 1) return
+    if (this.rain > 0.2) g.watered = this.clock.day
+    const rate = g.watered === this.clock.day ? 0.5 : 0.12 // 每天
+    g.growth = Math.min(1, g.growth + (rate * hours) / 24)
+  }
+
+  /** 照料菜地做完：熟了就收 3 份吃的，没熟就浇水（用掉一点水） */
+  private finishGarden(): void {
+    const g = this.garden
+    if (g.growth >= 1) {
+      g.growth = 0
+      this.stock = { ...this.stock, food: this.stock.food + 3 }
+      this.note('world.log.harvest')
+    } else if (g.watered !== this.clock.day) {
+      this.take('water', 0.3)
+      g.watered = this.clock.day
+    }
+  }
+
   /** 最外面一层坏了的防线（白天爸爸会去修） */
   private damagedLayer(): (typeof LAYERS)[number] | null {
     return LAYERS.find((l) => this.barriers[l.id] < this.maxOf(l.id)) ?? null
@@ -980,7 +1033,7 @@ export class Household {
     if (!t || t.phase !== 'use') return 'idle'
     if (t.kind === 'sit') return 'relax'
     if (t.kind === 'walk' || t.kind === 'guard') return 'idle'
-    if (t.kind === 'repair') return 'cook'
+    if (t.kind === 'repair' || t.kind === 'garden') return 'cook'
     return t.kind
   }
 
@@ -1009,7 +1062,9 @@ export class Household {
     // 白天爸爸有空就去修被丧尸砸坏的门
     const handy = a.handy && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
     if (handy) task = this.repairTask()
-    if (task) { /* 修门 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
+    // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
+    if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
+    if (task) { /* 修门 / 种地 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
     else if (want === 'eat') task = this.eatTask(a)
     else if (want === 'relax' || (want === 'stroll' && night)) {
@@ -1122,6 +1177,7 @@ export class Household {
     const t = a.task!
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
+    if (t.kind === 'garden') this.finishGarden()
     this.release(a)
     a.task = null
     const next = t.then?.() ?? null
