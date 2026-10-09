@@ -1380,11 +1380,11 @@ export class World {
         this.warned.crisis = ck.day
         const kind = Household.crisisKind({ day: ck.day, hour: 21 })
         this.toast('world.toast.crisisDay', 6, { kind: kind ? t(`crisisKind.${kind}` as UiKey) : '' })
-      } else if (ck.hour >= 9 && ck.hour < 10 && this.warned.stock !== ck.day && (left.water < 3 || left.food < 3)) {
+      } else if (this.toastTimer <= 0 && ck.hour >= 9 && ck.hour < 10 && this.warned.stock !== ck.day && (left.water < 3 || left.food < 3)) {
         // 早上看一眼存货：快没水 / 没吃的了就提醒（饿死渴死是会死人的）
         this.warned.stock = ck.day
         this.toast(left.water < 3 ? 'world.toast.lowWater' : 'world.toast.lowFood', 6)
-      } else if (ck.hour >= 19.5 && ck.hour < 20.5 && this.warned.dusk !== ck.day) {
+      } else if (this.toastTimer <= 0 && ck.hour >= 19.5 && ck.hour < 20.5 && this.warned.dusk !== ck.day) {
         this.warned.dusk = ck.day
         this.toast(this.life.raidTonight ? 'world.toast.duskRaid' : this.life.ammo.n < 8 ? 'world.toast.duskLowAmmo' : 'world.toast.dusk', 5)
       }

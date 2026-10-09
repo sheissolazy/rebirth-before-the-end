@@ -912,12 +912,16 @@ describe('重生点', () => {
     expect(save.applyPerks(life)).toEqual(['space', 'jiangye'])
     expect(life.spaceCap).toBe(before.cap + 4)
     expect(life.affection.jiangye).toBe(before.aff + 20)
-    // 第一次存档成功以后才清掉（开发模式会建两次世界）
-    expect(save.boughtPerks()).toEqual(['space', 'jiangye'])
-    save.saveWorld(life)
+    // 马上从商店清掉；同一世再开局（开发模式建两次世界）重用同一份
     expect(save.boughtPerks()).toEqual([])
-    // 下一世死了又能拿；同一世重复调用返回同样的点数，但只加一次
+    const again = simulate('paradise', 0).life
+    expect(save.applyPerks(again)).toEqual(['space', 'jiangye'])
+    // 这一世死在结束画面时买的，是下一世的，不受影响
     expect(save.awardRebirthPoints(3)).toBe(3)
+    save.togglePerk('medkit')
+    expect(save.boughtPerks()).toEqual(['medkit'])
+    save.togglePerk('medkit')
+    // 同一世重复调用返回同样的点数，但只加一次
     expect(save.awardRebirthPoints(9)).toBe(3)
     expect(save.rebirthPoints()).toBe(3)
     vi.unstubAllGlobals()
@@ -1221,5 +1225,31 @@ describe('弩的传承', () => {
     expect(life.actors[2].weapon).toBe('crossbow')
     life.die(life.actors[2], 'crisis')
     expect(life.actors[1].weapon).toBe('crossbow')
+  })
+})
+
+describe('第五轮审查（回归测试）', () => {
+  it('爸爸去世后弩在妈妈手上；存档读档以后还在活着的人手上', () => {
+    const { life } = simulate('paradise', 0)
+    life.crossbow = true
+    life.equipCrossbow()
+    life.die(life.actors[2], 'crisis')
+    expect(life.actors[1].weapon).toBe('crossbow')
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.actors[2].dead).toBe(true)
+    expect(b.actors[2].weapon).not.toBe('crossbow')
+    expect(b.actors[1].weapon).toBe('crossbow')
+  })
+
+  it('住进来的沈砚读档后还是医生的轻武器', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _model, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    const s = life.addResident('沈砚', 'shenyan', { x: 4, z: 10 }, 'trait_nurse')!
+    expect(s.weapon).toBe('pin')
+    const b = simulate('paradise', 0).life
+    b.makeActor = life.makeActor
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.actors.find((a) => a.name === '沈砚')?.weapon).toBe('pin')
   })
 })

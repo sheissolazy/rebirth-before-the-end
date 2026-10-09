@@ -170,7 +170,6 @@ export function restore(life: Household, s: WorldSave): void {
   life.jiangyeHome = !!s.jiangyeHome
   life.shenyanHome = !!s.shenyanHome
   life.crossbow = !!s.crossbow
-  life.equipCrossbow()
   life.medicTomorrow = s.medicTomorrow ?? -1
   life.lent = s.lent ?? null
   life.fewerTonight = !!s.fewerTonight
@@ -208,15 +207,14 @@ export function restore(life: Household, s: WorldSave): void {
       life.trip = { def, members, phase: 'away', back: s.trip.back }
     }
   }
+  // 弩：等每个人的生死都恢复好了再交到手上（不然会交给已经去世的爸爸）
+  life.equipCrossbow()
 }
 
 export function saveWorld(life: Household): void {
   if (life.siege && !life.siege.done) return
   try {
     localStorage.setItem(KEY, JSON.stringify(snapshot(life)))
-    // 新开局用上的重生加成：第一次存档成功以后才清掉（开发模式会建两次世界，提前清掉第二次就没了）。
-    // 女主死了停在结束画面时不清——那时候正在买下一世的加成
-    if (!life.over && life.perksApplied) localStorage.setItem(`${PREFIX}-perks`, '[]')
   } catch { /* 隐私模式或存满了 */ }
 }
 
@@ -309,9 +307,22 @@ export function togglePerk(id: PerkId): void {
   }
 }
 
-/** 新开局：用掉买好的加成 */
+const USED = `${PREFIX}-perks-used`
+
+/** 新开局：用掉买好的加成。马上从商店清掉、记到这一世名下；
+ *  同一世再开局（开发模式建两次世界、第一次存档前刷新页面）就重用同一份，不会丢也不会用两次 */
 export function applyPerks(life: Household): PerkId[] {
-  const have = boughtPerks()
+  const thisLife = currentLife()
+  let have: PerkId[]
+  try {
+    const used = JSON.parse(read(USED) ?? 'null') as { life: number; list: PerkId[] } | null
+    if (used && used.life === thisLife) have = used.list
+    else {
+      have = boughtPerks()
+      write(USED, JSON.stringify({ life: thisLife, list: have }))
+      write(PERKS, '[]')
+    }
+  } catch { have = [] }
   for (const id of have) {
     if (id === 'money') life.money += 5000
     else if (id === 'ammo') life.ammo.n += 12
@@ -320,8 +331,6 @@ export function applyPerks(life: Household): PerkId[] {
     else if (id === 'jiangye') life.affection.jiangye = Math.min(100, (life.affection.jiangye ?? 0) + 20)
     else if (id === 'bow') { life.crossbow = true; life.equipCrossbow() }
   }
-  // 不在这里清掉，等第一次存档成功（见 saveWorld）
-  life.perksApplied = have.length > 0
   return have
 }
 

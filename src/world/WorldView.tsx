@@ -105,6 +105,8 @@ export default function WorldView() {
     setMapState(open)
   }
   useEffect(() => { setMapRef.current = setMap })
+  const blockedRef = useRef(false)
+  useEffect(() => { blockedRef.current = !!hud.over || hud.intro })
 
   useEffect(() => {
     let w: World | null = null
@@ -163,8 +165,11 @@ export default function WorldView() {
       } else if (e.key === '1' || e.key === '2' || e.key === '3') {
         if (uiPaused.current) resume.current = Number(e.key)
         else w.setSpeed(Number(e.key))
-      } else if (e.key === 'm' || e.key === 'M') setMapRef.current(true)
-      else if (e.key === 'j' || e.key === 'J') setDiary(true)
+      } else if (!e.metaKey && !e.ctrlKey && !e.altKey && !blockedRef.current) {
+        // M 地图、J 日记（片头、结束画面时不响应；Cmd+M 之类留给系统）
+        if (e.key === 'm' || e.key === 'M') setMapRef.current(true)
+        else if (e.key === 'j' || e.key === 'J') setDiary(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

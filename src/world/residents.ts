@@ -450,7 +450,10 @@ export class Household {
 
   /** 把弩交给爸爸（不在了就交给家里最健康的人，女主自己用霰弹枪） */
   equipCrossbow(): void {
-    if (!this.crossbow || this.actors.some((a) => a.weapon === 'crossbow' && !a.dead && !a.lost)) return
+    if (!this.crossbow) return
+    // 原来拿弩的人不在了：先收回来
+    for (const a of this.actors) if (a.weapon === 'crossbow' && (a.dead || a.lost)) a.weapon = 'pin'
+    if (this.actors.some((a) => a.weapon === 'crossbow')) return
     const dad = this.actors[2]
     const holder = dad && !dad.dead && !dad.lost ? dad
       : this.actors.filter((a) => a !== this.actors[0] && !a.guest && !a.dead && !a.lost).sort((x, y) => y.health - x.health)[0]
@@ -464,8 +467,6 @@ export class Household {
 
   /** 这一局已经因为困难模式减过一次子弹（来回切换不会一直减） */
   hardHalved = false
-  /** 新开局用上了重生加成（第一次存档后清掉商店里买的） */
-  perksApplied = false
 
   /** 疫病夜以后沈砚哪天来送药（-1 = 不来） */
   medicTomorrow = -1
@@ -711,7 +712,8 @@ export class Household {
     if (!this.makeActor || this.residents >= Household.MAX_RESIDENTS) return null
     const a = this.makeActor(name, model, at)
     a.model = model
-    a.weapon = 'machete'
+    // 沈砚是医生，拿擀面杖那种轻家伙；其他住进来的人拿砍刀
+    a.weapon = model === 'shenyan' ? 'pin' : 'machete'
     a.trait = trait ?? survivorTraits[Math.floor(this.rand() * survivorTraits.length)].id
     if (a.trait === 'trait_mechanic') a.handy = true
     this.actors.push(a)
@@ -780,7 +782,6 @@ export class Household {
         for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35)
         const a = this.addResident('沈砚', 'shenyan', { x: v.pos.x, z: v.pos.z }, 'trait_nurse')
         if (a) {
-          a.weapon = 'pin'
           a.needs = { hunger: 60, thirst: 60, energy: 50, mood: 80 }
           a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
           this.shenyanHome = true
@@ -1009,6 +1010,7 @@ export class Household {
         } else {
           a.lost = true
           this.note('world.log.lost1', { who: a.name })
+          if (a.weapon === 'crossbow') this.equipCrossbow()
         }
       }
     }
