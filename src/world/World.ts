@@ -9,12 +9,13 @@ import {
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
+import { decorateHouse, parchmentMap } from './decor'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
-  toon, toonify, tree, villaRoof, wallMap,
+  toon, toonify, tree, villaRoof,
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
 import { PROLOGUE_DAYS, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
@@ -542,6 +543,19 @@ export class World {
       }
       this.assembleVilla(kit)
       if (paradise) this.applyParadise(paradise)
+      // 让屋里像个家：地毯、窗帘、画、桌上的花（花瓶放在餐桌桌面上：往下打一条射线找桌面）
+      try {
+        this.scene.updateMatrixWorld(true)
+        const ray = new THREE.Raycaster(new THREE.Vector3(2.5, 1.4, 3.0), new THREE.Vector3(0, -1, 0), 0, 1.4)
+        ray.camera = this.camera // 场景里有精灵（头顶的气泡），没有相机会报错
+        const meshes: THREE.Object3D[] = []
+        this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && !(o as THREE.InstancedMesh).isInstancedMesh) meshes.push(o) })
+        const hit = ray.intersectObjects(meshes, false).find((h) => h.point.y > 0.4 && h.point.y < 1.2)
+        decorateHouse(this.scene, this.floor2, hit ? hit.point.y : 0.76)
+      } catch (e) {
+        // 装饰出问题也不能挡住后面加载人物
+        console.warn('decor', e)
+      }
       if (people) {
         people.forEach((m, k) => this.actors[k].setModel(m))
         // 女主霰弹枪、妈妈擀面杖、爸爸撬棍：只在打丧尸时拿出来
@@ -844,7 +858,7 @@ export class World {
       return o
     }
     const made: Record<string, () => THREE.Object3D> = {
-      sofa, counter, fridge, desk, shelf, wall_map: wallMap, stairs: () => stairs(FLOOR_H),
+      sofa, counter, fridge, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H),
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
     obj.userData.piece = p.piece
@@ -867,8 +881,9 @@ export class World {
       })
       this.roofMats = [...own]
     }
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.05
+    // Neutral（Khronos PBR Neutral）保留原本的颜色；ACES 会把颜色压灰，看着"糊"
+    this.renderer.toneMapping = THREE.NeutralToneMapping
+    this.renderer.toneMappingExposure = 1.0
     this.scene.environment = kit.env
     this.scene.fog = new THREE.FogExp2('#dfe6dd', 0.013)
     // 白天的基准；早晚和夜里由 applySky 按时间调
@@ -879,9 +894,10 @@ export class World {
     this.swapToModels(kit)
     // 草、花、蕨、苔石：Poly Haven 植物模型实例化撒在地上
     this.scene.add(
-      scatter(kit, 'grass_bermuda_01', 9000, samplers.lawnEdge, [3.0, 4.6], 1),
+      // 院子里是修剪过的草坪：草丛少很多（以前密密麻麻，从高处看一片"麻麻赖赖"），院子外面才是野草
+      scatter(kit, 'grass_bermuda_01', 3200, samplers.lawnEdge, [3.0, 4.6], 1),
       scatter(kit, 'grass_bermuda_01', 12000, samplers.wild, [3.2, 5.0], 2),
-      scatter(kit, 'grass_bermuda_01', 2500, samplers.lawn, [2.4, 3.4], 9),
+      scatter(kit, 'grass_bermuda_01', 700, samplers.lawn, [2.4, 3.4], 9),
       scatter(kit, 'dandelion_01', 320, samplers.lawn, [1.5, 2.1], 3),
       scatter(kit, 'flower_empodium', 220, samplers.lawnEdge, [1.6, 2.3], 4),
       scatter(kit, 'shrub_sorrel_01', 260, samplers.houseFront, [2.2, 3.2], 5),
@@ -1100,7 +1116,8 @@ export class World {
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const l of this.lamps) {
       const off = l.userData.floor === 1 && upstairsHidden
-      l.intensity = off ? 0 : (l.userData.base as number) * s.lamps
+      // 白天屋里也留一点暖光（像阳光照进来、屋里开着小灯），屋子不会显得冷冰冰
+      l.intensity = off ? 0 : (l.userData.base as number) * Math.max(s.lamps, 0.32)
     }
     for (const b of this.bulbs) (b.material as THREE.MeshBasicMaterial).opacity = s.lamps
   }

@@ -26,15 +26,17 @@ export function saveStyle(s: ArtStyle): void {
 }
 
 /** 材质角色 → Poly Haven 贴图。tile = 一张贴图铺多少米 */
-const SURFACES: Record<string, { slug: string; tile: number; rough: number; tint?: string; normal?: number }> = {
-  wall: { slug: 'white_plaster_02', tile: 2.5, rough: 0.95 },
+const SURFACES: Record<string, { slug: string; tile: number; rough: number; tint?: string; normal?: number; plain?: boolean }> = {
+  // 墙：奶油色（原来的白灰泥在镜头下发灰、显冷）
+  wall: { slug: 'white_plaster_02', tile: 2.5, rough: 0.95, tint: '#efe0c8', normal: 0.45, plain: true },
   trim: { slug: 'weathered_brown_planks', tile: 1, rough: 0.85, tint: '#6b4d38' },
   floor: { slug: 'wood_floor', tile: 2, rough: 0.6 },
   wood: { slug: 'weathered_brown_planks', tile: 1.2, rough: 0.85 },
   wood_dark: { slug: 'weathered_brown_planks', tile: 1.2, rough: 0.85, tint: '#8a6a52' },
   woodDark: { slug: 'weathered_brown_planks', tile: 1.2, rough: 0.85, tint: '#8a6a52' },
   roof: { slug: 'grey_roof_tiles_02', tile: 2, rough: 0.8, normal: 1.4 },
-  grass: { slug: 'leafy_grass', tile: 3, rough: 0.95, tint: '#c8e6a0' },
+  // 院子草地：铺得更大、法线更浅，从高处看不再一片斑斑点点
+  grass: { slug: 'leafy_grass', tile: 5, rough: 0.95, tint: '#cbe9a2', normal: 0.5 },
   grassDark: { slug: 'aerial_grass_rock', tile: 9, rough: 0.95, tint: '#b9d98f' },
   wallTinted: { slug: 'white_plaster_02', tile: 2.5, rough: 0.95 },
   road: { slug: 'asphalt_02', tile: 4, rough: 0.9 },
@@ -165,7 +167,8 @@ export class ParadiseMaterials {
     diff.repeat.set(1 / s.tile, 1 / s.tile)
     nor.repeat.copy(diff.repeat)
     return new THREE.MeshStandardMaterial({
-      map: diff, normalMap: nor, normalScale: new THREE.Vector2(s.normal ?? 1, s.normal ?? 1),
+      // plain：不用颜色贴图，只留法线（干净的纯色墙面，从高处看不"麻"）
+      map: s.plain ? null : diff, normalMap: nor, normalScale: new THREE.Vector2(s.normal ?? 1, s.normal ?? 1),
       roughness: s.rough, color: s.tint ?? '#ffffff',
     })
   }
