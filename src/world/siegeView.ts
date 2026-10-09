@@ -383,7 +383,7 @@ export class SiegeView {
     }
     if (this.door) {
       // 有人走近就开门；打仗时关着；被砸开就倒下
-      const near = actors.some((a) => Math.hypot(a.root.position.x - 3.5, a.root.position.z - 6) < 1.3 && a.root.position.y < 1)
+      const near = actors.some((a) => a.root.visible && Math.hypot(a.root.position.x - 3.5, a.root.position.z - 6) < 1.3 && a.root.position.y < 1)
       const broken = life.barriers.door <= 0
       this.doorOpen += ((near && !fighting ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 8)
       const leaf = this.door.children[0]

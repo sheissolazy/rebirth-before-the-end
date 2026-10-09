@@ -82,7 +82,10 @@ export function snapshot(life: Household): WorldSave {
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
-    log: [...life.log],
+    // 送东西的人还在路上：日志等放下了才写，这时候刷新页面的话先把它记上（东西已经到账了）
+    log: life.courier?.pending
+      ? [...life.log, { day: life.clock.day, hour: life.clock.hour, key: life.courier.pending.key, vars: life.courier.pending.vars }]
+      : [...life.log],
     actors: life.actors.filter((a) => !a.guest).map((a) => ({
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood,

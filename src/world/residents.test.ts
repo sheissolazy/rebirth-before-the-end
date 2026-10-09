@@ -919,3 +919,55 @@ describe('重生点', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('第三轮审查（回归测试）', () => {
+  it('借出去的人还在往外走时开打：不当守夜的人、也不会被取消路线；不能再借第二个', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.guchenMet = true
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'guchen_visit')!)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.answerVisitor('lend')
+    const who = life.actors.find((a) => a.name === life.lent?.name)!
+    expect(who.away).toBe(false)
+    expect(life.lendable()).toEqual([])
+    life.startSiege(2, false)
+    expect(who.path.length).toBeGreaterThan(0)
+    expect((life.siege as unknown as { o: { defenders: Actor[] } }).o.defenders).not.toContain(who)
+    expect(life.commandWalk(who, { x: 2, z: 2, floor: 0 })).toBeNull()
+  })
+
+  it('去世的人不再回血、需求也不再变', () => {
+    const { life } = simulate('paradise', 0)
+    const mom = life.actors[1]
+    life.die(mom, 'starve')
+    const needs = { ...mom.needs }
+    for (let i = 0; i < 200; i++) life.tick(0.05, () => false)
+    expect(mom.health).toBe(0)
+    expect(mom.needs).toEqual(needs)
+  })
+
+  it('女主钓着鱼饿死：还是倒在地上', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 6 }
+    expect(life.startFishing()).toBe(true)
+    life.die(life.actors[0], 'starve')
+    expect(life.actors[0].pose).toBe('down')
+    expect(life.fishing).toBeNull()
+  })
+
+  it('送东西的人还在路上时存档：日志先记上，刷新也不会丢', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 9 }
+    life.spawnCourier = (who, at) => new Courier(who, at)
+    life.giveCare('xielin')
+    expect(life.log.some((l) => l.key === 'world.xielin.note0')).toBe(false)
+    const s = JSON.parse(JSON.stringify(snapshot(life)))
+    const b = simulate('paradise', 0).life
+    restore(b, s)
+    expect(b.log.some((l) => l.key === 'world.xielin.note0')).toBe(true)
+    expect(b.xielinNotes).toBe(1)
+  })
+})

@@ -104,15 +104,28 @@ const TMP_FWD = new THREE.Vector3()
 /** 坟的位置：房子西边的草地（家里视角看得见，不挡路） */
 const GRAVES = [{ x: -2.0, z: 2.0 }, { x: -2.0, z: 3.6 }, { x: -3.1, z: 2.8 }, { x: -3.1, z: 4.4 }]
 
-/** 谢临：衣服换成黑色（复制材质，不影响别人） */
+/** 送东西的人放在铁门外的箱子 / 纸条（共用一份，不用每次新建） */
+const DROP = {
+  box: new THREE.BoxGeometry(0.5, 0.36, 0.4),
+  note: new THREE.BoxGeometry(0.2, 0.01, 0.14),
+  card: new THREE.MeshStandardMaterial({ color: '#9a7a4e' }),
+  white: new THREE.MeshStandardMaterial({ color: '#e8e8e8' }),
+  paper: new THREE.MeshStandardMaterial({ color: '#f4efe4' }),
+}
+
+/** 谢临：衣服换成黑色（复制一次材质就缓存起来，不影响别人，也不会每次来都复制） */
+const darkCopies = new WeakMap<THREE.Material, THREE.Material>()
 function darkCoat(model: THREE.Object3D): void {
   model.traverse((o) => {
     const m = o as THREE.Mesh
     if (!m.isMesh) return
     const fix = (mat: THREE.Material) => {
       if (!/suit|shoes/.test(mat.name)) return mat
+      const hit = darkCopies.get(mat)
+      if (hit) return hit
       const c = mat.clone() as THREE.MeshStandardMaterial
       c.color.set('#2a2a30')
+      darkCopies.set(mat, c)
       return c
     }
     m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material)
@@ -357,9 +370,7 @@ export class World {
         this.sound.knock()
         this.toast(`world.courier.${c.who}`, 4)
         // 铁门外留下一箱东西（谢临只是一张纸条）
-        const g = c.who === 'xielin'
-          ? new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.01, 0.14), new THREE.MeshStandardMaterial({ color: '#f4efe4' }))
-          : new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.4), new THREE.MeshStandardMaterial({ color: c.who === 'shenyan' ? '#e8e8e8' : '#9a7a4e' }))
+        const g = new THREE.Mesh(c.who === 'xielin' ? DROP.note : DROP.box, c.who === 'xielin' ? DROP.paper : c.who === 'shenyan' ? DROP.white : DROP.card)
         // 纸条从门缝塞进院子里；箱子放在他脚边（铁门外）
         if (c.who === 'xielin') g.position.set(c.pos.x, 0.02, c.pos.z - 0.6)
         else g.position.set(c.pos.x + 0.55, 0.18, c.pos.z + 0.05)
@@ -368,9 +379,10 @@ export class World {
         this.dropped = g
         this.scene.add(g)
       } else {
-        // 走远了，东西也被家里人收进去了
+        // 走远了，东西也被家里人收进去了；复制出来的骨骼也释放掉
         this.dropped?.removeFromParent()
         this.dropped = null
+        c.root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) (o as THREE.SkinnedMesh).skeleton.dispose() })
       }
     }
     this.life.makeActor = (name, model, at) => {
@@ -1124,7 +1136,7 @@ export class World {
     } else {
       // 回到家里时，跟在后面的人也一起进门
       const h = this.heroine.pos
-      this.actors.filter((a) => a !== this.heroine && !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)
+      this.actors.filter((a) => a !== this.heroine && !this.life.isOut(a)
         && !isHome(a.pos.x, a.pos.z, false)).forEach((a, k) => {
         this.life.commandWalk(a, { x: h.x + (k ? -1 : 1), z: h.z - 1.2, floor: 0 })
       })
@@ -1300,9 +1312,12 @@ export class World {
     // 有人快饿死、有人走了：日记里新出现这种记录就弹提示（只看新的）
     const last = this.life.log.at(-1) ?? null
     if (last !== this.lastLog) {
-      if (this.lastLog !== undefined && last) {
-        if (last.key === 'world.log.dying') this.toast('world.toast.dying', 5)
-        else if (last.key.startsWith('world.log.died.')) { this.toast('world.toast.died', 5); this.sound.eerie() }
+      if (this.lastLog !== undefined) {
+        // 同一帧可能记了好几条：从后往前看到上次看过的那条为止
+        const fresh: LogEntry[] = []
+        for (let i = this.life.log.length - 1; i >= 0 && this.life.log[i] !== this.lastLog && fresh.length < 12; i--) fresh.push(this.life.log[i])
+        if (fresh.some((l) => l.key.startsWith('world.log.died.'))) { this.toast('world.toast.died', 5); this.sound.eerie() }
+        else if (fresh.some((l) => l.key === 'world.log.dying')) this.toast('world.toast.dying', 5)
       }
       this.lastLog = last
     }
@@ -1361,7 +1376,7 @@ export class World {
     this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
     // 选中的人出门了、走了（客人离开、离家出走）就换一个在家的人
     if (this.selected.away || !this.actors.includes(this.selected)) {
-      const other = this.actors.find((a) => !a.away && !a.lost)
+      const other = this.actors.find((a) => !this.life.isOut(a))
       if (other) this.select(other)
     }
     this.updateCamera(dt)
@@ -1428,7 +1443,7 @@ export class World {
     const h = this.heroine.root
     const back = new THREE.Vector2(-Math.sin(h.rotation.y), -Math.cos(h.rotation.y))
     // 睡着的人不跟出去
-    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !a.away && !a.runaway && !a.lost && !this.life.onTrip(a)).forEach((a, k) => {
+    this.actors.filter((a) => a !== this.heroine && a.task?.kind !== 'sleep' && !this.life.isOut(a)).forEach((a, k) => {
       const side = k === 0 ? 1 : -1
       const spot = { x: h.position.x + back.x * 1.3 + back.y * side * 0.8, z: h.position.z + back.y * 1.3 - back.x * side * 0.8, floor: 0 as const }
       const d = Math.hypot(a.pos.x - h.position.x, a.pos.z - h.position.z)
@@ -1598,7 +1613,7 @@ export class World {
 
   /** 在家、能出门的人 */
   homeMembers(): { name: string; health: number }[] {
-    return this.actors.filter((a) => !a.away && !a.runaway && !a.lost && !a.guest && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
+    return this.actors.filter((a) => !this.life.isOut(a) && !a.guest).map((a) => ({ name: a.name, health: a.health }))
   }
 
   startTrip(id: string, names: string[]): boolean {

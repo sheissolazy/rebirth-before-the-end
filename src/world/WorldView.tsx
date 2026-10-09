@@ -36,7 +36,7 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
         {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
       </div>
       <div className="truncate text-[11px] text-zinc-500" title={doing}>{doing}</div>
-      <div className="mt-1.5 grid grid-cols-[2rem_1fr] items-center gap-x-1.5 gap-y-1">
+      {p.gone !== 'dead' && <div className="mt-1.5 grid grid-cols-[2rem_1fr] items-center gap-x-1.5 gap-y-1">
         {p.health < 100 && (
           <div className="contents">
             <span className="text-[11px] font-medium text-red-700">{t('world.need.health')}</span>
@@ -53,11 +53,11 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
             </div>
           </div>
         ))}
-      </div>
-      {p.doing === 'down' && (
+      </div>}
+      {p.doing === 'down' && !p.gone && (
         <div className="mt-1 text-[11px] font-semibold text-red-700">{t('world.rescueHint')}</div>
       )}
-      {p.needs.mood < DEPRESSED && (
+      {p.needs.mood < DEPRESSED && !p.gone && (
         <div className="mt-1 text-[11px] font-medium text-red-600">{t('world.depressed')}</div>
       )}
     </button>

@@ -359,6 +359,7 @@ export class Household {
     this.visitorTick()
     this.courierTick(hours)
     for (const a of this.actors) {
+      if (a.dead) continue
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
       a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6) * (nurse ? 2 : 1))
@@ -438,9 +439,15 @@ export class Household {
   lent: { name: string; back: number } | null = null
   static readonly LEND_HOURS = 48
 
-  /** 能借出去的家人：不算女主、来帮忙的客人、出门的、出走的 */
+  /** 不在家（出门、出走、死了、借给顾沉——包括还在往外走的路上） */
+  isOut(a: Actor): boolean {
+    return a.away || a.lost || a.dead || !!a.runaway || this.onTrip(a) || this.lent?.name === a.name
+  }
+
+  /** 能借出去的家人：不算女主、来帮忙的客人、不在家的；已经借出去一个就不能再借 */
   lendable(): Actor[] {
-    return this.actors.filter((a) => a !== this.actors[0] && !a.guest && !a.away && !a.lost && !a.dead && !a.runaway && !this.onTrip(a))
+    if (this.lent) return []
+    return this.actors.filter((a) => a !== this.actors[0] && !a.guest && !this.isOut(a))
   }
 
   /** 借出去的人：走出街口就不见了；两天后带着子弹和吃的回来 */
@@ -449,7 +456,11 @@ export class Household {
     if (!l) return
     const a = this.actors.find((x) => x.name === l.name)
     if (!a || a.dead) { this.lent = null; return }
-    if (!a.away && !a.path.length) a.away = true
+    // 走到街口才消失；路被打断了（打仗、被点了）就接着往街口走
+    if (!a.away && !a.path.length) {
+      if (Math.hypot(a.pos.x - EXIT.x, a.pos.z - EXIT.z) < 1.5) a.away = true
+      else if (!this.siege || this.siege.done) a.setPath(route(this.navs, a.pos, EXIT) ?? [])
+    }
     if (a.away && this.absHour >= l.back && !(this.siege && !this.siege.done)) {
       this.lent = null
       a.away = false
@@ -620,7 +631,7 @@ export class Household {
     if (!this.spawnZombie || this.siege) return
     const n = count ?? (this.rand() < 0.4 ? 2 : 1)
     const at = Array.from({ length: n }, (_, k) => ({ x: spot.at.x + (k ? -5 : 6), z: spot.at.z + (k ? 1.5 : 2) }))
-    const party = this.actors.filter((a) => !a.away && !a.lost && !a.runaway && !this.onTrip(a) && !this.isHomeBody(a))
+    const party = this.actors.filter((a) => !this.isOut(a) && !this.isHomeBody(a))
     // 女主不在外面（比如被派出门了）就不会遇袭
     if (!party.length) return
     this.cancelSearch()
@@ -724,17 +735,17 @@ export class Household {
       if (choice === 'lend') {
         // 挑一个能打的（壮实的优先，其次最健康的），跟着顾沉走出铁门
         const pick = this.lendable().sort((x, y) => (y.trait === 'trait_strong' ? 1 : 0) - (x.trait === 'trait_strong' ? 1 : 0) || y.health - x.health)[0]
-        if (pick) {
-          this.cancel(pick)
-          pick.setPath(route(this.navs, pick.pos, EXIT) ?? [])
-          this.lent = { name: pick.name, back: this.absHour + Household.LEND_HOURS }
-          love(10)
-          this.note('world.visit.guchen_visit.log.lend', { who: pick.name })
-          this.talking = null
-          v.phase = 'leave'
-          v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
-          return
-        }
+        this.talking = null
+        v.phase = 'leave'
+        v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+        // 没人能借（比如调试按钮连按）：顾沉就这么走了
+        if (!pick) return
+        this.cancel(pick)
+        pick.setPath(route(this.navs, pick.pos, EXIT) ?? [])
+        this.lent = { name: pick.name, back: this.absHour + Household.LEND_HOURS }
+        love(10)
+        this.note('world.visit.guchen_visit.log.lend', { who: pick.name })
+        return
       } else if (choice === 'ammo') { food(-4); this.ammo.n += 6; love(5) }
       else love(-2)
     } else if (def.id === 'jiangye_care') {
@@ -871,11 +882,11 @@ export class Household {
     a.runaway = null
     a.path = []
     if (a === this.actors[0]) {
-      // 女主倒在原地（不藏起来），游戏停在这一刻
-      a.pose = 'down'
-      this.over = { day: this.clock.day, hour: this.clock.hour, cause }
+      // 女主倒在原地（不藏起来），游戏停在这一刻（先收竿、停下搜东西，它们会把姿势改回站着）
       this.stopFishing()
       this.cancelSearch()
+      a.pose = 'down'
+      this.over = { day: this.clock.day, hour: this.clock.hour, cause }
       this.note('world.log.heroDied')
       this.speed = 0
       return
@@ -1061,7 +1072,7 @@ export class Household {
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
   startTrip(id: string, members: Actor[]): boolean {
     // 来帮忙的客人、出走的人不能派出去
-    members = members.filter((a) => !a.guest && !a.away && !a.lost && !a.runaway)
+    members = members.filter((a) => !a.guest && !this.isOut(a))
     if (!members.length || this.tripCheck(id) !== 'ok') return false
     if (members.includes(this.actors[0])) { this.cancelSearch(); this.stopFishing() }
     const def = TRIPS.find((t) => t.id === id)!
@@ -1254,7 +1265,7 @@ export class Household {
     this.cancelSearch()
     this.stopFishing()
     for (const a of this.actors) {
-      if (a.away) continue
+      if (this.isOut(a)) continue
       this.cancel(a)
       a.hold = 0
     }
@@ -1264,7 +1275,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, crisis, trapKills: 0, fireKills: 0,
     }
     this.siege = new Siege({
-      count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
+      count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a)), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id), trap: this.trap,
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
@@ -1593,6 +1604,7 @@ export class Household {
   // --- 玩家命令 -------------------------------------------------------------
 
   commandWalk(a: Actor, to: Where): StairPoint[] | null {
+    if (this.isOut(a)) return null
     this.cancel(a)
     const path = route(this.navs, a.pos, to)
     if (!path) return null
@@ -1603,6 +1615,7 @@ export class Household {
 
   /** 点了家具：去用它。返回 false 表示用不了（有人在用、没吃的…） */
   commandSpot(a: Actor, spot: Spot): boolean {
+    if (this.isOut(a)) return false
     const who = this.taken.get(spot)
     if (who && who !== a) return false
     this.cancel(a)
