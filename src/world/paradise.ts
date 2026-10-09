@@ -91,7 +91,10 @@ export async function loadParadiseKit(renderer: THREE.WebGLRenderer): Promise<Pa
       for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
         const std = mat as THREE.MeshStandardMaterial
         if (std.transparent && std.map) {
-          std.alphaTest = 0.5
+          // 远处的叶子贴图缩小以后边缘变透明，0.5 的阈值会把叶子整片裁掉（树看着像秃枝）：
+          // 阈值放低一点，再用多重采样的 alpha-to-coverage 让边缘柔和
+          std.alphaTest = 0.3
+          std.alphaToCoverage = true
           std.transparent = false
           std.depthWrite = true
           std.side = THREE.DoubleSide
