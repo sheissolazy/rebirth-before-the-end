@@ -147,7 +147,7 @@ export interface LogEntry {
 }
 
 /** 出门的一趟 */
-interface Trip {
+export interface Trip {
   def: TripDef
   members: Actor[]
   phase: 'out' | 'away' | 'back'
@@ -192,7 +192,8 @@ export class Household {
   /** World 提供：生成一只丧尸（带 3D 模型）、战斗特效 */
   spawnZombie: ((at: Pt) => Zombie) | null = null
   onSiege: ((e: SiegeEvent) => void) | null = null
-  private nightDone = -1
+  /** 哪一天的晚上已经来过丧尸了 */
+  nightDone = -1
   /** 序章存款（元）、急救包、加固铁门多出来的耐久 */
   money = 18000
   medkits = 0

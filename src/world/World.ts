@@ -22,6 +22,7 @@ import { LAYERS, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { Rain } from './weather'
+import { clearWorld, loadWorld, saveWorld } from './save'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -128,6 +129,7 @@ export class World {
   private readonly rain = new Rain()
   private readonly glass: THREE.Material[] = []
   private fogBase = 0.013
+  private saveTimer = 10
   private frontDoor: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
@@ -527,6 +529,8 @@ export class World {
     }
     this.selected = this.heroine
     this.life = new Household(this.actors, this.navs, this.style)
+    // 接着上次的进度
+    loadWorld(this.life)
   }
 
   /** 屋里的暖灯和路灯：一直在场景里，白天亮度为 0（灯的数量不变，免得着色器重新编译） */
@@ -784,6 +788,10 @@ export class World {
       this.pushLifeHud()
     }
     if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) this.setHud({ toast: '' })
+    if ((this.saveTimer -= dt) <= 0) {
+      this.saveTimer = 10
+      saveWorld(this.life)
+    }
     if (this.marker.visible) {
       const m = this.marker.material as THREE.MeshBasicMaterial
       m.opacity -= dt * 1.5
@@ -878,6 +886,8 @@ export class World {
     this.on(window, 'keydown', ((e: KeyboardEvent) => { this.sound.unlock(); this.keys.add(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'blur', (() => this.keys.clear()) as EventListener)
+    this.on(window, 'pagehide', (() => saveWorld(this.life)) as EventListener)
+    this.on(document, 'visibilitychange', (() => { if (document.hidden) saveWorld(this.life) }) as EventListener)
   }
 
   private pointerSpread(): number {
@@ -1078,7 +1088,15 @@ export class World {
     this.onHud(this.hud)
   }
 
+  /** 原型调试：清掉存档从头来 */
+  restart(): void {
+    this.disposed = true
+    clearWorld()
+    location.reload()
+  }
+
   dispose(): void {
+    if (!this.disposed) saveWorld(this.life)
     this.disposed = true
     cancelAnimationFrame(this.raf)
     this.resize.disconnect()

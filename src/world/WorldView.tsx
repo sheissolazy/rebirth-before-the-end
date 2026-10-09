@@ -9,6 +9,8 @@ import { DiaryPanel } from './DiaryPanel'
 import { MapPanel } from './MapPanel'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
+const WELCOME_KEY = 'rbte-proto-welcome-v2'
+const WELCOME_ITEMS = ['world.welcome.life', 'world.welcome.night', 'world.welcome.map', 'world.welcome.feel'] as const
 const SPEEDS = [0, 1, 2, 3] as const
 const SPEED_ICON = ['⏸', '▶', '▶▶', '▶▶▶']
 
@@ -62,6 +64,17 @@ export default function WorldView() {
   const [style, setStyle] = useState<ArtStyle>(loadStyle)
   const [diary, setDiaryState] = useState(false)
   const [map, setMapState] = useState(false)
+  const [welcome, setWelcome] = useState(() => {
+    try { return localStorage.getItem(WELCOME_KEY) !== '1' } catch { return true }
+  })
+  const welcomeOpen = useRef(welcome)
+  const closeWelcome = (night: boolean) => {
+    try { localStorage.setItem(WELCOME_KEY, '1') } catch { /* 隐私模式 */ }
+    welcomeOpen.current = false
+    world.current?.setSpeed(1)
+    setWelcome(false)
+    if (night) world.current?.debugNight(false)
+  }
   // 翻日记时游戏暂停，合上再接着走
   const resume = useRef(1)
   const setDiary = (open: boolean) => {
@@ -81,6 +94,8 @@ export default function WorldView() {
     let w: World | null = null
     try {
       w = new World(host.current!, setHud, style)
+      // 欢迎卡开着时先暂停
+      if (welcomeOpen.current) w.setSpeed(0)
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
       world.current = w
@@ -229,12 +244,30 @@ export default function WorldView() {
         <div className="mt-1 flex flex-col gap-1">
           <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
+          <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>
       </details>
 
       {hud.toast && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
           {t(hud.toast as UiKey)}
+        </div>
+      )}
+
+      {welcome && !hud.loading && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
+          <div className="w-[min(560px,92vw)] rounded-2xl bg-[#f6efdc] p-6 font-serif text-zinc-800 shadow-2xl">
+            <div className="text-xl font-bold">{t('world.welcome.title')}</div>
+            <div className="mt-1 text-sm text-zinc-600">{t('world.welcome.sub')}</div>
+            <ul className="mt-4 space-y-2 text-sm leading-relaxed">
+              {WELCOME_ITEMS.map((k) => <li key={k}>{t(k)}</li>)}
+            </ul>
+            <div className="mt-4 rounded-lg bg-white/60 p-3 text-xs leading-relaxed text-zinc-700">{t('world.welcome.keys')}</div>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => closeWelcome(false)} className="flex-1 rounded-lg bg-emerald-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.start')}</button>
+              <button onClick={() => closeWelcome(true)} className="flex-1 rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50 shadow">{t('world.welcome.zombies')}</button>
+            </div>
+          </div>
         </div>
       )}
 

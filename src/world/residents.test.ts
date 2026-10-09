@@ -3,6 +3,7 @@ import { navFloors } from './nav'
 import { Actor, Household } from './residents'
 import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
 import { Zombie } from './siege'
+import { restore, snapshot } from './save'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -205,5 +206,24 @@ describe('需求归零的后果', () => {
     expect(life.actors[0].runaway).toBeNull()
     expect(life.actors[0].lost).toBe(false)
     expect(life.actors.slice(1).some((a) => a.runaway || a.lost)).toBe(true)
+  })
+})
+
+describe('存档', () => {
+  it('存了再读：时钟、存货、防线、每个人的需求和日记都还在', () => {
+    const a = simulate('paradise', 0.3).life
+    a.money = 12345
+    a.barriers.gate = 77
+    a.actors[1].needs.mood = 33
+    a.log.push({ day: 1, hour: 2, key: 'world.log.won', vars: { kills: 2 } })
+    const s = snapshot(a)
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(s)))
+    expect(b.clock).toEqual(a.clock)
+    expect(b.money).toBe(12345)
+    expect(b.barriers.gate).toBe(77)
+    expect(b.actors[1].needs.mood).toBe(33)
+    expect(b.log.at(-1)?.key).toBe('world.log.won')
+    for (const p of b.actors) expect(b.navs[p.floor].isBlockedAt(p.root.position.x, p.root.position.z)).toBe(false)
   })
 })
