@@ -290,6 +290,11 @@ export class World {
       const gates: THREE.Object3D[] = []
       this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
+      // 预热：武器先拿出来，跟丧尸一起渲染一帧
+      for (const w of this.weapons) w.visible = true
+      this.updateCamera(0.016)
+      this.siegeView.prewarm(() => this.renderer.render(this.scene, this.camera))
+      for (const w of this.weapons) w.visible = false
       this.setHud({ loading: false })
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })

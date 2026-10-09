@@ -99,6 +99,24 @@ export class SiegeView {
     })
   }
 
+  /** 加载完先把丧尸和特效的着色器编译好，第一只丧尸出现时就不会卡一下。
+   *  要真的渲染一帧（藏在地面下面），因为江面的透射和阴影各自还要再编一套着色器。 */
+  prewarm(render: () => void): void {
+    const zs = this.templates.map((_, k) => this.spawn({ x: 3 + k, z: 9 }))
+    for (const z of zs) {
+      z.root.position.y = -1.9
+      z.animate(0.016, true)
+    }
+    this.blood({ x: 4, z: 9 })
+    this.core({ x: 4, z: 9 })
+    for (const f of this.fx) f.obj.position.y -= 3
+    for (const b of this.bars.values()) b.sprite.visible = true
+    render()
+    for (const z of zs) z.root.removeFromParent()
+    for (const b of this.bars.values()) b.sprite.visible = false
+    this.spawned = 0
+  }
+
   /** 生成一只丧尸放进场景 */
   spawn(at: Pt): Zombie {
     const t = this.templates[this.spawned++ % Math.max(1, this.templates.length)]
