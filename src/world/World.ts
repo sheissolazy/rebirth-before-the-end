@@ -662,6 +662,53 @@ export class World {
     this.scene.add(this.gardenObj)
   }
 
+  /** 两个人走得太近就让一让（不再穿身而过）：走路的人往旁边让、不往回退，
+   *  迎面走来的两个人各自靠右；坐着、躺着、正在挪位置的人不动 */
+  private makeWay(): void {
+    const R = 0.55
+    const list = this.actors.filter((a) => !a.away && !a.settling && a.pose !== 'sleep')
+    const step = (a: Actor, x: number, z: number) => {
+      const p = a.root.position
+      if (!this.navs[a.floor].isBlockedAt(p.x + x, p.z + z)) { p.x += x; p.z += z }
+    }
+    const heading = (a: Actor) => {
+      const n = a.path[0]
+      if (!n) return null
+      const dx = n.x - a.root.position.x
+      const dz = n.z - a.root.position.z
+      const d = Math.hypot(dx, dz)
+      return d > 1e-3 ? { x: dx / d, z: dz / d } : null
+    }
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i]
+        const b = list[j]
+        const pa = a.root.position
+        const pb = b.root.position
+        if (a.floor !== b.floor || Math.abs(pa.y - pb.y) > 0.3) continue
+        const d = Math.hypot(pb.x - pa.x, pb.z - pa.z)
+        if (d >= R) continue
+        const fa = heading(a)
+        const fb = heading(b)
+        if (!fa && !fb) continue // 都站着（面对面说话）不推
+        const push = (R - d) * 0.5
+        for (const [me, other, f] of [[a, b, fa], [b, a, fb]] as const) {
+          if (!f) continue
+          // 从对方指向自己的方向，去掉往回退的那部分；正对着撞上就往右手边让
+          let nx = me.root.position.x - other.root.position.x
+          let nz = me.root.position.z - other.root.position.z
+          const back = nx * f.x + nz * f.z
+          if (back < 0) { nx -= back * f.x; nz -= back * f.z }
+          let len = Math.hypot(nx, nz)
+          const headOn = fa && fb && fa.x * fb.x + fa.z * fb.z < -0.3
+          if (len < 0.05 || headOn) { nx += -f.z * 0.6; nz += f.x * 0.6; len = Math.hypot(nx, nz) }
+          const k = (fa && fb ? push : push * 2) / Math.max(len, 1e-3)
+          step(me, nx * k, nz * k)
+        }
+      }
+    }
+  }
+
   /** 人会看人：门外有人走过来就看过去，不然看身边最近的家人（3 米内、同一层） */
   private updateLooks(): void {
     const others: { x: number; z: number; floor: number; far: boolean }[] = []
@@ -1561,6 +1608,7 @@ export class World {
         if (a === this.selected && this.mode === 'home') this.setViewFloor(a.floor)
       }
     }
+    if (sim > 0) this.makeWay()
     const heroOut = this.life.onTrip(this.heroine)
     this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
     // 选中的人出门了、走了（客人离开、离家出走）就换一个在家的人

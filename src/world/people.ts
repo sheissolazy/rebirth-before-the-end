@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export type PoseState = 'idle' | 'walk' | 'sit' | 'sleep' | 'work'
-  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink' | 'fish'
+  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry' | 'sitEat' | 'drink' | 'fish' | 'wave'
 
 const SIDE = new THREE.Vector3(1, 0, 0)
 const FWD = new THREE.Vector3(0, 0, 1)
@@ -133,6 +133,19 @@ export async function loadPerson(name: string): Promise<THREE.Object3D> {
 
 interface Joint { bone: THREE.Bone; rest: THREE.Quaternion; worldRest: THREE.Quaternion; prev?: THREE.Quaternion }
 
+type Rots = [THREE.Vector3, number][]
+/** 站着没事时的小动作：发呆、抱胳膊、叉腰、东张西望、挠头、伸懒腰 */
+export type IdleVar = 'plain' | 'crossed' | 'hips' | 'look' | 'scratch' | 'stretch'
+/** 名字、权重、最短秒数、最长秒数 */
+const IDLE_PICK: [IdleVar, number, number, number][] = [
+  ['plain', 34, 4, 9], ['crossed', 22, 6, 12], ['hips', 16, 5, 10], ['look', 14, 3, 5], ['scratch', 8, 2.4, 2.4], ['stretch', 6, 2.8, 2.8],
+]
+/** 一个短动作的力度：开头 0.45 秒抬起、结尾 0.45 秒放下 */
+const envelope = (t: number, dur: number) => {
+  const k = Math.max(0, Math.min(1, t / 0.45, (dur - t) / 0.45))
+  return k * k * (3 - 2 * k)
+}
+
 /** 按名字找骨骼（three.js 会把 "mixamorig:LeftUpLeg" 变成 "mixamorigLeftUpLeg"） */
 function findBone(root: THREE.Object3D, suffix: string): THREE.Bone | null {
   let hit: THREE.Bone | null = null
@@ -153,8 +166,8 @@ export class PoseDriver {
   constructor(model: THREE.Object3D) {
     this.model = model
     model.updateMatrixWorld(true)
-    const names = ['Hips', 'Spine', 'Spine1', 'Neck', 'Head', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
-      'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm', 'LeftShoulder', 'RightShoulder']
+    const names = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg',
+      'LeftFoot', 'RightFoot', 'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm', 'LeftShoulder', 'RightShoulder']
     for (const n of names) {
       const bone = findBone(model, n)
       if (bone) this.joints.set(n, { bone, rest: bone.quaternion.clone(), worldRest: bone.getWorldQuaternion(new THREE.Quaternion()) })
@@ -209,11 +222,14 @@ export class PoseDriver {
   /** 同一根骨骼绕几个轴一起转（比如上身同时前倾和扭腰）。
    *  轴是"人物空间"的（x 左右、y 上、z 前），按父骨骼**这一帧**的朝向换算，
    *  所以大臂放下/抬起之后，小臂弯曲的方向也是对的。 */
-  private rotMany(name: string, rots: [THREE.Vector3, number][], pre?: THREE.Quaternion): void {
+  private rotMany(name: string, rots: [THREE.Vector3, number][], pre?: THREE.Quaternion, keep = false): void {
     const j = this.joints.get(name)
     if (!j) return
-    j.bone.quaternion.copy(j.rest)
-    if (pre) j.bone.quaternion.multiply(pre)
+    // keep = 叠加在这一帧已经摆好的姿势上（转头看人时不把点头、歪头冲掉）
+    if (!keep) {
+      j.bone.quaternion.copy(j.rest)
+      if (pre) j.bone.quaternion.multiply(pre)
+    }
     const parent = j.bone.parent
     if (!parent) return
     parent.updateWorldMatrix(true, false)
@@ -227,6 +243,40 @@ export class PoseDriver {
 
   /** 开枪后的后坐力（秒） */
   private kick = 0
+
+  /** 在聊天：轮到自己说时手比划，听的时候点点头（外面每帧设） */
+  talking = false
+  /** 平常站着时会换小动作（打仗时、访客、丧尸不换） */
+  fidget = false
+  private readonly seed = Math.random() * 100
+  private idleVar: IdleVar = 'plain'
+  private idleLeft = 1 + Math.random() * 5
+  private idleT = 0
+  private talkT = 0
+
+  /** 调试用：固定一个小动作（null = 恢复随机） */
+  forceIdle(v: IdleVar | null): void {
+    this.forced = v
+    if (v) { this.idleVar = v; this.idleT = 1.2 }
+  }
+  private forced: IdleVar | null = null
+
+  private pickIdle(dt: number): void {
+    if (this.forced) return
+    if (!this.fidget) { this.idleVar = 'plain'; return }
+    this.idleT += dt
+    this.idleLeft -= dt
+    if (this.idleLeft > 0) return
+    const total = IDLE_PICK.reduce((n, x) => n + x[1], 0)
+    let r = Math.random() * total
+    let pick = IDLE_PICK[0]
+    for (const x of IDLE_PICK) { r -= x[1]; if (r <= 0) { pick = x; break } }
+    // 同一个小动作不连着做两次（发呆除外）
+    if (pick[0] === this.idleVar && pick[0] !== 'plain') pick = IDLE_PICK[0]
+    this.idleVar = pick[0]
+    this.idleT = 0
+    this.idleLeft = pick[2] + Math.random() * (pick[3] - pick[2])
+  }
 
   recoil(): void {
     this.kick = 0.18
@@ -245,8 +295,8 @@ export class PoseDriver {
     const canLook = state === 'idle' || state === 'sit' || state === 'sitEat' || state === 'work' || state === 'drink' || state === 'fish'
     this.lookCur += ((canLook ? this.lookYaw : 0) - this.lookCur) * Math.min(1, dt * 4)
     if (Math.abs(this.lookCur) > 0.01) {
-      this.rot('Neck', UP, this.lookCur * 0.35)
-      this.rot('Head', UP, this.lookCur * 0.65)
+      this.rotMany('Neck', [[UP, this.lookCur * 0.35]], undefined, true)
+      this.rotMany('Head', [[UP, this.lookCur * 0.65]], undefined, true)
     }
     // 和上一帧之间平滑过渡：换动作（站→坐、走→停）不再一下子跳过去；倒地、死亡要快一点
     const fast = state === 'down' || state === 'dead' || state === 'shoot'
@@ -283,21 +333,46 @@ export class PoseDriver {
     for (const j of this.joints.values()) j.bone.quaternion.copy(j.rest)
     this.model.position.y = 0
     this.model.rotation.x = 0
-    if (state === 'walk') {
-      // 迈腿时膝盖比大腿晚一点弯（抬脚），胯左右摆、上身反方向扭，头保持朝前
-      const k = Math.sin(this.t + 0.5)
-      this.rot('LeftUpLeg', SIDE, -s * 0.5)
-      this.rot('RightUpLeg', SIDE, s * 0.5)
-      this.rot('LeftLeg', SIDE, Math.max(0, k) * 0.8)
-      this.rot('RightLeg', SIDE, Math.max(0, -k) * 0.8)
-      this.rotMany('Hips', [[UP, s * 0.08], [FWD, Math.cos(this.t) * 0.04]])
-      this.rotMany('Spine', [[UP, -s * 0.1], [SIDE, 0.04]])
-      this.rot('Head', UP, s * 0.05)
-      this.rot('LeftArm', SIDE, s * 0.45, leftDown)
-      this.rot('RightArm', SIDE, -s * 0.45, rightDown)
-      this.rot('LeftForeArm', SIDE, -0.3 - Math.max(0, -s) * 0.3)
-      this.rot('RightForeArm', SIDE, -0.3 - Math.max(0, s) * 0.3)
-      this.model.position.y = Math.abs(Math.cos(this.t)) * 0.03
+    this.model.position.x = 0
+    if (state === 'walk' || state === 'carry') {
+      // 走路：摆动腿时膝盖弯、脚尖勾起，支撑腿后蹬时脚跟抬起；胯跟着腿扭、往支撑腿那边微微移，
+      // 肩膀反着扭；手臂比腿慢半拍地甩（抱箱子时手在胸前抱着）
+      const carry = state === 'carry'
+      const amp = carry ? 0.8 : Math.min(1.2, 0.8 + speed * 0.2)
+      const p = this.t - 0.2
+      const thighL = -s * 0.46 * amp
+      const thighR = s * 0.46 * amp
+      const swingL = Math.max(0, Math.cos(p)) ** 1.4
+      const swingR = Math.max(0, -Math.cos(p)) ** 1.4
+      const kneeL = 0.08 + swingL * 0.9 * amp
+      const kneeR = 0.08 + swingR * 0.9 * amp
+      const pushL = Math.max(0, -Math.sin(p)) * Math.max(0, -Math.cos(p)) * 2
+      const pushR = Math.max(0, Math.sin(p)) * Math.max(0, Math.cos(p)) * 2
+      this.rot('LeftUpLeg', SIDE, thighL)
+      this.rot('RightUpLeg', SIDE, thighR)
+      this.rot('LeftLeg', SIDE, kneeL)
+      this.rot('RightLeg', SIDE, kneeR)
+      this.rot('LeftFoot', SIDE, -(thighL + kneeL) * 0.85 + pushL * 0.4 - swingL * 0.12)
+      this.rot('RightFoot', SIDE, -(thighR + kneeR) * 0.85 + pushR * 0.4 - swingR * 0.12)
+      const c = Math.cos(this.t)
+      this.rotMany('Hips', [[UP, s * 0.1 * amp], [FWD, c * 0.035]])
+      this.rotMany('Spine', [[UP, -s * 0.08 * amp], [SIDE, carry ? -0.06 : 0.05]])
+      this.rot('Spine1', UP, -s * 0.06 * amp)
+      this.rotMany('Head', [[UP, s * 0.06 * amp], [SIDE, -Math.abs(c) * 0.025]])
+      if (carry) {
+        this.rotMany('LeftArm', [[SIDE, -0.75], [FWD, 0.08]], leftDown)
+        this.rotMany('RightArm', [[SIDE, -0.75], [FWD, -0.08]], rightDown)
+        this.rot('LeftForeArm', SIDE, -0.8)
+        this.rot('RightForeArm', SIDE, -0.8)
+      } else {
+        const a = Math.sin(this.t - 0.25)
+        this.rotMany('LeftArm', [[SIDE, a * 0.42 * amp], [FWD, 0.07]], leftDown)
+        this.rotMany('RightArm', [[SIDE, -a * 0.42 * amp], [FWD, -0.07]], rightDown)
+        this.rot('LeftForeArm', SIDE, -0.25 - Math.max(0, -a) * 0.4)
+        this.rot('RightForeArm', SIDE, -0.25 - Math.max(0, a) * 0.4)
+      }
+      this.model.position.y = Math.abs(c) * (carry ? 0.02 : 0.028)
+      this.model.position.x = -Math.cos(p) * 0.016
     } else if (state === 'sitEat') {
       // 坐着吃饭：左手端碗，右手隔一会儿把筷子送到嘴边
       const lift = Math.max(0, Math.sin(this.t * 1.6)) ** 2
@@ -312,6 +387,15 @@ export class PoseDriver {
       this.rotMany('Spine', [[SIDE, 0.12 - lift * 0.05]])
       this.rot('Head', SIDE, 0.12 - lift * 0.1)
       this.model.position.y = -0.42 * this.legK
+    } else if (state === 'wave') {
+      // 挥手：右手举过肩、往外张开，小臂左右摆；身子微微踮一下
+      const k = Math.sin(this.t * 5.5)
+      this.rotMany('RightArm', [[FWD, 0.55], [SIDE, -2.35]], rightDown)
+      this.rotMany('RightForeArm', [[FWD, k * 0.38], [SIDE, -0.35]])
+      this.rot('LeftArm', SIDE, 0.03, leftDown)
+      this.rot('Spine', SIDE, -0.04)
+      this.rotMany('Head', [[SIDE, -0.06], [FWD, -0.05]])
+      this.model.position.y = Math.max(0, Math.sin(this.t * 2.2)) * 0.012
     } else if (state === 'fish') {
       // 钓鱼：两手往前握着竿，偶尔轻轻抖一下
       const twitch = Math.sin(this.t * 0.7) > 0.95 ? Math.sin(this.t * 9) * 0.06 : 0
@@ -329,28 +413,18 @@ export class PoseDriver {
       this.rot('LeftArm', SIDE, s * 0.03, leftDown)
       this.rot('Head', SIDE, -lift * 0.2)
       this.rot('Spine', SIDE, -lift * 0.04)
-    } else if (state === 'carry') {
-      // 抱着箱子走：腿照常迈，两只手往前抱住
-      this.rot('LeftUpLeg', SIDE, -s * 0.4)
-      this.rot('RightUpLeg', SIDE, s * 0.4)
-      this.rot('LeftLeg', SIDE, Math.max(0, s) * 0.6)
-      this.rot('RightLeg', SIDE, Math.max(0, -s) * 0.6)
-      this.rot('LeftArm', SIDE, -0.75, leftDown)
-      this.rot('RightArm', SIDE, -0.75, rightDown)
-      this.rot('LeftForeArm', SIDE, -0.8)
-      this.rot('RightForeArm', SIDE, -0.8)
-      this.rot('Spine', SIDE, -0.06)
-      this.model.position.y = Math.abs(Math.cos(this.t)) * 0.02
     } else if (state === 'sit') {
       this.rot('LeftUpLeg', SIDE, -1.45)
       this.rot('RightUpLeg', SIDE, -1.45)
       this.rot('LeftLeg', SIDE, 1.45)
       this.rot('RightLeg', SIDE, 1.45)
+      const g = this.talkGesture(dt)
       this.rot('LeftArm', SIDE, -0.35, leftDown)
-      this.rot('RightArm', SIDE, -0.35, rightDown)
+      this.rotMany('RightArm', [[SIDE, -0.35 - g.arm], [FWD, -g.out]], rightDown)
       this.rot('LeftForeArm', SIDE, -0.9)
-      this.rot('RightForeArm', SIDE, -0.9)
-      this.rot('Spine', SIDE, Math.sin(this.t) * 0.015)
+      this.rotMany('RightForeArm', [[UP, g.turn], [SIDE, -0.9 - g.fore]])
+      this.rot('Spine', SIDE, Math.sin(this.t) * 0.015 + g.lean)
+      this.rot('Head', SIDE, g.nod)
       this.model.position.y = -0.42 * this.legK
     } else if (state === 'sleep') {
       this.rot('LeftArm', SIDE, 0, leftDown)
@@ -410,15 +484,82 @@ export class PoseDriver {
       this.model.rotation.x = state === 'dead' ? Math.PI / 2 : -Math.PI / 2
       this.model.position.y = 0.14
     } else {
-      // 站着：呼吸、慢慢换重心、偶尔左右看看
-      const look = Math.sin(this.t * 0.23) > 0.6 ? Math.sin(this.t * 0.9) * 0.35 : 0
-      this.rot('LeftArm', SIDE, s * 0.03, leftDown)
-      this.rot('RightArm', SIDE, -s * 0.03, rightDown)
-      this.rotMany('Hips', [[FWD, Math.sin(this.t * 0.31) * 0.035]])
-      this.rot('Spine', SIDE, Math.sin(this.t * 1.4) * 0.015)
-      this.rot('Spine1', SIDE, Math.sin(this.t * 1.4 + 0.5) * 0.012)
-      this.rotMany('Head', [[UP, look], [FWD, Math.sin(this.t * 0.37) * 0.05]])
-      this.rot('LeftLeg', SIDE, Math.max(0, Math.sin(this.t * 0.31)) * 0.12)
+      this.idlePose(dt, s, leftDown, rightDown)
     }
+  }
+
+  /** 聊天时的手势：轮到自己说时右手比划、身子微微前倾，听的时候点点头 */
+  private talkGesture(dt: number): { arm: number; out: number; fore: number; turn: number; lean: number; nod: number } {
+    if (!this.talking) return { arm: 0, out: 0, fore: 0, turn: 0, lean: 0, nod: 0 }
+    this.talkT += dt
+    const speak = Math.max(0, Math.sin(this.talkT * 0.55 + this.seed)) ** 0.7
+    const wave = Math.sin(this.talkT * 2.3 + this.seed)
+    return {
+      arm: speak * (0.3 + wave * 0.1),
+      out: speak * 0.12,
+      fore: speak * (0.25 + Math.sin(this.talkT * 3.1) * 0.22),
+      turn: speak * 0.35,
+      lean: speak * 0.04,
+      nod: (1 - speak) * Math.max(0, Math.sin(this.talkT * 2.4)) * 0.07 + speak * Math.sin(this.talkT * 1.7) * 0.03,
+    }
+  }
+
+  /** 站着：呼吸、慢慢换重心，隔一会儿换个小动作；聊天时手比划 */
+  private idlePose(dt: number, s: number, leftDown?: THREE.Quaternion, rightDown?: THREE.Quaternion): void {
+    this.pickIdle(dt)
+    const v = this.talking ? 'plain' : this.idleVar
+    let headYaw = Math.sin(this.t * 0.23) > 0.6 ? Math.sin(this.t * 0.9) * 0.3 : 0
+    let headPitch = Math.sin(this.t * 0.37) * 0.05
+    let spinePitch = Math.sin(this.t * 1.4) * 0.015
+    let la: Rots = [[SIDE, s * 0.03]]
+    let ra: Rots = [[SIDE, -s * 0.03]]
+    let lf: Rots = [[SIDE, -0.12]]
+    let rf: Rots = [[SIDE, -0.12]]
+    if (v === 'crossed') {
+      la = [[SIDE, -0.3], [FWD, -0.06]]
+      ra = [[SIDE, -0.26], [FWD, 0.06]]
+      lf = [[UP, -1.35], [SIDE, -0.88]]
+      rf = [[UP, 1.35], [SIDE, -0.78]]
+      headPitch -= 0.04
+    } else if (v === 'hips') {
+      la = [[SIDE, 0.25], [FWD, 0.62]]
+      ra = [[SIDE, 0.25], [FWD, -0.62]]
+      lf = [[UP, -0.6], [FWD, -1.2]]
+      rf = [[UP, 0.6], [FWD, 1.2]]
+      spinePitch -= 0.03
+    } else if (v === 'look') {
+      headYaw = Math.sin(this.idleT * 1.25) * 0.65
+      headPitch -= 0.03
+    } else if (v === 'scratch') {
+      const k = envelope(this.idleT, 2.4)
+      ra = [[FWD, -0.35 * k], [SIDE, -2.3 * k]]
+      rf = [[FWD, -0.9 * k], [SIDE, -1.3 * k + Math.sin(this.idleT * 14) * 0.07 * k]]
+      headPitch += 0.14 * k
+      headYaw = -0.12 * k
+    } else if (v === 'stretch') {
+      const k = envelope(this.idleT, 2.8)
+      la = [[FWD, -0.25 * k], [SIDE, -2.85 * k]]
+      ra = [[FWD, 0.25 * k], [SIDE, -2.85 * k]]
+      lf = [[SIDE, -0.35 * k]]
+      rf = [[SIDE, -0.35 * k]]
+      spinePitch -= 0.12 * k
+      headPitch -= 0.22 * k
+    }
+    const g = this.talkGesture(dt)
+    if (this.talking) {
+      ra = [[SIDE, -0.3 - g.arm], [FWD, -0.08 - g.out]]
+      rf = [[UP, g.turn], [SIDE, -0.5 - g.fore]]
+      spinePitch += g.lean
+      headPitch += g.nod
+    }
+    this.rotMany('LeftArm', la, leftDown)
+    this.rotMany('RightArm', ra, rightDown)
+    this.rotMany('LeftForeArm', lf)
+    this.rotMany('RightForeArm', rf)
+    this.rotMany('Hips', [[FWD, Math.sin(this.t * 0.31) * 0.035]])
+    this.rot('Spine', SIDE, spinePitch)
+    this.rot('Spine1', SIDE, Math.sin(this.t * 1.4 + 0.5) * 0.012)
+    this.rotMany('Head', [[UP, headYaw], [SIDE, headPitch]])
+    this.rot('LeftLeg', SIDE, Math.max(0, Math.sin(this.t * 0.31)) * 0.12)
   }
 }

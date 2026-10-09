@@ -20,12 +20,12 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
-import { lt, t, type UiKey } from '../i18n'
+import { lt, t, t as t_, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash'
+  | 'company' | 'tidy' | 'wash' | 'greet'
 
 interface Task {
   kind: TaskKind
@@ -39,6 +39,8 @@ interface Task {
   layer?: LayerId
   /** 陪谁说话 */
   with?: Actor
+  /** 迎接：还要挥手多久（游戏小时）；0 = 挥过了 */
+  wave?: number
 }
 
 
@@ -67,6 +69,10 @@ export class Actor extends Walker {
   lowMood = 0
   /** 正和家人一起歇着/吃饭，聊着天 */
   chatting = false
+  /** 头顶冒出来的一句话（迎接、喊人），hours 是还剩多久 */
+  line: { text: string; hours: number } | null = null
+  /** 没在打丧尸：站着时会换小动作 */
+  calm = true
   /** 打丧尸用什么 */
   weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' | 'crossbow' = 'pin'
   /** 戴着顾沉的头盔：被咬伤害减半 */
@@ -149,6 +155,8 @@ export class Actor extends Walker {
   animate(dt: number, walking: boolean): void {
     const state: PoseState = walking ? (this.carrying ? 'carry' : 'walk') : this.pose
     if (this.driver) {
+      this.driver.talking = this.chatting && !walking
+      this.driver.fidget = this.calm && !this.away
       this.driver.update(dt, state)
       return
     }
@@ -902,7 +910,10 @@ export class Household {
   /** 一起坐着歇、一起吃饭的人会聊起来：心情慢慢变好 */
   private chatTick(hours: number): void {
     const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company') && !a.away
+    const calm = !this.siege || this.siege.done
     for (const a of this.actors) {
+      a.calm = calm
+      if (a.line && (a.line.hours -= hours) <= 0) a.line = null
       a.chatting = social(a) && this.actors.some((b) => b !== a && social(b) && b.floor === a.floor
         && Math.hypot(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z) < 2.4)
       if (a.chatting) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + hours * 5) }
@@ -1208,11 +1219,13 @@ export class Household {
     } else if (t.phase === 'away' && this.absHour >= t.back) {
       // 开车回来：先等车倒进车位停稳，人再下车
       if (t.van) {
-        if (!this.vanMove) { this.vanAway = false; this.vanMove = { dir: 'in', t0: this.absHour }; return }
+        if (!this.vanMove) { this.vanAway = false; this.vanMove = { dir: 'in', t0: this.absHour }; this.greetArrivals(t); return }
         if (this.absHour < this.vanMove.t0 + VAN_IN_H) return
         this.vanMove = null
       }
       t.phase = 'back'
+      if (!t.van) this.greetArrivals(t)
+      t.members[0].line = { text: t_('world.greet.back'), hours: 0.25 }
       t.members.forEach((a, k) => {
         a.away = false
         a.carrying = true
@@ -1565,7 +1578,7 @@ export class Household {
     if (t.kind === 'repair' || t.kind === 'garden') return 'cook'
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company') return 'relax'
-    if (t.kind === 'tidy' || t.kind === 'wash') return 'idle'
+    if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet') return 'idle'
     return t.kind
   }
 
@@ -1643,6 +1656,40 @@ export class Household {
     const floor = this.rand() < 0.7 ? a.floor : (a.floor === 0 ? 1 : 0)
     const spot: Spot = { kind: 'stroll', x, z, floor: floor as Spot['floor'], face: this.rand() * 360, pose: 'work' }
     return { kind: 'tidy', spot, phase: 'go', hours: 0.25 + this.rand() * 0.35, manual: false }
+  }
+
+  /** 家里人听到车开回来 / 出门的人进了街口：没在忙的出来迎一迎（吃饭做饭睡觉的不动） */
+  private greetArrivals(t: Trip): void {
+    const free = ['idle', 'stroll', 'relax', 'company', 'tidy', 'wash', 'sit']
+    let k = 0
+    for (const a of this.actors) {
+      if (t.members.includes(a) || this.isOut(a) || a.dead || a.settling || a.needs.energy < 25) continue
+      if (a.task ? a.task.manual || !free.includes(a.task.kind) : a.path.length > 0) continue
+      if (a === this.actors[0] && (this.search || this.fishing)) continue
+      // 站在进屋那条路旁边，面朝人回来的方向
+      const at = t.van ? { x: 2.6 + k * 0.75, z: 9.45 - k * 0.2 } : { x: 5.25 + k * 0.7, z: 10.9 - k * 0.15 }
+      const look = t.van ? { x: 0.9, z: 10.7 } : { x: 4, z: 13 }
+      const face = THREE.MathUtils.radToDeg(Math.atan2(look.x - at.x, look.z - at.z))
+      this.release(a)
+      a.task = null
+      this.assign(a, { kind: 'greet', spot: { kind: 'stroll', x: at.x, z: at.z, floor: 0, face, pose: 'idle' }, phase: 'go', hours: t.van ? 1.2 : 2, manual: false })
+      k++
+    }
+  }
+
+  /** 迎接的人：看见回来的人走近了就挥挥手、喊一声，挥一会儿就站着等他们进屋 */
+  private greetTick(a: Actor, t: Task, hours: number): void {
+    const trip = this.trip
+    const near = trip?.phase === 'back' ? trip.members.find((m) => !m.away && Math.hypot(m.pos.x - a.pos.x, m.pos.z - a.pos.z) < 7) : undefined
+    if (near && t.wave === undefined) {
+      t.wave = 0.2
+      const prologue = this.clock.day < PROLOGUE_DAYS
+      const n = Math.floor(this.rand() * 3)
+      a.line = { text: t_(`world.greet.${prologue ? 'calm' : 'doom'}${n}` as UiKey), hours: 0.22 }
+    }
+    if (t.wave !== undefined && t.wave > 0) t.wave = Math.max(0, t.wave - hours)
+    a.pose = t.wave !== undefined && t.wave > 0 ? 'wave' : 'idle'
+    if (near) a.face(near.pos.x - a.pos.x, near.pos.z - a.pos.z, 0.05)
   }
 
   /** 擦车：站到车北边，面朝车 */
@@ -1734,6 +1781,7 @@ export class Household {
     t.hours -= hours
     // 陪聊：一直面朝对方
     if (t.kind === 'company' && t.with) a.face(t.with.pos.x - a.pos.x, t.with.pos.z - a.pos.z, 0.05)
+    if (t.kind === 'greet') this.greetTick(a, t, hours)
     if (t.kind === 'repair' && t.layer) {
       const max = this.maxOf(t.layer)
       this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
@@ -1755,7 +1803,9 @@ export class Household {
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了
     if (t.kind === 'wash' && (this.vanAway || this.vanMove)) return true
-    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash')) {
+    // 迎接：人都进屋卸完货了（这趟结束了）就散
+    if (t.kind === 'greet' && !this.trip) return true
+    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet')) {
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false

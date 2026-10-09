@@ -226,6 +226,35 @@ describe('出门', () => {
     expect(life.stock.food).toBeGreaterThan(food0 + 9)
   })
 
+  it('车开回来时，在家闲着的人出来迎：走到院子里，看见人下车就挥手喊一声，卸完货就散', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9.5 }
+    life.speed = 3
+    const [hero, mom, dad] = life.actors
+    life.startTrip('supermarket', [mom, dad], true)
+    let greeted = false
+    let waved = false
+    let said = ''
+    let back = ''
+    const dt = 0.1
+    for (let i = 0; i < (3.5 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      // 女主在家闲着（不是在吃饭睡觉）
+      if (!life.trip || life.trip.phase === 'out') hero.needs = { hunger: 90, thirst: 90, energy: 90, mood: 80 }
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      if (hero.task?.kind === 'greet') greeted = true
+      if (hero.pose === 'wave') waved = true
+      if (hero.line) said = hero.line.text
+      if (mom.line) back = mom.line.text
+    }
+    expect(greeted).toBe(true)
+    expect(waved).toBe(true)
+    expect(said).toBeTruthy()
+    expect(back).toBe('我们回来啦～')
+    expect(life.trip).toBeNull()
+    expect(hero.task?.kind).not.toBe('greet')
+  })
+
   it('没油、车不在家、去上班都不能开车；加油站末日前花钱买油，末日后不要钱', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 0, hour: 8 }

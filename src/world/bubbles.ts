@@ -50,6 +50,7 @@ export function thoughtOf(a: Actor, fighting: boolean): string | null {
   if (k === 'garden' && using) return '🌱'
   if (k === 'tidy' && using) return '🧹'
   if (k === 'wash' && using) return '🧽'
+  if (k === 'greet' && a.pose === 'wave') return '👋'
   const n = a.needs
   if (n.mood < 18) return '🌧️'
   if (n.thirst < 25) return '🥤'
@@ -131,7 +132,8 @@ export class Bubbles {
       }
       const say = this.saying.get(a)
       if (say && (say.until < t || !a.chatting)) this.saying.delete(a)
-      const line = show && a.root.visible && say && say.until >= t ? say.text : null
+      // 迎接、喊人的那一句优先
+      const line = show && a.root.visible ? (a.line?.text ?? (say && say.until >= t ? say.text : null)) : null
       const emoji = line ? null : show && a.root.visible ? thoughtOf(a, fighting) : null
       s.visible = !!(emoji || line)
       if (!emoji && !line) continue
