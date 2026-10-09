@@ -86,7 +86,7 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -147,6 +147,7 @@ export class World {
   private readonly glass: THREE.Material[] = []
   private fogBase = 0.013
   private saveTimer = 10
+  private hadGuest = false
   private readonly bubbles = new Bubbles()
   /** 菜地：一块土 + 两排苗（苗按长势缩放），熟了头上冒 🥬 */
   private readonly gardenObj = new THREE.Group()
@@ -864,6 +865,11 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    // 江野来帮忙守夜：提示一下
+    if (!!this.life.guest !== this.hadGuest) {
+      this.hadGuest = !!this.life.guest
+      if (this.hadGuest) { this.toast('world.toast.guest', 4); this.sound.knock() }
+    }
     const visitor = this.life.visitor
     if (visitor) {
       let walking = false

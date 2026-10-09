@@ -68,7 +68,7 @@ export function snapshot(life: Household): WorldSave {
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
     log: [...life.log],
-    actors: life.actors.map((a) => ({
+    actors: life.actors.filter((a) => !a.guest).map((a) => ({
       name: a.name, model: a.model, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, runaway: a.runaway, lowMood: a.lowMood,
     })),

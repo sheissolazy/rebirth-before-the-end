@@ -72,6 +72,8 @@ export class Actor extends Walker {
   handy = false
   /** 用哪个模型（住进来的人存档要用） */
   model = ''
+  /** 来做客/帮忙的人，不算家里人（不存档、不分床） */
+  guest = false
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
   runaway: { back: number } | null = null
   lost = false
@@ -390,7 +392,7 @@ export class Household {
   static readonly MAX_RESIDENTS = 5
 
   get residents(): number {
-    return this.actors.filter((a) => !a.lost).length
+    return this.actors.filter((a) => !a.lost && !a.guest).length
   }
 
   // --- 上街搜东西 -------------------------------------------------------------
@@ -644,7 +646,7 @@ export class Household {
   private runawayTick(): void {
     for (const a of this.actors) {
       const r = a.runaway
-      if (!r) continue
+      if (!r || a.guest) continue
       if (!a.away && !a.path.length) a.away = true
       if (a.away && this.absHour >= r.back) {
         a.runaway = null
@@ -830,8 +832,46 @@ export class Household {
     return { count: 2 + month + (c.day % 2), crisis: false }
   }
 
+  /** 来帮忙守夜的江野（危机夜傍晚进门，天亮走） */
+  guest: Actor | null = null
+  private guestNight = -1
+
+  /** 月底危机夜，江野好感够高就会来帮忙 */
+  private guestTick(): void {
+    const c = this.clock
+    const g = this.guest
+    if (!g && this.makeActor && c.hour >= 19.5 && c.hour < 21 && this.guestNight !== c.day
+      && Household.crisisKind(c) && (this.affection.jiangye ?? 0) >= 60) {
+      this.guestNight = c.day
+      const a = this.makeActor('江野', 'jiangye', { x: 30, z: 18 })
+      a.model = 'jiangye'
+      a.weapon = 'machete'
+      a.guest = true
+      a.health = 100
+      a.needs = { hunger: 90, thirst: 90, energy: 95, mood: 80 }
+      a.setPath(route(this.navs, a.pos, { ...HOME_IN, x: HOME_IN.x + 1 }) ?? [])
+      this.actors.push(a)
+      this.guest = a
+      this.note('world.log.guestCome')
+    }
+    // 天亮了、仗也打完了：他摆摆手走了
+    if (g && !g.runaway && c.hour >= 6.5 && c.hour < 12 && (!this.siege || this.siege.done)) {
+      this.cancel(g)
+      g.runaway = { back: Infinity }
+      g.setPath(route(this.navs, g.pos, EXIT) ?? [])
+      this.note('world.log.guestLeave')
+    }
+    if (g?.runaway && !g.path.length) {
+      g.root.removeFromParent()
+      this.actors.splice(this.actors.indexOf(g), 1)
+      this.guest = null
+      this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + 5)
+    }
+  }
+
   private siegeTick(simSeconds: number): void {
     const c = this.clock
+    this.guestTick()
     if (!this.siege && this.spawnZombie && c.hour >= 21 && this.nightDone !== c.day) {
       const { count, crisis } = Household.nightCount(c)
       this.nightDone = c.day

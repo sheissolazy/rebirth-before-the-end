@@ -558,3 +558,27 @@ describe('种田', () => {
     expect(life.log.some((l) => l.key === 'world.log.harvest')).toBe(true)
   })
 })
+
+describe('江野来帮忙守夜', () => {
+  it('好感够高：月底危机夜傍晚他来了，一起守，天亮走了；好感不够就不来', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _m, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnZombie = (at) => new Zombie(at)
+    life.affection.jiangye = 70
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 19.4 }
+    const dt = 0.05
+    const step = () => {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      for (const z of life.siege?.zombies ?? []) z.follow(dt * life.speed, z.speed)
+    }
+    for (let i = 0; i < 200; i++) step()
+    expect(life.guest?.name).toBe('江野')
+    expect(life.residents).toBe(3)
+    // 打到天亮
+    for (let i = 0; i < 60000 && life.guest; i++) { if (!life.siege) life.speed = 3; step() }
+    expect(life.guest).toBeNull()
+    expect(life.log.some((l) => l.key === 'world.log.guestLeave')).toBe(true)
+    expect(life.actors.some((a) => a.name === '江野')).toBe(false)
+  })
+})

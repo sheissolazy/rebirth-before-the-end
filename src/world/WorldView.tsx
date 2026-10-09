@@ -28,13 +28,13 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
     : t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
   return (
     <button onClick={onClick}
-      className={`w-40 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
+      className={`w-36 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
       <div className="flex items-baseline justify-between gap-1">
         <span className="whitespace-nowrap text-sm font-semibold">{p.name}</span>
         {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
       </div>
       <div className="truncate text-[11px] text-zinc-500" title={doing}>{doing}</div>
-      <div className="mt-1.5 grid grid-cols-[2.2rem_1fr] items-center gap-x-1.5 gap-y-1">
+      <div className="mt-1.5 grid grid-cols-[2rem_1fr] items-center gap-x-1.5 gap-y-1">
         {p.health < 100 && (
           <div className="contents">
             <span className="text-[11px] font-medium text-red-700">{t('world.need.health')}</span>
@@ -258,7 +258,7 @@ export default function WorldView() {
         ))}
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 max-w-sm rounded-xl bg-zinc-900/65 px-4 py-2 text-xs leading-relaxed text-white">
+      <div className="pointer-events-none absolute bottom-3 right-3 max-w-xs rounded-xl bg-zinc-900/65 px-3 py-2 text-[11px] leading-relaxed text-white">
         {home && hud.floor === 1 ? t('world.floor2Hint') : t(home ? 'world.help.home' : 'world.help.outside')}
       </div>
 
