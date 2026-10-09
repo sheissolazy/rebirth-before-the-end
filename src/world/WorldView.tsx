@@ -14,7 +14,7 @@ import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
 import { peopleStyle } from './people'
 import { BTN_GOLD, BTN_RED, CHIP, GRAIN, Grain, PANEL, SERIF } from './ui'
 
-const WELCOME_KEY = 'rbte-proto-welcome-v8'
+const WELCOME_KEY = 'rbte-proto-welcome-v9'
 const WELCOME_ITEMS = ['life', 'night', 'map', 'feel'] as const
 const WELCOME_KEYS = ['click', 'wasd', 'wheel', 'space', 'speed', 'map', 'diary', 'act'] as const
 const SPEEDS = [0, 1, 2, 3] as const
