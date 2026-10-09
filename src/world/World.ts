@@ -164,6 +164,21 @@ export class World {
   private readonly fences: THREE.Object3D[] = []
   private stoneWall: THREE.Group | null = null
   private pmats: ParadiseMaterials | null = null
+  /** 白天天上慢慢飞过的一小群鸟（扇翅膀的折线） */
+  private readonly birds = (() => {
+    const g = new THREE.Group()
+    const mat = new THREE.LineBasicMaterial({ color: '#3a3a3a', transparent: true, opacity: 0.75 })
+    const list: { obj: THREE.Line; off: THREE.Vector3; ph: number }[] = []
+    for (let i = 0; i < 7; i++) {
+      const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.35, 0, 0), new THREE.Vector3(0, 0, 0.08), new THREE.Vector3(0.35, 0, 0)])
+      const obj = new THREE.Line(geo, mat)
+      const off = new THREE.Vector3((i % 3) * 1.4 - 1.4 + (i > 3 ? 0.7 : 0), Math.sin(i) * 0.5, -Math.floor(i / 2) * 1.2)
+      g.add(obj)
+      list.push({ obj, off, ph: i * 0.9 })
+    }
+    g.visible = false
+    return { g, list }
+  })()
   /** 平静的夜里院子里飞的萤火虫 */
   private readonly flies = (() => {
     const n = 70
@@ -263,7 +278,7 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
-    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts)
+    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts, this.birds.g)
     // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.016, 2.0, 6), new THREE.MeshStandardMaterial({ color: '#4b3a2a', roughness: 0.6 }))
     pole.position.y = 1.0
@@ -1007,6 +1022,22 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    // 鸟：白天、不下雨时，一群鸟从西边慢慢飞到东边，循环
+    const dayCalm = this.nightness < 0.3 && this.life.rain < 0.05
+    this.birds.g.visible = dayCalm
+    if (dayCalm) {
+      const cycle = (this.elapsed * 1.6) % 140
+      this.birds.g.position.set(-50 + cycle, 13, -2 + Math.sin(this.elapsed * 0.05) * 6)
+      this.birds.g.rotation.y = -Math.PI / 2
+      for (const b of this.birds.list) {
+        const flap = Math.sin(this.elapsed * 6 + b.ph) * 0.18
+        const p = b.obj.geometry.attributes.position as THREE.BufferAttribute
+        p.setY(0, flap)
+        p.setY(2, flap)
+        p.needsUpdate = true
+        b.obj.position.copy(b.off)
+      }
+    }
     // 萤火虫：世外桃源画风、夜里、不下雨、没在打仗时才有
     const calmNight = this.style === 'paradise' && this.nightness > 0.6 && this.life.rain < 0.05 && !fighting
     this.flies.pts.visible = calmNight
