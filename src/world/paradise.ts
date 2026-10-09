@@ -454,14 +454,21 @@ export class River {
     const bankLen = Math.hypot(RIVER.bank, -RIVER.bed)
     plane(len, bankLen, bed, RIVER.bed / 2, RIVER.south - RIVER.bank / 2, -slope)
     plane(len, bankLen, bed, RIVER.bed / 2, RIVER.north + RIVER.bank / 2, slope)
-    // 水面：透射材质，能看到下面的卵石；法线贴图慢慢流动
+    // 水面：半透明的青绿色，能看到下面的卵石；法线贴图慢慢流动。
+    // 以前用透射材质（?water=glass 还能切回去），但它每帧要把整个场景多画一遍，一帧慢 5 倍左右，看起来也差不多
     this.normal = rippleTexture()
     this.normal.repeat.set(len / 9, (RIVER.south - RIVER.north) / 9)
-    const water = new THREE.MeshPhysicalMaterial({
-      color: '#f2fbfa', roughness: 0.02, metalness: 0, transmission: 1, ior: 1.33, thickness: 0.5,
-      attenuationColor: '#6fb7ae', attenuationDistance: 4, normalMap: this.normal, normalScale: new THREE.Vector2(0.1, 0.1),
-      specularIntensity: 0.6,
-    })
+    const glass = typeof location !== 'undefined' && new URLSearchParams(location.search).get('water') === 'glass'
+    const water = glass
+      ? new THREE.MeshPhysicalMaterial({
+        color: '#f2fbfa', roughness: 0.02, metalness: 0, transmission: 1, ior: 1.33, thickness: 0.5,
+        attenuationColor: '#6fb7ae', attenuationDistance: 4, normalMap: this.normal, normalScale: new THREE.Vector2(0.1, 0.1),
+        specularIntensity: 0.6,
+      })
+      : new THREE.MeshPhysicalMaterial({
+        color: '#57a196', roughness: 0.03, metalness: 0, transparent: true, opacity: 0.38, depthWrite: false,
+        normalMap: this.normal, normalScale: new THREE.Vector2(0.1, 0.1), specularIntensity: 0.7,
+      })
     const surface = new THREE.Mesh(new THREE.PlaneGeometry(len, RIVER.south - RIVER.north - 0.4), water)
     surface.rotation.x = -Math.PI / 2
     surface.position.set(5, RIVER.water, mid)

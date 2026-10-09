@@ -291,6 +291,8 @@ export class World {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    // 江面的透射要把整个场景再画一遍：用一半分辨率画，看不出区别，省不少
+    this.renderer.transmissionResolutionScale = 0.5
     host.appendChild(this.renderer.domElement)
     this.renderer.domElement.style.touchAction = 'none'
 
@@ -838,6 +840,8 @@ export class World {
         const slug = o.userData.prop === 'car' ? 'covered_car' : o.userData.prop === 'barrel' ? 'wine_barrel_01' : 'island_tree_02'
         const sc = o.userData.prop === 'tree' ? 0.9 + (Math.abs(o.position.x * 7) % 3) * 0.12 : 1
         const m = placeModel(kit, slug, o.position.x, 0, o.position.z, THREE.MathUtils.radToDeg(o.rotation.y) + (o.userData.prop === 'tree' ? o.position.x * 40 : 0), sc)
+        // 马路对面的行道树（每棵 8 万个三角形）不投影子：影子落在对面人行道上几乎看不见，阴影那一遍能省一半
+        if (o.userData.prop === 'tree' && o.position.z > STREET.z1 - 3) m.traverse((c) => { c.castShadow = false })
         o.parent?.add(m)
         doomed.push(o)
         return
