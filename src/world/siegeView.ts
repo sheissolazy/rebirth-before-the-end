@@ -188,10 +188,11 @@ export class SiegeView {
   }
 
   /** 生成一只丧尸（或者一个黑鸦的人）放进场景 */
-  spawn(at: Pt, raider = false): Zombie {
-    const t = raider ? this.npcs.get('stranger') : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
+  spawn(at: Pt, raider = false, brute = false): Zombie {
+    // 大块头固定用干活的大叔（第一个模板）放大，不然会冒出个巨人小姑娘
+    const t = raider ? this.npcs.get('stranger') : brute ? this.templates[0] : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
     const z = new Zombie(at, t ? cloneSkinned(t) : undefined)
-    z.root.scale.setScalar(0.94 + ((this.spawned * 13) % 10) / 80)
+    z.root.scale.setScalar(brute ? 1.36 : 0.94 + ((this.spawned * 13) % 10) / 80)
     // 黑鸦的人手里拎着钢管
     if (raider) z.driver?.attach(crowbar(), 'RightHand')
     this.scene.add(z.root)

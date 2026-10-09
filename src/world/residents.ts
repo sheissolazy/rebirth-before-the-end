@@ -241,7 +241,7 @@ export class Household {
   siege: Siege | null = null
   readonly log: LogEntry[] = []
   /** World 提供：生成一只丧尸（带 3D 模型）、战斗特效 */
-  spawnZombie: ((at: Pt, raider: boolean) => Zombie) | null = null
+  spawnZombie: ((at: Pt, raider: boolean, brute?: boolean) => Zombie) | null = null
   onSiege: ((e: SiegeEvent) => void) | null = null
   /** 哪一天的晚上已经来过丧尸了 */
   nightDone = -1
@@ -1309,7 +1309,7 @@ export class Household {
     else if (e.kind === 'kill') {
       // 丧尸掉晶核；黑鸦的人身上能搜出子弹
       if (e.raider) this.ammo.n += 2
-      else this.cores += 1
+      else this.cores += e.brute ? 3 : 1
       this.kills++
       if (this.before && e.by === 'trap') this.before.trapKills++
       if (this.before && e.by === 'fire') this.before.fireKills++

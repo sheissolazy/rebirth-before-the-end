@@ -62,6 +62,8 @@ export const inTrap = (p: Pt) => p.x > TRAP.x0 && p.x < TRAP.x1 && p.z > TRAP.z0
 
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
+  /** 危机夜里的大块头：高大、皮厚、走得慢，砸门砸得狠 */
+  brute = false
   /** 黑鸦的人（不是丧尸）：走得快、皮厚、打不过会跑 */
   raider = false
   speed = ZOMBIE.speed
@@ -118,7 +120,8 @@ export type Role = 'ranged' | 'melee1' | 'melee2'
 export type SiegeEvent =
   | { kind: 'start'; count: number; crisis: boolean; raid: boolean; ambush: boolean }
   | { kind: 'broken'; layer: LayerId }
-  | { kind: 'kill'; at: Pt; by: string; raider: boolean }
+  | { kind: 'kill'; at: Pt; by: string; raider: boolean; brute?: boolean }
+  | { kind: 'brute' }
   | { kind: 'trapBroken' }
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
@@ -144,7 +147,7 @@ export interface SiegeOpts {
   maxOf?: (id: LayerId) => number
   /** 铁门外的钉板（耐久 0~100，打仗时会磨损，和 Household 共用一个对象） */
   trap?: { hp: number }
-  spawn: (at: Pt, raider: boolean) => Zombie
+  spawn: (at: Pt, raider: boolean, brute?: boolean) => Zombie
   emit: (e: SiegeEvent) => void
 }
 
@@ -160,6 +163,7 @@ export class Siege {
   private readonly cool = new Map<Actor, number>()
   private readonly broken: LayerId[] = []
   private readonly downed = new Set<Actor>()
+  private bruteSeen = false
   private nextId = 0
   private seed = 7
 
@@ -233,10 +237,18 @@ export class Siege {
     this.t += dt
     while (!this.done && this.queue.length && this.queue[0].t <= this.t) {
       const q = this.queue.shift()!
-      const z = this.o.spawn(q.at, !!this.o.raid)
+      // 月底危机夜（不是黑鸦、不是街上遇袭）：每五只里有一只大块头
+      const brute = this.o.crisis && !this.o.raid && !this.o.ambushAt && this.nextId % 5 === 4
+      const z = this.o.spawn(q.at, !!this.o.raid, brute)
       z.cool = this.rand() * ZOMBIE.cool
       if (this.o.raid) { z.raider = true; z.hp = 75; z.speed = 1.35 }
       z.id = this.nextId++
+      if (brute) {
+        z.brute = true
+        z.hp = 200
+        z.speed = 0.72
+        if (!this.bruteSeen) { this.bruteSeen = true; this.o.emit({ kind: 'brute' }) }
+      }
       this.zombies.push(z)
       this.sendZombie(z)
     }
@@ -362,7 +374,7 @@ export class Siege {
           return
         }
         const id = layer.id
-        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg)
+        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg * (z.brute ? 2.5 : 1))
         this.o.emit({ kind: 'bash', layer: id, at: z.pos })
         if (this.o.barriers[id] <= 0) this.breakLayer()
       }
@@ -377,7 +389,7 @@ export class Siege {
       z.face(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z, dt)
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
-        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (prey.helmet ? 0.5 : 1))
+        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (z.brute ? 1.6 : 1) * (prey.helmet ? 0.5 : 1))
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }
@@ -472,7 +484,7 @@ export class Siege {
     z.slot = -1
     z.burn = 0
     this.kills++
-    this.o.emit({ kind: 'kill', at: z.pos, by, raider: z.raider })
+    this.o.emit({ kind: 'kill', at: z.pos, by, raider: z.raider, brute: z.brute })
     this.fillSlots()
     // 黑鸦的人倒下一大半，剩下的就跑了
     if (this.o.raid && this.kills >= Math.ceil(this.o.count * 0.6)) this.finish(true)

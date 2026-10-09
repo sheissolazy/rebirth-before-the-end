@@ -89,6 +89,7 @@ export const zh = {
   'world.trap.buildCores': '🪤 铁门外铺钉板（2 颗晶核换钉子和铁丝）',
   'world.trap.left': '🪤 钉板还剩 {n}%',
   'world.toast.trap': '铁门外铺好了钉板和铁丝网',
+  'world.toast.brute': '⚠️ 尸群里有大块头！皮厚、砸门狠——燃烧瓶留给它（打倒掉 3 颗晶核）',
   'world.toast.dying': '⚠️ 有人快撑不住了！看日记，赶紧弄吃的喝的（急救包也能吊住命）',
   'world.toast.died': '🕯 家里有人走了……看日记',
   'world.log.trap': '在铁门外铺了钉板、拉了铁丝网：丧尸踩上去走不快，还会一直掉血（用久了会被踩烂）',

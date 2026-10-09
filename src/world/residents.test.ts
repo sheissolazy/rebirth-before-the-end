@@ -971,3 +971,25 @@ describe('第三轮审查（回归测试）', () => {
     expect(b.xielinNotes).toBe(1)
   })
 })
+
+describe('危机夜的大块头', () => {
+  it('危机夜每五只里有一只大块头（200 血、走得慢），打倒掉 3 颗晶核；普通夜里没有', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 21.05 }
+    life.startSiege(10, true)
+    for (let i = 0; i < 4000 && (life.siege?.zombies.length ?? 0) < 5; i++) life.tick(0.05, () => false)
+    const brute = life.siege!.zombies.find((z) => z.brute)!
+    expect(brute.hp).toBe(200)
+    expect(brute.speed).toBeLessThan(0.95)
+    const cores = life.cores
+    ;(life.siege as unknown as { kill: (z: Zombie, by: string) => void }).kill(brute, 'shot')
+    expect(life.cores).toBe(cores + 3)
+    const b = simulate('paradise', 0).life
+    b.spawnZombie = (at) => new Zombie(at)
+    b.clock = { day: PROLOGUE_DAYS + 1, hour: 21.05 }
+    b.startSiege(6, false)
+    for (let i = 0; i < 4000 && (b.siege?.zombies.length ?? 0) < 6; i++) b.tick(0.05, () => false)
+    expect(b.siege!.zombies.some((z) => z.brute)).toBe(false)
+  })
+})

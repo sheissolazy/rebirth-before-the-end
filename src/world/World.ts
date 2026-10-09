@@ -133,7 +133,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -352,7 +352,7 @@ export class World {
     }
     this.buildGarden()
     this.siegeView = new SiegeView(this.scene)
-    this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
+    this.life.spawnZombie = (at, raider, brute) => this.siegeView.spawn(at, raider, brute)
     this.life.spawnVisitor = (def, at, model) => {
       const v = new Visitor(def, at, this.siegeView.npc(model) ?? this.siegeView.npc(def.model), isFemaleModel(model))
       this.scene.add(v.root)
@@ -415,6 +415,7 @@ export class World {
       else if (e.kind === 'hit') this.sound.hurt()
       else if (e.kind === 'fire') this.sound.fire()
       else if (e.kind === 'trapBroken') this.sound.crash()
+      else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1) }
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home') this.setViewFloor(0)
@@ -1185,6 +1186,7 @@ export class World {
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
+      if (z.brute && z.root.scale.x < 1.3) z.root.scale.setScalar(1.36)
       for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed * (z.slowed ? TRAP.slow : 1)) || walking
       z.animate(Math.min(sim, 0.1), walking)
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
