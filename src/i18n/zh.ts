@@ -226,7 +226,7 @@ export const zh = {
   'world.welcome.feel': '🌙 昼夜、下雨、夜里亮灯；音效全是现场合成的（点一下画面才出声，右上角可以静音）。进度会自动存档。',
   'world.welcome.keys': '操作：点人选中，点家具让 TA 去用（灶台、冰箱、沙发、床），点地面走过去；拖动平移、滚轮缩放；WASD 控制女主；空格暂停，1 / 2 / 3 调速度。右下"原型调试"可以随时跳到丧尸夜。',
   'world.welcome.start': '先过日子',
-  'world.welcome.zombies': '直接看丧尸夜',
+  'world.welcome.zombies': '直接看月底危机夜 🧟',
   'world.unit.food': '{n} 份吃的',
   'world.unit.water': '{n} 份水',
   'world.unit.money': '{n} 元',

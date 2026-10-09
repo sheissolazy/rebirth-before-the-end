@@ -76,7 +76,7 @@ export default function WorldView() {
     welcomeOpen.current = false
     world.current?.setSpeed(resume.current || 1)
     setWelcome(false)
-    if (night) world.current?.debugNight(false)
+    if (night) world.current?.debugNight(true)
   }
   // 翻日记时游戏暂停，合上再接着走
   const resume = useRef(1)
