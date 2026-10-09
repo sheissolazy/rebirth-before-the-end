@@ -300,8 +300,20 @@ def main():
         extra.append(ct)
     if st.get('inner'):
         # 敞开的外套里露出来的衬衫 / T 恤：胸口一竖条
-        c = (H('Spine2') + H('Spine1')) / 2 + fwd * 0.098 - up * 0.02
-        extra.append(ellipsoid(f'{name}.inner', c, fwd, (0.05, 0.16, 0.018), mat('inner', st['inner'], 0.8), 24, 14))
+        # 倒三角的 V 领：上宽下尖、压扁贴在胸口（以前是椭圆，像吐出来的舌头）
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=20, radius1=0.004, radius2=0.062, depth=0.19)
+        me = bpy.data.meshes.new(f'{name}.inner')
+        bm.to_mesh(me)
+        bm.free()
+        vn = bpy.data.objects.new(f'{name}.inner', me)
+        bpy.context.collection.objects.link(vn)
+        top_c = H('Neck') - up * 0.03
+        vn.matrix_world = Matrix.Translation(top_c - up * 0.095 + fwd * 0.085) @ fwd.to_track_quat('Y', 'Z').to_matrix().to_4x4() @ Matrix.Diagonal((1.0, 0.22, 1.0, 1.0))
+        vn.data.materials.append(mat('inner', st['inner'], 0.8))
+        for pl in vn.data.polygons:
+            pl.use_smooth = True
+        extra.append(vn)
     if zombie:
         # 衣服上几块血迹
         blood = mat('blood', '#5e1a1a', 0.5)
