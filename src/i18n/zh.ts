@@ -79,6 +79,8 @@ export const zh = {
   'world.go.repair': '去修被砸坏的门',
   'world.go.guard': '赶去守位',
   'world.debug': '原型调试',
+  'world.intro.sub': '外婆的老宅 · 末日前 4 天',
+  'world.intro.skip': '点一下跳过',
   'world.chat.calm0': '外婆这房子真结实',
   'world.chat.calm1': '你小时候在这棵树上摔过',
   'world.chat.calm2': '这两天你怎么老往家里搬东西？',

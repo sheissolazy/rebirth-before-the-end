@@ -155,6 +155,8 @@ export default function WorldView() {
     <div className="fixed inset-0 select-none overflow-hidden bg-sky-200 text-zinc-900">
       <div ref={host} className="absolute inset-0" />
 
+      {/* 片头放的时候把界面藏起来 */}
+      <div className={hud.intro ? 'pointer-events-none opacity-0' : 'transition-opacity duration-1000'}>
       <div className="absolute left-3 top-3 flex flex-col gap-1.5">
         <div className={`rounded-2xl px-4 py-2 shadow ${hud.night ? 'bg-zinc-900/80 text-white' : 'bg-white/90'}`}>
           <div className="flex items-center gap-2 text-base font-semibold tabular-nums">
@@ -360,6 +362,8 @@ export default function WorldView() {
         </div>
       )}
 
+      </div>
+
       {hud.visit && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center bg-gradient-to-t from-black/50 to-transparent pb-6 pt-24">
           <div className="flex w-[min(640px,92vw)] gap-4 rounded-2xl bg-[#f6efdc] p-4 text-zinc-800 shadow-2xl">
@@ -404,7 +408,18 @@ export default function WorldView() {
         </div>
       )}
 
-      {welcome && !hud.loading && (
+      {hud.intro && (
+        <div className="absolute inset-0 z-30 flex cursor-pointer flex-col justify-between" onClick={() => world.current?.endIntro()}>
+          <div className="h-[9vh] bg-black" />
+          <div className="intro-title text-center font-serif text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+            <div className="text-4xl font-bold tracking-[0.3em]">{t('app.title')}</div>
+            <div className="mt-3 text-base tracking-widest opacity-90">{t('world.intro.sub')}</div>
+          </div>
+          <div className="flex h-[9vh] items-center justify-end bg-black px-6 text-xs text-white/60">{t('world.intro.skip')}</div>
+        </div>
+      )}
+
+      {welcome && !hud.loading && !hud.intro && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
           <div className="w-[min(560px,92vw)] rounded-2xl bg-[#f6efdc] p-6 font-serif text-zinc-800 shadow-2xl">
             <div className="text-xl font-bold">{t('world.welcome.title')}</div>

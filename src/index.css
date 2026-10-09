@@ -7,3 +7,7 @@ body { margin: 0; min-height: 100vh; }
 @media (orientation: portrait) and (pointer: coarse) {
   .rotate-hint { display: flex; }
 }
+
+/* 2.5D 片头：标题慢慢浮现 */
+@keyframes intro-fade { 0% { opacity: 0; transform: translateY(8px) } 25% { opacity: 1; transform: none } 85% { opacity: 1 } 100% { opacity: 0 } }
+.intro-title { animation: intro-fade 7s ease-in-out forwards; }

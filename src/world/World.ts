@@ -74,6 +74,8 @@ export interface Hud {
   fishing: { active: boolean; near: boolean; caught: number }
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
+  /** 全新开局的片头正在放 */
+  intro: boolean
   /** 有人在门口等回话 */
   visit: { id: string; icon: string; name: string; textKey: string; choices: { id: string; ok: boolean }[] } | null
 }
@@ -98,7 +100,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -153,6 +155,31 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 平静的夜里院子里飞的萤火虫 */
+  private readonly flies = (() => {
+    const n = 70
+    const pos = new Float32Array(n * 3)
+    const col = new Float32Array(n * 3)
+    const home: THREE.Vector3[] = []
+    for (let i = 0; i < n; i++) {
+      const p = new THREE.Vector3(YARD.x0 + Math.random() * (YARD.x1 - YARD.x0), 0.4 + Math.random() * 1.4, YARD.z0 + Math.random() * (YARD.z1 - YARD.z0))
+      if (p.x > HOUSE.x0 - 0.5 && p.x < HOUSE.x1 + 0.5 && p.z > HOUSE.z0 - 0.5 && p.z < HOUSE.z1 + 0.5) p.z = HOUSE.z1 + 1 + Math.random() * 5
+      home.push(p)
+      pos.set([p.x, p.y, p.z], i * 3)
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+      size: 0.09, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    pts.frustumCulled = false
+    pts.visible = false
+    return { pts, home, phase: home.map(() => Math.random() * 10) }
+  })()
+  /** 全新开局的片头：镜头从江面上空慢慢滑到老宅（秒；<0 表示没有片头） */
+  private introT = -1
+  static readonly INTRO_S = 7
   /** 钓鱼竿、鱼线、浮漂 */
   private readonly rod = new THREE.Group()
   private readonly rodTip = new THREE.Object3D()
@@ -227,7 +254,7 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
-    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target)
+    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts)
     // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.016, 2.0, 6), new THREE.MeshStandardMaterial({ color: '#4b3a2a', roughness: 0.6 }))
     pole.position.y = 1.0
@@ -263,7 +290,8 @@ export class World {
       return a
     }
     // 接着上次的进度（要在 makeActor 设好以后，住进来的人才能重建）
-    loadWorld(this.life)
+    // 没有存档 = 全新开局：先放一段片头
+    if (!loadWorld(this.life)) this.introT = 0
     this.life.onKnock = () => {
       this.sound.knock()
       if (this.mode === 'home') this.setViewFloor(0)
@@ -376,7 +404,7 @@ export class World {
       const gates: THREE.Object3D[] = []
       this.scene.traverse((o) => { if (o.userData.gate || o.userData.slug === 'large_iron_gate') gates.push(o) })
       this.siegeView.bind(gates, this.frontDoor, this.barricade)
-      this.setHud({ loading: false })
+      this.setHud({ loading: false, intro: this.introT >= 0 })
       // 丧尸、访客、住进来的人的模型不挡开场：别墅出来以后在后台加载，好了再预热着色器
       if (this.style === 'paradise') void this.siegeView.loadModels().then(() => this.afterExtraModels(), () => this.afterExtraModels())
       else this.afterExtraModels()
@@ -756,7 +784,9 @@ export class World {
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(s.sky).lerp(grey, rain * 0.75)
     else this.scene.background = s.sky.clone()
     this.scene.fog?.color.copy(s.fog).lerp(grey, rain * 0.75)
-    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.fogBase * (1 + rain * 1.3)
+    // 片头的高空镜头离得远，雾先淡一点，降下来以后恢复
+    const introK = this.introT >= 0 ? 0.35 + 0.65 * Math.min(1, this.introT / World.INTRO_S) : 1
+    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.fogBase * (1 + rain * 1.3) * introK
     for (const g of this.glass) (g as THREE.MeshStandardMaterial).emissive?.setRGB(1, 0.72, 0.38).multiplyScalar(s.lamps * 0.55)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const l of this.lamps) {
@@ -792,6 +822,21 @@ export class World {
 
   private updateCamera(dt: number): void {
     const want = this.desiredPose(this.mode)
+    // 片头：从高空转着降到平常的 45° 视角
+    if (this.introT >= 0 && !this.hud.loading) {
+      this.introT += dt
+      const k = ease(Math.min(1, this.introT / World.INTRO_S))
+      // 从西南方的高空俯瞰整条街和屋后的江，一边转一边降下来（不从北边来：远山会挡住镜头）
+      const from = { target: new THREE.Vector3(4, 0, 4), elev: THREE.MathUtils.degToRad(58), dist: 72, fov: 30 }
+      this.pose.target.lerpVectors(from.target, want.target, k)
+      this.pose.elev = THREE.MathUtils.lerp(from.elev, want.elev, k)
+      this.pose.dist = THREE.MathUtils.lerp(from.dist, want.dist, k)
+      this.pose.fov = THREE.MathUtils.lerp(from.fov, want.fov, k)
+      const yaw = YAW - (1 - k) * 1.3
+      this.applyPose(yaw)
+      if (this.introT >= World.INTRO_S) this.endIntro()
+      return
+    }
     if (this.tweenT < TWEEN_S && this.tweenFrom) {
       this.tweenT += dt
       const k = ease(Math.min(1, this.tweenT / TWEEN_S))
@@ -810,13 +855,17 @@ export class World {
       this.pose.fov += (want.fov - this.pose.fov) * a
       this.homeness = this.mode === 'home' ? 1 : 0
     }
+    this.applyPose(YAW)
+  }
+
+  private applyPose(yaw: number): void {
     const { target, elev, dist, fov } = this.pose
     this.camera.fov = fov
     this.camera.updateProjectionMatrix()
     this.camera.position.set(
-      target.x + Math.sin(YAW) * Math.cos(elev) * dist,
+      target.x + Math.sin(yaw) * Math.cos(elev) * dist,
       target.y + Math.sin(elev) * dist,
-      target.z + Math.cos(YAW) * Math.cos(elev) * dist,
+      target.z + Math.cos(yaw) * Math.cos(elev) * dist,
     )
     this.camera.lookAt(target)
     if (this.siegeView?.shake > 0) {
@@ -901,6 +950,22 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    // 萤火虫：世外桃源画风、夜里、不下雨、没在打仗时才有
+    const calmNight = this.style === 'paradise' && this.nightness > 0.6 && this.life.rain < 0.05 && !fighting
+    this.flies.pts.visible = calmNight
+    if (calmNight) {
+      const fp = this.flies.pts.geometry.attributes.position as THREE.BufferAttribute
+      const fc = this.flies.pts.geometry.attributes.color as THREE.BufferAttribute
+      const tt = this.elapsed
+      this.flies.home.forEach((h, i) => {
+        const ph = this.flies.phase[i]
+        fp.setXYZ(i, h.x + Math.sin(tt * 0.3 + ph) * 0.8, h.y + Math.sin(tt * 0.7 + ph * 2) * 0.25, h.z + Math.cos(tt * 0.25 + ph) * 0.8)
+        const glow = Math.max(0, Math.sin(tt * 1.7 + ph * 3)) ** 3
+        fc.setXYZ(i, 0.75 * glow, 1.0 * glow, 0.35 * glow)
+      })
+      fp.needsUpdate = true
+      fc.needsUpdate = true
+    }
     // 钓鱼：竿、线、浮漂（咬钩时浮漂往下一沉）
     const fishing = !!this.life.fishing
     this.rod.visible = fishing
@@ -1389,6 +1454,13 @@ export class World {
   clearReport(): void {
     this.life.report = null
     this.pushLifeHud()
+  }
+
+  /** 片头放完（或者被点掉） */
+  endIntro(): void {
+    if (this.introT < 0) return
+    this.introT = -1
+    this.setHud({ intro: false })
   }
 
   toggleMusic(): void {
