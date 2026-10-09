@@ -9,3 +9,5 @@
 | 天空光照 `public/textures/ph/kloofendal_sky.hdr` | Poly Haven：kloofendal_48d_partly_cloudy_puresky（1K） | CC0 | 世外桃源画风的环境光 |
 
 Poly Haven 的素材是 CC0，不署名也可以；但它的 API 条款要求用 API 的产品注明来源，所以游戏的制作人员名单里要写上"素材：Poly Haven（polyhaven.com）"。下载时用了唯一的 User-Agent，没有批量爬取。
+
+| 3D 模型 `public/models/ph/*.glb`（32 个） | Poly Haven：Sofa_01、Rockingchair_01、wooden_table_02、painted_wooden_chair_01、chinese_cabinet、chinese_chandelier、potted_plant_01、wooden_crate_01/02、electric_stove、vintage_electric_kettle、painted_wooden_cabinet、vintage_day_bed、ClassicNightstand_01、wooden_lantern_01、WoodenTable_01、wooden_bookshelf_worn、island_tree_02、grass_bermuda_01、shrub_sorrel_01、periwinkle_plant、dandelion_01、flower_empodium、fern_02、rock_moss_set_02、boulder_01、covered_car、wine_barrel_01、wooden_bucket_01、large_iron_gate、painted_wooden_bench、street_lamp_01 | CC0 | 世外桃源画风。用 `tools/blender/slim_polyhaven.py` 减面、接上透明贴图、压成 WebP；`tools/blender/fix_glb.py` 修掉坏掉的贴图引用 |

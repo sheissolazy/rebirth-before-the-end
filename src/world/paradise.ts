@@ -1,6 +1,8 @@
-// "世外桃源"画风：Poly Haven（CC0）的真实材质 + 代码生成的草、樱花、远山和江面。
-// 和卡通画风共用同一套场景，只是在加载后把材质换掉、再加一些景物。
+// "世外桃源"画风：全部用 Poly Haven（CC0）的贴图、天空光照和 3D 模型。
+// 模型先用 tools/blender/slim_polyhaven.py 减面、压缩成 public/models/ph/*.glb。
+// 和卡通画风共用同一套场景，加载后把材质换掉、把家具和景物换成真模型。
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
 import { HOUSE, STREET, WORLD, YARD, GATE, PROPS } from './layout'
 
@@ -41,9 +43,20 @@ const SURFACES: Record<string, { slug: string; tile: number; rough: number; tint
   sakuraBark: { slug: 'sakura_bark', tile: 1, rough: 0.95 },
 }
 
+/** 用到的 Poly Haven 模型（public/models/ph/<slug>.glb） */
+export const PH_MODELS = [
+  'Sofa_01', 'Rockingchair_01', 'wooden_table_02', 'painted_wooden_chair_01', 'chinese_cabinet', 'chinese_chandelier',
+  'potted_plant_01', 'wooden_crate_01', 'wooden_crate_02', 'electric_stove', 'vintage_electric_kettle', 'painted_wooden_cabinet',
+  'vintage_day_bed', 'ClassicNightstand_01', 'wooden_lantern_01', 'WoodenTable_01', 'wooden_bookshelf_worn',
+  'island_tree_02', 'grass_bermuda_01', 'shrub_sorrel_01', 'periwinkle_plant', 'dandelion_01', 'flower_empodium', 'fern_02',
+  'rock_moss_set_02', 'boulder_01', 'covered_car', 'wine_barrel_01', 'wooden_bucket_01', 'large_iron_gate',
+  'painted_wooden_bench', 'street_lamp_01',
+] as const
+
 export interface ParadiseKit {
   maps: Map<string, { diff: THREE.Texture; nor: THREE.Texture }>
   env: THREE.Texture
+  models: Map<string, THREE.Object3D>
 }
 
 export async function loadParadiseKit(renderer: THREE.WebGLRenderer): Promise<ParadiseKit> {
@@ -64,12 +77,45 @@ export async function loadParadiseKit(renderer: THREE.WebGLRenderer): Promise<Pa
     }
     maps.set(slug, { diff, nor })
   }))
+  const models = new Map<string, THREE.Object3D>()
+  const gltf = new GLTFLoader()
+  await Promise.all(PH_MODELS.map(async (slug) => {
+    const g = await gltf.loadAsync(`${import.meta.env.BASE_URL}models/ph/${slug}.glb`)
+    g.scene.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      m.castShadow = true
+      m.receiveShadow = true
+      // 叶子和草用镂空而不是半透明混合，避免前后排序出错
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        const std = mat as THREE.MeshStandardMaterial
+        if (std.transparent && std.map) {
+          std.alphaTest = 0.5
+          std.transparent = false
+          std.depthWrite = true
+          std.side = THREE.DoubleSide
+        }
+      }
+    })
+    models.set(slug, g.scene)
+  }))
   const hdr = await new HDRLoader().loadAsync(`${base}kloofendal_sky.hdr`)
   const pmrem = new THREE.PMREMGenerator(renderer)
   const env = pmrem.fromEquirectangular(hdr).texture
   hdr.dispose()
   pmrem.dispose()
-  return { maps, env }
+  return { maps, env, models }
+}
+
+/** 放一个模型（共用几何和材质的浅拷贝） */
+export function placeModel(kit: ParadiseKit, slug: string, x: number, y: number, z: number, rotDeg = 0, scale = 1): THREE.Object3D {
+  const src = kit.models.get(slug)
+  if (!src) throw new Error(`缺少模型 ${slug}`)
+  const o = src.clone()
+  o.position.set(x, y, z)
+  o.rotation.y = THREE.MathUtils.degToRad(rotDeg)
+  o.scale.setScalar(scale)
+  return o
 }
 
 /** 按顶点法线把 UV 设成"米"为单位的盒式投影，贴图就不会被拉伸 */
@@ -178,148 +224,140 @@ function rng(seed: number): () => number {
   }
 }
 
-/** 一簇草：5 片叶子，根部深、叶尖浅 */
-function tuftGeometry(): THREE.BufferGeometry {
-  const pos: number[] = []
-  const col: number[] = []
-  const base = new THREE.Color('#3d6e2b')
-  const tip = new THREE.Color('#93c95e')
-  for (let k = 0; k < 7; k++) {
-    const a = (k / 7) * Math.PI * 2
-    const lean = 0.09
-    const w = 0.03
-    const h = 0.12 + (k % 3) * 0.05
-    const cx = Math.cos(a)
-    const cz = Math.sin(a)
-    pos.push(-w * cz, 0, w * cx, w * cz, 0, -w * cx, cx * lean, h, cz * lean)
-    col.push(base.r, base.g, base.b, base.r, base.g, base.b, tip.r, tip.g, tip.b)
+/** 把一个"一排好几种"的模型集拆成一个个品种，每个品种底面中心归零 */
+function variants(src: THREE.Object3D): { parts: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[] }[] }[] {
+  src.updateMatrixWorld(true)
+  const out: { parts: { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[] }[] }[] = []
+  const nodes = src.children.length === 1 && !(src.children[0] as THREE.Mesh).isMesh ? src.children[0].children : src.children
+  for (const node of nodes) {
+    const meshes: THREE.Mesh[] = []
+    node.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh) })
+    if (!meshes.length) continue
+    const box = new THREE.Box3().setFromObject(node)
+    const offset = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
+    out.push({
+      parts: meshes.map((m) => {
+        const geo = m.geometry.clone().applyMatrix4(m.matrixWorld)
+        geo.translate(-offset.x, -offset.y, -offset.z)
+        return { geo, mat: m.material }
+      }),
+    })
   }
-  const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
-  g.computeVertexNormals()
+  return out
+}
+
+/** 在一片区域里撒某个模型集的各个品种（实例化，便宜） */
+export function scatter(kit: ParadiseKit, slug: string, total: number, sample: (r: () => number) => [number, number] | null,
+  scale: [number, number], seed: number): THREE.Group {
+  const r = rng(seed)
+  const g = new THREE.Group()
+  const vs = variants(kit.models.get(slug)!)
+  const per = Math.ceil(total / vs.length)
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const up = new THREE.Vector3(0, 1, 0)
+  for (const v of vs) {
+    const mats: THREE.Matrix4[] = []
+    for (let tries = 0; mats.length < per && tries < per * 6; tries++) {
+      const p = sample(r)
+      if (!p) continue
+      const s = scale[0] + r() * (scale[1] - scale[0])
+      q.setFromAxisAngle(up, r() * Math.PI * 2)
+      mats.push(m.clone().compose(new THREE.Vector3(p[0], 0, p[1]), q, new THREE.Vector3(s, s, s)))
+    }
+    for (const part of v.parts) {
+      // 植物贴图的透明部分要镂空（Blender 导出时会丢掉这个设置），否则会显示成黑块
+      for (const mat of Array.isArray(part.mat) ? part.mat : [part.mat]) {
+        const std = mat as THREE.MeshStandardMaterial
+        if (std.map && slug !== 'rock_moss_set_02') {
+          std.alphaTest = 0.5
+          std.transparent = false
+          std.depthWrite = true
+          std.side = THREE.DoubleSide
+          std.needsUpdate = true
+        }
+      }
+      const im = new THREE.InstancedMesh(part.geo, part.mat, mats.length)
+      mats.forEach((mm, k) => im.setMatrixAt(k, mm))
+      im.castShadow = true
+      im.receiveShadow = true
+      g.add(im)
+    }
+  }
   return g
 }
 
+/** 不长草的地方：房子、石板路、街道、邻居家、围栏线 */
 function blocked(x: number, z: number): boolean {
   if (x > HOUSE.x0 - 0.3 && x < HOUSE.x1 + 0.3 && z > HOUSE.z0 - 0.3 && z < HOUSE.z1 + 0.3) return true
-  if (Math.abs(x - GATE.x) < 0.7 && z > HOUSE.z1 && z < GATE.z + 0.5) return true
+  if (Math.abs(x - (3.5 + (GATE.x - 3.5) * Math.min(1, Math.max(0, (z - HOUSE.z1) / (GATE.z - HOUSE.z1))))) < 0.7 && z > HOUSE.z1 && z < GATE.z + 0.5) return true
   if (z > STREET.z0 - 1.4 && z < STREET.z1 + 1.4) return true
   for (const p of PROPS) if (p.kind !== 'tree' && Math.abs(x - p.x) < p.w / 2 + 0.6 && Math.abs(z - p.z) < p.d / 2 + 0.6) return true
   if (Math.abs(z - YARD.z0) < 0.25 || Math.abs(z - YARD.z1) < 0.25 || Math.abs(x - YARD.x0) < 0.25 || Math.abs(x - YARD.x1) < 0.25) return true
   return false
 }
 
-export function grassField(count: number): THREE.InstancedMesh {
-  const r = rng(7)
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 })
-  const mesh = new THREE.InstancedMesh(tuftGeometry(), mat, count)
-  const m = new THREE.Matrix4()
-  const q = new THREE.Quaternion()
-  const c = new THREE.Color()
-  let n = 0
-  const area = { x0: WORLD.x0 - 6, z0: WORLD.z0 - 4, x1: WORLD.x1 + 6, z1: WORLD.z1 + 6 }
-  for (let tries = 0; n < count && tries < count * 4; tries++) {
-    // 院子是草坪，只在围栏和墙根留一些草丛；外面是野地，草丛多
-    const inYard = r() < 0.35
-    const x = inYard ? YARD.x0 + r() * (YARD.x1 - YARD.x0) : area.x0 + r() * (area.x1 - area.x0)
-    const z = inYard ? YARD.z0 + r() * (YARD.z1 - YARD.z0) : area.z0 + r() * (area.z1 - area.z0)
-    if (blocked(x, z) || (z < WORLD.z0 - 2 && z > -16)) continue
-    if (inYard) {
-      const edge = Math.min(x - YARD.x0, YARD.x1 - x, z - YARD.z0, YARD.z1 - z)
-      const nearHouse = x > HOUSE.x0 - 1.2 && x < HOUSE.x1 + 1.2 && z > HOUSE.z0 - 1.2 && z < HOUSE.z1 + 1.2
-      if (edge > 1.6 && !nearHouse && r() > 0.12) continue
-    }
-    const s = 0.7 + r() * 0.9
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * Math.PI * 2)
-    m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s * (0.8 + r() * 0.6), s))
-    mesh.setMatrixAt(n, m)
-    mesh.setColorAt(n, c.setHSL(0.25 + r() * 0.05, 0.5 + r() * 0.2, 0.55 + r() * 0.15))
-    n++
-  }
-  mesh.count = n
-  mesh.receiveShadow = true
-  return mesh
-}
-
-export function flowers(count: number): THREE.InstancedMesh {
-  const r = rng(11)
-  const geo = new THREE.IcosahedronGeometry(0.06, 0)
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.7 }), count)
-  const palette = ['#fff7e8', '#ffd84d', '#f6a6c8', '#c9a7f2', '#ffffff']
-  const m = new THREE.Matrix4()
-  const c = new THREE.Color()
-  let n = 0
-  for (let tries = 0; n < count && tries < count * 5; tries++) {
+/** 地面采样器：院子草坪的边上、院子里、外面野地 */
+export const samplers = {
+  lawnEdge: (r: () => number): [number, number] | null => {
     const x = YARD.x0 + r() * (YARD.x1 - YARD.x0)
     const z = YARD.z0 + r() * (YARD.z1 - YARD.z0)
-    if (blocked(x, z)) continue
-    m.makeTranslation(x, 0.22 + r() * 0.12, z)
-    mesh.setMatrixAt(n, m)
-    mesh.setColorAt(n, c.set(palette[Math.floor(r() * palette.length)]))
-    n++
-  }
-  mesh.count = n
-  return mesh
+    const edge = Math.min(x - YARD.x0, YARD.x1 - x, z - YARD.z0, YARD.z1 - z)
+    const nearHouse = x > HOUSE.x0 - 1.2 && x < HOUSE.x1 + 1.2 && z > HOUSE.z0 - 1.2 && z < HOUSE.z1 + 1.2
+    if (blocked(x, z) || (edge > 1.4 && !nearHouse)) return null
+    return [x, z]
+  },
+  lawn: (r: () => number): [number, number] | null => {
+    const x = YARD.x0 + r() * (YARD.x1 - YARD.x0)
+    const z = YARD.z0 + r() * (YARD.z1 - YARD.z0)
+    return blocked(x, z) ? null : [x, z]
+  },
+  houseFront: (r: () => number): [number, number] | null => {
+    const side = r()
+    const [x, z] = side < 0.6 ? [HOUSE.x0 + r() * (HOUSE.x1 - HOUSE.x0), HOUSE.z1 + 0.35 + r() * 0.5] : [HOUSE.x1 + 0.35 + r() * 0.5, HOUSE.z0 + r() * (HOUSE.z1 - HOUSE.z0)]
+    return blocked(x, z) || Math.abs(x - GATE.x) < 1 ? null : [x, z]
+  },
+  wild: (r: () => number): [number, number] | null => {
+    const x = WORLD.x0 - 8 + r() * (WORLD.x1 - WORLD.x0 + 16)
+    const z = WORLD.z0 - 2 + r() * (WORLD.z1 - WORLD.z0 + 10)
+    if (x > YARD.x0 - 0.4 && x < YARD.x1 + 0.4 && z > YARD.z0 - 0.4 && z < YARD.z1 + 0.4) return null
+    return blocked(x, z) ? null : [x, z]
+  },
+  riverBank: (r: () => number): [number, number] | null => {
+    const x = WORLD.x0 - 10 + r() * (WORLD.x1 - WORLD.x0 + 20)
+    const z = WORLD.z0 - 1.6 - r() * 1.2
+    return [x, z]
+  },
 }
 
-/** 樱花树：弯一点的树干 + 几根枝 + 一团团粉色花冠 */
-export function sakuraTree(bark: THREE.Material, seed: number, scale = 1): THREE.Group {
-  const r = rng(seed)
-  const g = new THREE.Group()
-  const seg = (from: THREE.Vector3, to: THREE.Vector3, r0: number, r1: number) => {
-    const len = from.distanceTo(to)
-    const geo = new THREE.CylinderGeometry(r1, r0, len, 7)
-    geo.translate(0, len / 2, 0)
-    const m = new THREE.Mesh(geo, bark)
-    m.position.copy(from)
-    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize())
-    m.castShadow = true
-    g.add(m)
-  }
-  const top = new THREE.Vector3(0.3, 2.2, 0.1)
-  seg(new THREE.Vector3(0, 0, 0), top, 0.22, 0.14)
-  const pinks = ['#f2a0bf', '#f6b8cf', '#ec8fb1', '#fbd0df', '#f7c2d6'].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, flatShading: true }))
-  const blob = new THREE.IcosahedronGeometry(1, 0)
-  for (let b = 0; b < 6; b++) {
-    const a = (b / 6) * Math.PI * 2 + r()
-    const end = new THREE.Vector3(top.x + Math.cos(a) * (1.0 + r() * 0.8), top.y + 0.5 + r() * 0.9, top.z + Math.sin(a) * (1.0 + r() * 0.8))
-    seg(top, end, 0.1, 0.045)
-    for (let k = 0; k < 9; k++) {
-      const m = new THREE.Mesh(blob, pinks[Math.floor(r() * pinks.length)])
-      m.position.set(end.x + (r() - 0.5) * 1.3, end.y + (r() - 0.35) * 0.9, end.z + (r() - 0.5) * 1.3)
-      m.rotation.set(r() * 3, r() * 3, r() * 3)
-      m.scale.setScalar(0.28 + r() * 0.3)
-      m.castShadow = true
-      g.add(m)
-    }
-  }
-  g.scale.setScalar(scale)
-  return g
-}
-
-/** 普通的绿树：真树皮 + 一团团深浅不一的绿叶 */
-export function leafyTree(bark: THREE.Material, seed: number, scale = 1): THREE.Group {
-  const r = rng(seed)
-  const g = new THREE.Group()
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 1.8, 7), bark)
-  trunk.position.y = 0.9
-  trunk.castShadow = true
-  g.add(trunk)
-  const greens = ['#4f8a3a', '#5f9c45', '#6aa84c', '#3f7a32', '#76b356'].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true }))
-  const blob = new THREE.IcosahedronGeometry(1, 0)
-  for (let k = 0; k < 22; k++) {
-    const a = r() * Math.PI * 2
-    const rad = r() * 1.1
-    const m = new THREE.Mesh(blob, greens[Math.floor(r() * greens.length)])
-    m.position.set(Math.cos(a) * rad, 2.0 + r() * 1.4, Math.sin(a) * rad)
-    m.rotation.set(r() * 3, r() * 3, r() * 3)
-    m.scale.setScalar(0.4 + r() * 0.35)
-    m.castShadow = true
-    g.add(m)
-  }
-  g.scale.setScalar(scale)
-  return g
+/** 樱花树：Poly Haven 的老树，叶子在着色器里换成樱花粉 */
+const sakuraLeavesByKit = new WeakMap<ParadiseKit, THREE.Material>()
+export function sakuraTree(kit: ParadiseKit, scale: number): THREE.Object3D {
+  let sakuraLeaves = sakuraLeavesByKit.get(kit) ?? null
+  const t = kit.models.get('island_tree_02')!.clone()
+  t.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    const mats = Array.isArray(m.material) ? m.material : [m.material]
+    const swapped = mats.map((mat) => {
+      if (!/leaves/i.test(mat.name)) return mat
+      if (!sakuraLeaves) {
+        const pink = (mat as THREE.MeshStandardMaterial).clone()
+        pink.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+            float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+            diffuseColor.rgb = mix(vec3(0.86, 0.45, 0.62), vec3(1.0, 0.84, 0.9), clamp(lum * 2.4, 0.0, 1.0));`)
+        }
+        pink.customProgramCacheKey = () => 'sakura-leaves'
+        sakuraLeaves = pink
+        sakuraLeavesByKit.set(kit, pink)
+      }
+      return sakuraLeaves
+    })
+    m.material = Array.isArray(m.material) ? swapped : swapped[0]
+  })
+  t.scale.setScalar(scale)
+  return t
 }
 
 /** 飘落的花瓣 */

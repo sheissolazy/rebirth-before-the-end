@@ -27,7 +27,7 @@ describe('别墅寻路', () => {
       }
       return NaN
     }
-    expect(Math.abs(crossX(GATE.z) - GATE.x)).toBeLessThan(0.5)
+    expect(Math.abs(crossX(GATE.z) - GATE.x)).toBeLessThan(1)  // 铁门两米宽
     expect(Math.abs(crossX(6) - 3.5)).toBeLessThan(0.5)
   })
 

@@ -26,13 +26,16 @@ export interface Placement {
   floor: Floor
   /** 挡路的范围（半宽、半深），不填就不挡 */
   block?: [number, number]
+  /** 离本层地面的高度（挂在空中的灯等） */
+  y?: number
+  scale?: number
 }
 
 export const WALL_H = 2.6
 export const FLOOR_H = 2.8
 export const HOUSE: Rect = { x0: 0, z0: 0, x1: 8, z1: 6 }
 export const YARD: Rect = { x0: -4, z0: -3, x1: 12, z1: 13 }
-export const GATE = { x: 3.5, z: 13 }
+export const GATE = { x: 4, z: 13 }
 export const STREET: Rect = { x0: -24, z0: 15, x1: 32, z1: 21 }
 export const WORLD: Rect = { x0: -24, z0: -8, x1: 32, z1: 30 }
 export const HOUSE_CENTER = { x: 4, z: 3 }
@@ -91,12 +94,27 @@ export const FURNITURE: Placement[] = [
   { piece: 'shelf', x: 7.6, z: 1.5, rot: -90, floor: 1 },
 ]
 
-/** 院子围栏，铁门那一米留空 */
+/** 世外桃源画风里额外摆的 Poly Haven 模型（卡通画风里没有） */
+export const PARADISE_EXTRAS: Placement[] = [
+  { piece: 'Rockingchair_01', x: 0.9, z: 2.0, rot: 110, floor: 0, block: [0.4, 0.45] },
+  { piece: 'chinese_cabinet', x: 3.3, z: 0.42, rot: 0, floor: 0, block: [0.65, 0.32], scale: 0.85 },
+  { piece: 'potted_plant_01', x: 4.35, z: 0.55, rot: 0, floor: 0, block: [0.3, 0.3] },
+  { piece: 'WoodenTable_01', x: 1.0, z: 4.25, rot: 0, floor: 0, block: [0.65, 0.25], scale: 0.7 },
+  { piece: 'chinese_chandelier', x: 2.5, z: 3.0, rot: 0, floor: 0, y: 1.7, scale: 0.8 },
+  { piece: 'ClassicNightstand_01', x: 2.7, z: 0.38, rot: 0, floor: 1 },
+  { piece: 'wooden_lantern_01', x: 2.7, z: 0.38, rot: 0, floor: 1, y: 0.7 },
+  { piece: 'painted_wooden_bench', x: 7.0, z: 9.2, rot: -90, floor: 0, block: [0.3, 0.6] },
+  { piece: 'wine_barrel_01', x: 8.75, z: 5.3, rot: 0, floor: 0, block: [0.4, 0.4] },
+  { piece: 'wooden_bucket_01', x: 8.8, z: 4.4, rot: 0, floor: 0, block: [0.2, 0.2] },
+  { piece: 'boulder_01', x: 11.0, z: 11.8, rot: 30, floor: 0, block: [0.7, 0.9] },
+]
+
+/** 院子围栏，铁门那两米留空 */
 export function fenceSegments(): { x: number; z: number; axis: 'x' | 'z'; gate: boolean }[] {
   const segs: { x: number; z: number; axis: 'x' | 'z'; gate: boolean }[] = []
   for (let x = YARD.x0; x < YARD.x1; x++) {
     segs.push({ x: x + 0.5, z: YARD.z0, axis: 'x', gate: false })
-    segs.push({ x: x + 0.5, z: YARD.z1, axis: 'x', gate: x + 0.5 === GATE.x })
+    segs.push({ x: x + 0.5, z: YARD.z1, axis: 'x', gate: Math.abs(x + 0.5 - GATE.x) < 0.6 })
   }
   for (let z = YARD.z0; z < YARD.z1; z++) {
     segs.push({ x: YARD.x0, z: z + 0.5, axis: 'z', gate: false })

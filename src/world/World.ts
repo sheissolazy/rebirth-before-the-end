@@ -4,12 +4,12 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GATE, HOUSE, HOUSE_CENTER, PROPS, STREET, WALLS, WORLD, YARD,
+  FLOOR_H, FURNITURE, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STREET, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement,
 } from './layout'
 import { buildNav, type NavGrid, type Pt } from './nav'
 import {
-  ParadiseMaterials, Petals, River, flowers, grassField, hills, leafyTree, loadParadiseKit, sakuraTree, type ArtStyle, type ParadiseKit,
+  ParadiseMaterials, Petals, River, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
   COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, person, shelf, sofa, stairs,
@@ -96,7 +96,7 @@ export class World {
   private readonly clock = new THREE.Clock()
   private readonly raycaster = new THREE.Raycaster()
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-  private readonly nav: NavGrid = buildNav()
+  private readonly nav: NavGrid
   private readonly actors: Actor[] = []
   private heroine!: Actor
   private selected!: Actor
@@ -137,6 +137,7 @@ export class World {
     this.host = host
     this.onHud = onHud
     this.style = style
+    this.nav = buildNav(style === 'paradise' ? PARADISE_EXTRAS : [])
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -216,7 +217,7 @@ export class World {
       const obj = p.kind === 'house' ? neighborHouse(p) : p.kind === 'tree' ? tree() : p.kind === 'car' ? car(p.color ?? '#888') : barrel()
       obj.position.set(p.x, 0, p.z)
       obj.rotation.y = THREE.MathUtils.degToRad(p.rot)
-      if (p.kind === 'tree') obj.userData.tree = true
+      obj.userData.prop = p.kind
       this.scene.add(obj)
     }
   }
@@ -270,7 +271,11 @@ export class World {
     // 家具
     for (const p of FURNITURE) floorGroup(p.floor).add(this.furniture(p, kit, place))
     // 围栏和铁门
-    for (const s of fenceSegments()) this.scene.add(place(s.gate ? 'gate_1m' : 'fence_1m', s.x, 0, s.z, s.axis === 'z' ? 90 : 0))
+    for (const s of fenceSegments()) {
+      const f = place(s.gate ? 'gate_1m' : 'fence_1m', s.x, 0, s.z, s.axis === 'z' ? 90 : 0)
+      if (s.gate) f.userData.gate = true
+      this.scene.add(f)
+    }
     // 屋顶
     const { root, mats } = villaRoof(w, d, FLOOR_H * 2 - 0.2)
     root.position.set(HOUSE.x0 + w / 2, 0, HOUSE.z0 + d / 2)
@@ -282,11 +287,16 @@ export class World {
   private furniture(p: Placement, kit: Map<string, THREE.Object3D>,
     place: (n: string, x: number, y: number, z: number, r: number) => THREE.Object3D): THREE.Object3D {
     const y = p.floor * FLOOR_H
-    if (kit.has(p.piece)) return place(p.piece, p.x, y, p.z, p.rot)
+    if (kit.has(p.piece)) {
+      const o = place(p.piece, p.x, y, p.z, p.rot)
+      o.userData.piece = p.piece
+      return o
+    }
     const made: Record<string, () => THREE.Object3D> = {
       sofa, counter, fridge, desk, shelf, wall_map: wallMap, stairs: () => stairs(FLOOR_H),
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
+    obj.userData.piece = p.piece
     obj.position.set(p.x, y, p.z)
     obj.rotation.y = p.piece === 'wall_map' ? 0 : THREE.MathUtils.degToRad(p.rot)
     return obj
@@ -314,24 +324,25 @@ export class World {
     this.hemi.intensity = 0.55
     this.sun.color.set('#ffe2b8')
     this.sun.intensity = 2.8
-    const coarse = window.matchMedia('(pointer: coarse)').matches
-    this.scene.add(grassField(coarse ? 3000 : 6000), flowers(coarse ? 220 : 420))
-    // 卡通树换成真树皮的绿树
-    const treeBark = mats.textured('bark') ?? new THREE.MeshStandardMaterial({ color: '#5a3d29' })
-    const oldTrees: THREE.Object3D[] = []
-    this.scene.traverse((o) => { if (o.userData.tree) oldTrees.push(o) })
-    oldTrees.forEach((o, k) => {
-      const t = leafyTree(treeBark, 20 + k, 0.9 + (k % 3) * 0.15)
-      t.position.copy(o.position)
-      o.parent?.add(t)
-      o.removeFromParent()
-    })
-    // 樱花种在屋后和两侧，不挡家里视角
-    const bark = mats.textured('sakuraBark') ?? treeBark
-    const trees: [number, number, number, number][] = [[-2.5, -1.6, 1, 1.05], [6, -2, 2, 0.95], [-2.8, 9.8, 3, 1.1], [-9, 12.5, 4, 1.15], [17, -5, 5, 1.05], [-15, -3, 6, 1]]
-    for (const [x, z, seed, sc] of trees) {
-      const t = sakuraTree(bark, seed, sc)
+    this.swapToModels(kit)
+    // 草、花、蕨、苔石：Poly Haven 植物模型实例化撒在地上
+    this.scene.add(
+      scatter(kit, 'grass_bermuda_01', 9000, samplers.lawnEdge, [3.0, 4.6], 1),
+      scatter(kit, 'grass_bermuda_01', 12000, samplers.wild, [3.2, 5.0], 2),
+      scatter(kit, 'grass_bermuda_01', 2500, samplers.lawn, [2.4, 3.4], 9),
+      scatter(kit, 'dandelion_01', 320, samplers.lawn, [1.5, 2.1], 3),
+      scatter(kit, 'flower_empodium', 220, samplers.lawnEdge, [1.6, 2.3], 4),
+      scatter(kit, 'shrub_sorrel_01', 260, samplers.houseFront, [2.2, 3.2], 5),
+      scatter(kit, 'periwinkle_plant', 70, samplers.houseFront, [1.3, 1.8], 6),
+      scatter(kit, 'fern_02', 60, samplers.wild, [1.0, 1.5], 7),
+      scatter(kit, 'rock_moss_set_02', 30, samplers.riverBank, [0.5, 0.9], 8),
+    )
+    // 樱花种在屋后和两侧，不挡家里视角；外面的树换成 Poly Haven 的老树
+    const trees: [number, number, number][] = [[-2.4, -1.6, 0.85], [6, -2.2, 0.8], [-2.6, 9.8, 0.9], [-9, 12.5, 1.0], [17, -5, 0.95], [-15, -3, 0.9]]
+    for (const [x, z, sc] of trees) {
+      const t = sakuraTree(kit, sc)
       t.position.set(x, 0, z)
+      t.rotation.y = x * 1.7
       this.scene.add(t)
     }
     this.petals = new Petals(new THREE.Vector3(-2.8, 0, 9.8), 3.5)
@@ -340,6 +351,74 @@ export class World {
     this.scene.add(hills(hillMat))
     this.river = new River()
     this.scene.add(this.river.mesh)
+  }
+
+  /** 世外桃源画风：把代码画的家具、铁门、车、木桶、树换成 Poly Haven 模型 */
+  private swapToModels(kit: ParadiseKit): void {
+    const subst: Record<string, { slug: string; rot?: number; scale?: number }> = {
+      sofa: { slug: 'Sofa_01', rot: 180 },
+      table: { slug: 'wooden_table_02' },
+      chair: { slug: 'painted_wooden_chair_01', rot: 180 },
+      desk: { slug: 'wooden_table_02' },
+      shelf: { slug: 'wooden_bookshelf_worn', scale: 0.95 },
+    }
+    const doomed: THREE.Object3D[] = []
+    let crate = 0
+    const visit = (root: THREE.Object3D) => root.traverse((o) => {
+      const piece = o.userData.piece as string | undefined
+      if (o.userData.gate) { doomed.push(o); return }
+      if (o.userData.prop === 'car' || o.userData.prop === 'barrel' || o.userData.prop === 'tree') {
+        const slug = o.userData.prop === 'car' ? 'covered_car' : o.userData.prop === 'barrel' ? 'wine_barrel_01' : 'island_tree_02'
+        const sc = o.userData.prop === 'tree' ? 0.9 + (Math.abs(o.position.x * 7) % 3) * 0.12 : 1
+        const m = placeModel(kit, slug, o.position.x, 0, o.position.z, THREE.MathUtils.radToDeg(o.rotation.y) + (o.userData.prop === 'tree' ? o.position.x * 40 : 0), sc)
+        o.parent?.add(m)
+        doomed.push(o)
+        return
+      }
+      if (!piece) return
+      const y = o.position.y
+      const rot = THREE.MathUtils.radToDeg(o.rotation.y)
+      if (subst[piece]) {
+        const s = subst[piece]
+        o.parent?.add(placeModel(kit, s.slug, o.position.x, y, o.position.z, rot + (s.rot ?? 0), s.scale ?? 1))
+        if (piece === 'desk') {
+          // 重生日记：游戏里的道具，先用一本红色的本子占位
+          const book = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.05, 0.32), new THREE.MeshStandardMaterial({ color: '#a83232', roughness: 0.7 }))
+          book.position.set(o.position.x + 0.15, y + 0.83, o.position.z + 0.05)
+          book.castShadow = true
+          o.parent?.add(book)
+        }
+        doomed.push(o)
+      } else if (piece === 'crate') {
+        o.parent?.add(placeModel(kit, crate++ % 2 ? 'wooden_crate_02' : 'wooden_crate_01', o.position.x, y, o.position.z, crate * 37))
+        doomed.push(o)
+      } else if (piece === 'counter') {
+        o.parent?.add(
+          placeModel(kit, 'painted_wooden_cabinet', o.position.x - 0.7, y, o.position.z, 0),
+          placeModel(kit, 'electric_stove', o.position.x + 0.45, y, o.position.z, 0),
+          placeModel(kit, 'vintage_electric_kettle', o.position.x + 0.5, y + 0.86, o.position.z - 0.05, 30, 0.8),
+        )
+        doomed.push(o)
+      } else if (piece === 'bed') {
+        doomed.push(o)
+      }
+    })
+    visit(this.scene)
+    for (const o of doomed) o.removeFromParent()
+    // 二楼卧室：两张复古坐卧床，一张靠北墙、一张靠西墙
+    this.floor2.add(
+      placeModel(kit, 'vintage_day_bed', 1.25, FLOOR_H, 0.55, 0),
+      placeModel(kit, 'vintage_day_bed', 0.55, FLOOR_H, 3.7, 90),
+    )
+    // 画风特有的家具和院子里的小物件
+    for (const p of PARADISE_EXTRAS) {
+      const m = placeModel(kit, p.piece, p.x, p.floor * FLOOR_H + (p.y ?? 0), p.z, p.rot, p.scale ?? 1)
+      ;(p.floor === 1 ? this.floor2 : this.scene).add(m)
+    }
+    // 两米宽的铁门
+    this.scene.add(placeModel(kit, 'large_iron_gate', GATE.x, 0, GATE.z, 0, 0.68))
+    // 街边的路灯
+    for (const x of [-18, -6, 6, 18, 30]) this.scene.add(placeModel(kit, 'street_lamp_01', x, 0, STREET.z0 - 0.7, 0, 0.9))
   }
 
   private spawnActors(): void {

@@ -1,5 +1,5 @@
 // 走路用的格子地图和寻路（纯逻辑，可单测）。
-import { FURNITURE, PROPS, WALLS, WORLD, fenceSegments, type Rect } from './layout'
+import { FURNITURE, PROPS, WALLS, WORLD, fenceSegments, type Placement, type Rect } from './layout'
 
 export const CELL = 0.5
 
@@ -140,8 +140,8 @@ export class NavGrid {
 
 const WALL_HALF_T = 0.15
 
-/** 一楼和院子、街道的可走地图。二楼原型里还不能走。 */
-export function buildNav(): NavGrid {
+/** 一楼和院子、街道的可走地图。二楼原型里还不能走。`extra` 是画风特有的家具。 */
+export function buildNav(extra: Placement[] = []): NavGrid {
   const nav = new NavGrid(WORLD)
   for (const s of WALLS) {
     if (s.floor !== 0 || s.kind === 'door') continue
@@ -153,7 +153,7 @@ export function buildNav(): NavGrid {
     if (s.axis === 'x') nav.blockRect(s.x - 0.5, s.z - 0.1, s.x + 0.5, s.z + 0.1)
     else nav.blockRect(s.x - 0.1, s.z - 0.5, s.x + 0.1, s.z + 0.5)
   }
-  for (const p of FURNITURE) {
+  for (const p of [...FURNITURE, ...extra]) {
     if (p.floor !== 0 || !p.block) continue
     const swap = Math.abs(p.rot) % 180 === 90
     const [hw, hd] = swap ? [p.block[1], p.block[0]] : p.block
