@@ -176,7 +176,7 @@ export const zh = {
   'world.debug.beggar': '🧔 让门外的陌生人来敲门',
   'world.debug.guchen': '⚡ 顾沉送一箱东西来',
   'world.debug.guchenVisit': '⚡ 顾沉上门借人',
-  'world.visit.guchen_visit.text': '顾沉站在铁门外，军装上全是灰："城东防线缺人。借我一个能打的，两天后我把人完整地还回来，再加一箱子弹。"他顿了顿，"……军区的粮也快见底了。"',
+  'world.visit.guchen_visit.text': '顾沉站在铁门外，军绿色的 T 恤上全是灰土："城东防线缺人。借我一个能打的，两天后我把人完整地还回来，再加一箱子弹。"他顿了顿，"……军区的粮也快见底了。"',
   'world.visit.guchen_visit.choice.lend': '借给他一个人（两天后回来，带回 10 发子弹）',
   'world.visit.guchen_visit.choice.ammo': '给他 4 份吃的，换 6 发子弹',
   'world.visit.guchen_visit.choice.refuse': '家里离不开人，拒绝',
