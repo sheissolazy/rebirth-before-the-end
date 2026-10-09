@@ -73,7 +73,7 @@ export interface Hud {
   /** 困难模式 */
   hard: boolean
   /** 女主死了：这一世结束 */
-  over: { when: string; cause: string; days: number; points: number; kills: number } | null
+  over: { when: string; cause: string; days: number; points: number; kills: number; mourned: string[] } | null
   /** 钉板耐久（0 = 没有） */
   trap: number
   /** 末日前要做的事（做完打勾） */
@@ -1946,7 +1946,8 @@ export class World {
     const days = Math.max(0, o.day - PROLOGUE_DAYS + 1)
     const points = Math.max(1, days + Math.floor(this.life.kills / 5))
     awardRebirthPoints(points)
-    return { when: calendarLabel({ day: o.day, hour: o.hour }), cause: o.cause, days, points, kills: this.life.kills }
+    const mourned = this.actors.filter((a) => a.dead && a !== this.heroine).map((a) => a.name)
+    return { when: calendarLabel({ day: o.day, hour: o.hour }), cause: o.cause, days, points, kills: this.life.kills, mourned }
   }
 
   /** 女主死了：带着记忆进入下一世（新开局，第几世 +1） */

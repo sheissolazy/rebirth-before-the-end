@@ -112,6 +112,7 @@ export const zh = {
   'world.over.cause.crisis': '月底的危机夜，门没守住，家里只剩下你一个人。',
   'world.over.when': '{when} · 末日后撑了 {days} 天',
   'world.over.again': '再睁开眼，又是外婆老宅的那个早上，离末日还有 4 天。这一次，你记得的更多。',
+  'world.over.mourned': '这一世先走一步的：{names}',
   'world.over.button': '再重生一次（第 {n} 世）',
   'world.over.points': '这一世撑了 {days} 天、打倒 {kills} 只，得到 {points} 点重生点',
   'world.over.shop': '用重生点给下一世准备点东西（剩 {n} 点，点一下买 / 退）',

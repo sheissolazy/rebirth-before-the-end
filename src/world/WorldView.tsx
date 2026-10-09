@@ -471,6 +471,7 @@ export default function WorldView() {
             <div className="mt-3 text-4xl font-bold tracking-[0.2em]">{t('world.over.title')}</div>
             <p className="mt-5 text-base leading-relaxed text-white/85">{t(`world.over.cause.${hud.over.cause}` as UiKey)}</p>
             <p className="mt-2 text-sm text-white/60">{t('world.over.when', { when: hud.over.when, days: hud.over.days })}</p>
+            {hud.over.mourned.length > 0 && <p className="mt-2 text-sm text-white/60">🕯 {t('world.over.mourned', { names: hud.over.mourned.join('、') })}</p>}
             <p className="mt-4 text-sm text-amber-200">{t('world.over.points', { days: hud.over.days, kills: hud.over.kills, points: hud.over.points })}</p>
             <div className="mt-3 rounded-xl bg-white/10 p-3 text-left font-sans">
               <div className="mb-2 text-xs text-white/70">{t('world.over.shop', { n: rebirthPoints() })}</div>
