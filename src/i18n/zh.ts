@@ -41,7 +41,7 @@ export const zh = {
   'world.go.sit': '去坐一会儿',
   'world.go.stroll': '去院子里走走',
   'world.toast.busy': '用不了：有人在用，或者家里没吃的/喝的了',
-  'world.toast.fighting': '打丧尸的时候大家听防守安排，先别乱跑',
+  'world.toast.fighting': '打丧尸时：先点一个人，再点地上发光的守位圈（蓝色后排、橙色贴门）就能换位置',
   'world.toast.siege': '丧尸来了！大家各就各位',
   'world.toast.crisis': '月底危机夜：一大群丧尸朝这边涌过来了！',
   'world.toast.won': '天亮了……守住了',

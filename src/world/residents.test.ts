@@ -227,3 +227,19 @@ describe('存档', () => {
     for (const p of b.actors) expect(b.navs[p.floor].isBlockedAt(p.root.position.x, p.root.position.z)).toBe(false)
   })
 })
+
+describe('调整守位', () => {
+  it('把妈妈换到后排，女主就去她原来贴门的位置', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(2, false)
+    const s = life.siege!
+    const [hero, mom] = life.actors
+    expect(s.post(hero)).toBe(0)
+    const momPost = s.post(mom)
+    s.assign(mom, 0)
+    expect(s.post(mom)).toBe(0)
+    expect(s.post(hero)).toBe(momPost)
+  })
+})

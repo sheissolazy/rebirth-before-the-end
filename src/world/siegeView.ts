@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
+import { FLOOR_H } from './layout'
 import type { Pt } from './nav'
 import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
 import type { Household } from './residents'
@@ -59,6 +60,8 @@ export class SiegeView {
   private door: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private doorOpen = 0
+  /** 当前这一层的三个守位圈（后排是蓝色，贴门的是橙色） */
+  private readonly posts: THREE.Mesh[] = []
   private gateDown = false
   private spawned = 0
   shake = 0
@@ -66,6 +69,15 @@ export class SiegeView {
   constructor(scene: THREE.Scene) {
     this.scene = scene
     this.scene.add(this.flash)
+    for (let k = 0; k < 3; k++) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 28), new THREE.MeshBasicMaterial({
+        color: k === 0 ? '#7cc4ff' : '#ffb35c', transparent: true, opacity: 0.75, depthWrite: false,
+      }))
+      ring.rotation.x = -Math.PI / 2
+      ring.visible = false
+      this.posts.push(ring)
+      this.scene.add(ring)
+    }
     for (const l of LAYERS) {
       const b = new Bar(BAR_AT[l.id])
       b.sprite.visible = false
@@ -239,6 +251,15 @@ export class SiegeView {
       }
     }
     if (this.barricade) this.barricade.visible = fighting && (s?.layer ?? 0) >= 2 && life.barriers.stairs > 0
+    // 守位圈：只在打仗时显示当前这一层的
+    const layer = fighting ? s?.current : null
+    this.posts.forEach((ring, k) => {
+      ring.visible = !!layer
+      if (!layer) return
+      const p = layer.posts[k]
+      ring.position.set(p.x, p.floor * FLOOR_H + 0.04, p.z)
+      ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(performance.now() / 300) * 0.2
+    })
   }
 }
 

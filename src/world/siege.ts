@@ -163,6 +163,27 @@ export class Siege {
     return LAYERS[this.layer] ?? null
   }
 
+  /** 玩家调过的守位：人 → 站位编号（0 后排、1/2 贴门） */
+  private readonly postOf = new Map<Actor, number>()
+
+  /** 这个人现在守哪个位置 */
+  post(a: Actor): number {
+    const fixed = this.postOf.get(a)
+    if (fixed !== undefined) return fixed
+    const r = this.roleOf(a)
+    return r === 'ranged' ? 0 : r === 'melee1' ? 1 : 2
+  }
+
+  /** 玩家把某人换到某个站位，原来站那里的人换到他的位置 */
+  assign(a: Actor, slot: number): void {
+    const mine = this.post(a)
+    if (mine === slot) return
+    const other = this.o.defenders.find((d) => d !== a && this.post(d) === slot)
+    if (other) { this.postOf.set(other, mine); other.path = [] }
+    this.postOf.set(a, slot)
+    a.path = []
+  }
+
   roleOf(a: Actor): Role {
     const k = this.o.defenders.indexOf(a)
     return k === 0 ? 'ranged' : k === 1 ? 'melee2' : 'melee1'  // 女主、妈妈、爸爸
@@ -281,7 +302,7 @@ export class Siege {
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
         // 贴在门边打的人，偶尔会被从栏杆/门缝里伸出来的手抓伤
-        const close = this.o.defenders.find((a) => !this.downed.has(a) && this.roleOf(a) !== 'ranged'
+        const close = this.o.defenders.find((a) => !this.downed.has(a) && this.post(a) !== 0
           && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 1.7)
         if (close && this.rand() < 0.3) {
           close.health = Math.max(0, close.health - 5)
@@ -353,9 +374,10 @@ export class Siege {
     const layer = this.current
     // 女主霰弹枪（没子弹就换菜刀），爸爸撬棍，妈妈擀面杖
     const weapon = role === 'ranged' ? (this.o.ammo.n > 0 ? 'shotgun' : 'knife') : role === 'melee1' ? 'crowbar' : 'pin'
+    const slot = this.post(a)
     // 回到这一层的站位（最后一层没了就原地打）
     if (layer) {
-      const post = layer.posts[role === 'ranged' ? 0 : role === 'melee1' ? 1 : 2]
+      const post = layer.posts[slot]
       const far = Math.hypot(post.x - a.pos.x, post.z - a.pos.z) > 0.35 || post.floor !== a.floor
       if (far && !a.path.length) a.setPath(route(this.o.navs, a.pos, post) ?? [])
       if (a.path.length) { a.pose = 'idle'; return }

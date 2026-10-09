@@ -918,6 +918,7 @@ export class World {
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, this.camera)
     const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
+    if (this.mode === 'home' && this.tapPost()) return
     if (this.mode === 'home') {
       const hits = this.raycaster.intersectObjects(this.actors.filter((a) => a.root.visible).map((a) => a.root), true)
       if (hits.length) {
@@ -928,7 +929,10 @@ export class World {
           return
         }
       }
-      if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
+      if (this.life.siege && !this.life.siege.done) {
+        this.toast('world.toast.fighting')
+        return
+      }
       // 书桌上的红本子：打开重生日记
       const hit = this.furnitureUnder(floor)
       if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
@@ -948,6 +952,20 @@ export class World {
     if (!path) return
     const end = path[path.length - 1] ?? { ...who.pos, y: who.root.position.y }
     this.flashMarker(end.x, floor * FLOOR_H, end.z)
+  }
+
+  /** 打丧尸时点了地上的守位圈（哪怕上面站着人）：把选中的人换过去 */
+  private tapPost(): boolean {
+    const siege = this.life.siege
+    const layer = siege && !siege.done ? siege.current : null
+    if (!siege || !layer || this.selected.away) return false
+    const p = new THREE.Vector3()
+    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -layer.posts[0].floor * FLOOR_H), p)) return false
+    const k = layer.posts.findIndex((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.6)
+    if (k < 0 || siege.post(this.selected) === k) return false
+    siege.assign(this.selected, k)
+    this.flashMarker(layer.posts[k].x, layer.posts[k].floor * FLOOR_H, layer.posts[k].z)
+    return true
   }
 
   /** 鼠标下面第一件看得见的家具（只算当前看的这一层） */
