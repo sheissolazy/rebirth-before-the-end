@@ -485,3 +485,31 @@ describe('江野', () => {
     expect(life.affection.jiangye).toBe(60)
   })
 })
+
+describe('顾沉 / 军区', () => {
+  function run(life: Household, hours: number) {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+  it('末日前去军区门口见到顾沉；末日后用晶核在军区换子弹，见过他的话多给', () => {
+    const { life } = simulate('paradise', 0)
+    life.speed = 3
+    life.clock = { day: 1, hour: 8 }
+    expect(life.startTrip('armygate', [life.actors[0]])).toBe(true)
+    run(life, 4.5)
+    expect(life.guchenMet).toBe(true)
+    expect(life.affection.guchen).toBe(8)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 8 }
+    life.cores = 2
+    expect(life.tripCheck('armygate')).toBe('cores')
+    life.cores = 6
+    const ammo = life.ammo.n
+    expect(life.startTrip('armygate', [life.actors[2]])).toBe(true)
+    run(life, 4.5)
+    expect(life.cores).toBe(1)
+    expect(life.ammo.n).toBe(ammo + 18)
+  })
+})

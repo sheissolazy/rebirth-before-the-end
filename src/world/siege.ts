@@ -356,7 +356,7 @@ export class Siege {
       z.face(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z, dt)
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
-        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg)
+        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (prey.helmet ? 0.5 : 1))
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }

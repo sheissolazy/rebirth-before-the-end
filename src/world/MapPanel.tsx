@@ -5,7 +5,7 @@ import { locations } from '../content/locations'
 import { TRIPS } from './expedition'
 
 export interface MapMember { name: string; health: number }
-type Check = 'ok' | 'phase' | 'money' | 'late' | 'busy'
+type Check = 'ok' | 'phase' | 'money' | 'late' | 'busy' | 'cores'
 
 export function MapPanel({ prologue, check, members, onGo, onClose }: {
   prologue: boolean

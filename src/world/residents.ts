@@ -12,6 +12,7 @@ import {
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
 import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
+import { npcs } from '../content/npcs'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
@@ -63,6 +64,8 @@ export class Actor extends Walker {
   chatting = false
   /** 打丧尸用什么 */
   weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' = 'pin'
+  /** 戴着顾沉的头盔：被咬伤害减半 */
+  helmet = false
   /** 枪没子弹时换的近战武器（江野送的斧子比菜刀好用） */
   sidearm: 'knife' | 'axe' = 'knife'
   /** 白天会去修门的人 */
@@ -243,7 +246,14 @@ export class Household {
   seen: Record<string, number> = {}
   helpedNeighbor = false
   /** 男主好感（江野是青梅竹马，一开始就有 40） */
-  affection: Record<string, number> = { jiangye: 40 }
+  affection: Record<string, number> = { jiangye: 40, guchen: 0 }
+  /** 末日前去军区门口见过顾沉 */
+  guchenMet = false
+  /** 顾沉送的头盔：女主被咬伤害减半 */
+  helmet = false
+  /** 顾沉的对讲机提醒过：今晚少来几只 */
+  fewerTonight = false
+  private careDay = -1
   warnedJiangye = false
   /** 这次江野来送的是哪一样（0 罐头 / 1 斧子 / 2 焊铁门） */
   careVariant = 0
@@ -297,6 +307,7 @@ export class Household {
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done
     this.tripTick()
+    this.careTick()
     this.runawayTick()
     this.rainTick(hours)
     this.searchTick(hours)
@@ -660,9 +671,47 @@ export class Household {
     return LAYERS.find((l) => l.id === id)!.max + (id === 'gate' ? this.gateBonus : 0)
   }
 
-  tripCheck(id: string): ReturnType<typeof canGo> | 'busy' {
+  /** 末日后去军区基地换东西要几颗晶核 */
+  static readonly ARMY_PRICE = 5
+
+  tripCheck(id: string): ReturnType<typeof canGo> | 'busy' | 'cores' {
     if (this.trip || (this.siege && !this.siege.done)) return 'busy'
-    return canGo(TRIPS.find((t) => t.id === id)!, this.clock.day < PROLOGUE_DAYS, this.money, this.clock.hour)
+    const ok = canGo(TRIPS.find((t) => t.id === id)!, this.clock.day < PROLOGUE_DAYS, this.money, this.clock.hour)
+    if (ok === 'ok' && id === 'armygate' && this.clock.day >= PROLOGUE_DAYS && this.cores < Household.ARMY_PRICE) return 'cores'
+    return ok
+  }
+
+  /** 军区门口/基地：不走通用的搜刮结算 */
+  private settleArmy(t: Trip): void {
+    const who = t.members.map((m) => m.name).join('、')
+    if (this.clock.day < PROLOGUE_DAYS || t.back < PROLOGUE_DAYS * 24) {
+      this.affection.guchen = Math.min(100, (this.affection.guchen ?? 0) + (this.guchenMet ? 3 : 8))
+      this.note(this.guchenMet ? 'world.army.again' : 'world.army.meet', { who })
+      this.guchenMet = true
+      return
+    }
+    // 军区收编以后：交晶核换子弹和急救包；示警过的话顾沉多给一些
+    this.cores = Math.max(0, this.cores - Household.ARMY_PRICE)
+    const ammo = this.guchenMet ? 18 : 12
+    this.ammo.n += ammo
+    this.medkits += 1
+    this.note(this.guchenMet ? 'world.army.tradeFriend' : 'world.army.trade', { who, ammo, cores: Household.ARMY_PRICE })
+  }
+
+  /** 见过顾沉的话，末日后他偶尔派人送东西到门口（台词用文字版的"关心"） */
+  private careTick(): void {
+    const c = this.clock
+    if (!this.guchenMet || c.day < PROLOGUE_DAYS || c.hour < 8 || this.careDay === c.day) return
+    this.careDay = c.day
+    if (this.rand() > 0.35) return
+    const npc = npcs.find((n) => n.id === 'guchen')
+    const k = Math.floor(this.rand() * 3)
+    const text = npc?.care?.[k] ? lt(npc.care[k].text) : ''
+    if (k === 0) this.stock = { ...this.stock, food: this.stock.food + 3 }
+    else if (k === 1) this.fewerTonight = true
+    else { this.helmet = true; this.actors[0].helmet = true }
+    this.affection.guchen = Math.min(100, (this.affection.guchen ?? 0) + 3)
+    this.note(`world.army.care${k}`, { text })
   }
 
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
@@ -694,6 +743,10 @@ export class Household {
         a.floor = 0
         a.setPath(route(this.navs, a.pos, { ...HOME_IN, x: HOME_IN.x + (k - 1) * 0.9 }) ?? [])
       })
+    } else if (t.phase === 'back' && t.members.every((a) => !a.path.length) && t.def.id === 'armygate') {
+      this.settleArmy(t)
+      t.members.forEach((a) => { a.carrying = false; a.hold = 0.3 })
+      this.trip = null
     } else if (t.phase === 'back' && t.members.every((a) => !a.path.length)) {
       const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
       const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand())
@@ -772,7 +825,12 @@ export class Household {
           this.note('world.log.plague', { who: who.name })
         }
         this.startSiege(3, false)
-      } else if (count > 0) this.startSiege(count, crisis)
+      } else if (count > 0) {
+        // 顾沉的对讲机提醒过东门有尸群：提前堵好了，少来两只
+        const n = this.fewerTonight ? Math.max(1, count - 2) : count
+        this.fewerTonight = false
+        this.startSiege(n, crisis)
+      }
     }
     // 暴雨夜过后：一楼进水，泡坏一部分囤货
     if (this.storm === c.day - 1 && c.hour >= 7 && this.flooded !== this.storm) {

@@ -16,7 +16,7 @@ export interface TripDef {
   /** 来回要几个游戏小时 */
   hours: number
   cost: number
-  phase: 'prologue' | 'apocalypse'
+  phase: 'prologue' | 'apocalypse' | 'both'
   /** 遇到丧尸的概率（0~1） */
   danger: number
 }
@@ -27,6 +27,8 @@ export const TRIPS: TripDef[] = [
   { id: 'pharmacy', hours: 2.5, cost: 900, phase: 'prologue', danger: 0 },
   { id: 'hardware', hours: 3.5, cost: 2500, phase: 'prologue', danger: 0 },
   { id: 'blackmarket', hours: 4, cost: 3000, phase: 'prologue', danger: 0 },
+  // 军区门口：末日前去示警（见到顾沉），末日后是军区基地，用晶核换物资（结算在 Household 里）
+  { id: 'armygate', hours: 3, cost: 0, phase: 'both', danger: 0 },
   { id: 'ruin_market', hours: 4, cost: 0, phase: 'apocalypse', danger: 0.4 },
   { id: 'hospital', hours: 4.5, cost: 0, phase: 'apocalypse', danger: 0.6 },
   { id: 'armory', hours: 5, cost: 0, phase: 'apocalypse', danger: 0.5 },
@@ -93,7 +95,7 @@ export function settleTrip(id: string, people: number, armed: boolean, r: () => 
 
 /** 现在能不能出这趟门：阶段对、钱够、回来时天还没黑 */
 export function canGo(t: TripDef, prologue: boolean, money: number, hour: number): 'ok' | 'phase' | 'money' | 'late' {
-  if ((t.phase === 'prologue') !== prologue) return 'phase'
+  if (t.phase !== 'both' && (t.phase === 'prologue') !== prologue) return 'phase'
   if (money < t.cost) return 'money'
   if (hour < 6 || hour + t.hours > 19.5) return 'late'
   return 'ok'

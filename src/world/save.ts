@@ -49,6 +49,8 @@ export interface WorldSave {
   affection?: Record<string, number>
   warnedJiangye?: boolean
   heroAxe?: boolean
+  guchenMet?: boolean
+  helmet?: boolean
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -80,6 +82,8 @@ export function snapshot(life: Household): WorldSave {
     affection: { ...life.affection },
     warnedJiangye: life.warnedJiangye,
     heroAxe: life.actors[0]?.sidearm === 'axe',
+    guchenMet: life.guchenMet,
+    helmet: life.helmet,
   }
 }
 
@@ -102,7 +106,10 @@ export function restore(life: Household, s: WorldSave): void {
   life.space = { ...(s.space ?? { food: 0, water: 0 }) }
   life.spaceCap = s.spaceCap ?? 6
   life.molotovs = s.molotovs ?? 2
-  life.affection = { jiangye: 40, ...(s.affection ?? {}) }
+  life.affection = { jiangye: 40, guchen: 0, ...(s.affection ?? {}) }
+  life.guchenMet = !!s.guchenMet
+  life.helmet = !!s.helmet
+  if (life.helmet && life.actors[0]) life.actors[0].helmet = true
   life.warnedJiangye = !!s.warnedJiangye
   if (s.heroAxe && life.actors[0]) life.actors[0].sidearm = 'axe'
   for (const as of s.actors) {

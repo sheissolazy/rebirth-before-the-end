@@ -1154,7 +1154,8 @@ export class World {
   diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean }[] {
     return Object.entries(this.life.affection).map(([id, v]) => {
       const n = npcs.find((x) => x.id === id)
-      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met: this.life.seen[`${id}_meet`] !== undefined }
+      const met = id === 'guchen' ? this.life.guchenMet : this.life.seen[`${id}_meet`] !== undefined
+      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met }
     })
   }
 
