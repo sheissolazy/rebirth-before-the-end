@@ -73,6 +73,8 @@ export class Actor extends Walker {
   line: { text: string; hours: number } | null = null
   /** 没在打丧尸：站着时会换小动作 */
   calm = true
+  /** 刚被玩家点中：站着的话挥一下手（秒） */
+  ack = 0
   /** 打丧尸用什么 */
   weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' | 'crossbow' = 'pin'
   /** 戴着顾沉的头盔：被咬伤害减半 */
@@ -153,7 +155,9 @@ export class Actor extends Walker {
   }
 
   animate(dt: number, walking: boolean): void {
-    const state: PoseState = walking ? (this.carrying ? 'carry' : 'walk') : this.pose
+    this.ack = Math.max(0, this.ack - dt)
+    const waving = this.ack > 0 && !walking && this.pose === 'idle'
+    const state: PoseState = walking ? (this.carrying ? 'carry' : 'walk') : waving ? 'wave' : this.pose
     if (this.driver) {
       this.driver.talking = this.chatting && !walking
       this.driver.fidget = this.calm && !this.away

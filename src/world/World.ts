@@ -1989,6 +1989,8 @@ export class World {
       else this.toast('world.toast.noMedkit')
     }
     if (this.mode === 'outside' && actor !== this.heroine) return
+    // 点了一个站着没事的人：TA 冲你挥挥手（打丧尸时不挥）
+    if (actor !== this.selected && this.life.speed > 0 && !(this.life.siege && !this.life.siege.done)) actor.ack = 1.3
     this.selected = actor
     if (this.mode === 'home') this.setViewFloor(actor.root.position.y > FLOOR_H - 0.4 ? 1 : 0)
     this.setHud({ selected: actor.name })
