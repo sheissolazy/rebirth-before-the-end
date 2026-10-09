@@ -1,6 +1,6 @@
 # 2.5D 原型试玩清单（2026-10-09 早上）
 
-打开 https://sheissolazy.github.io/rebirth-before-the-end/proto/ ，如果还是旧版就 Cmd+Shift+R 强制刷新一次。第一次会弹欢迎卡（游戏先暂停）。
+打开 https://sheissolazy.github.io/rebirth-before-the-end/proto/ ，如果还是旧版就 Cmd+Shift+R 强制刷新一次。第一次会弹欢迎卡（游戏先暂停）。默认是世外桃源画风（真人模型都在这个画风里），右上角"画风"按钮可以切到卡通；如果你之前手动选过卡通，点一下切回来，或者打开 `…/proto/?style=paradise`。
 
 ## 10 分钟能看完的路线
 
