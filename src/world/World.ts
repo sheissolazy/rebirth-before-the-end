@@ -70,6 +70,8 @@ export interface Hud {
   wall: boolean
   /** 第几世 */
   life: number
+  /** 困难模式 */
+  hard: boolean
   /** 女主死了：这一世结束 */
   over: { when: string; cause: string; days: number; points: number; kills: number } | null
   /** 钉板耐久（0 = 没有） */
@@ -140,7 +142,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -1711,6 +1713,14 @@ export class World {
     this.pushLifeHud()
   }
 
+  /** 原型调试：普通 / 困难切换（切到困难时子弹减半） */
+  toggleHard(): void {
+    this.life.hard = !this.life.hard
+    if (this.life.hard) this.life.ammo.n = Math.ceil(this.life.ammo.n / 2)
+    saveWorld(this.life)
+    this.setHud({ hard: this.life.hard })
+  }
+
   /** 原型调试：看看"你又死了一次"那一屏 */
   debugDie(): void {
     this.life.die(this.actors[0], 'crisis')
@@ -1839,6 +1849,7 @@ export class World {
     this.setHud({
       time: calendarLabel(c),
       life: currentLife(),
+      hard: this.life.hard,
       over: this.life.over ? this.overHud(this.life.over) : null,
       night: isNight(c.hour),
       rain: this.life.rain,

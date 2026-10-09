@@ -65,6 +65,7 @@ export interface WorldSave {
   over?: { day: number; hour: number; cause: string } | null
   trap?: number
   kills?: number
+  hard?: boolean
   lent?: { name: string; back: number } | null
   fewerTonight?: boolean
   wall?: boolean
@@ -115,6 +116,7 @@ export function snapshot(life: Household): WorldSave {
     over: life.over,
     trap: life.trap.hp,
     kills: life.kills,
+    hard: life.hard,
     lent: life.lent,
     fewerTonight: life.fewerTonight,
     wall: life.wall,
@@ -153,6 +155,7 @@ export function restore(life: Household, s: WorldSave): void {
   if (life.over) { life.actors[0].pose = 'down'; life.speed = 0 }
   life.trap.hp = s.trap ?? 0
   life.kills = s.kills ?? 0
+  life.hard = !!s.hard
   life.lent = s.lent ?? null
   life.fewerTonight = !!s.fewerTonight
   life.wall = !!s.wall

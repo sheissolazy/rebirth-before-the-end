@@ -1016,3 +1016,20 @@ describe('谢临傍晚来访', () => {
     expect(def.when(life.visitorCtx())).toBe(false)
   })
 })
+
+describe('困难模式', () => {
+  it('丧尸多一半，危机夜每三只一只大块头，存档记住', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.hard = true
+    life.clock = { day: PROLOGUE_DAYS + 3, hour: 21.05 }
+    life.startSiege(10, true)
+    for (let i = 0; i < 8000 && (life.siege?.zombies.length ?? 0) < 6; i++) life.tick(0.05, () => false)
+    const zs = life.siege!.zombies
+    expect(zs.filter((z) => z.brute).map((z) => z.id)).toEqual(zs.filter((z) => z.id % 3 === 2).map((z) => z.id))
+    expect((life.siege as unknown as { o: { count: number } }).o.count).toBe(15)
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.hard).toBe(true)
+  })
+})

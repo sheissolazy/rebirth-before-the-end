@@ -137,6 +137,8 @@ export interface SiegeOpts {
   raid?: boolean
   /** 砌了院墙：隔着铁门栏杆抓不到人 */
   solidWall?: boolean
+  /** 困难模式：咬人、砸门更狠，大块头更多 */
+  hard?: boolean
   /** 在街上搜东西时遇到的：不分防线，从这些位置冒出来直接扑人 */
   ambushAt?: Pt[]
   navs: Record<Floor, NavGrid>
@@ -238,7 +240,7 @@ export class Siege {
     while (!this.done && this.queue.length && this.queue[0].t <= this.t) {
       const q = this.queue.shift()!
       // 月底危机夜（不是黑鸦、不是街上遇袭）：每五只里有一只大块头
-      const brute = this.o.crisis && !this.o.raid && !this.o.ambushAt && this.nextId % 5 === 4
+      const brute = this.o.crisis && !this.o.raid && !this.o.ambushAt && this.nextId % (this.o.hard ? 3 : 5) === (this.o.hard ? 2 : 4)
       const z = this.o.spawn(q.at, !!this.o.raid, brute)
       z.cool = this.rand() * ZOMBIE.cool
       if (this.o.raid) { z.raider = true; z.hp = 75; z.speed = 1.35 }
@@ -374,7 +376,7 @@ export class Siege {
           return
         }
         const id = layer.id
-        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg * (z.brute ? 2.5 : 1))
+        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg * (z.brute ? 2.5 : 1) * (this.o.hard ? 1.3 : 1))
         this.o.emit({ kind: 'bash', layer: id, at: z.pos })
         if (this.o.barriers[id] <= 0) this.breakLayer()
       }
@@ -389,7 +391,7 @@ export class Siege {
       z.face(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z, dt)
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
-        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (z.brute ? 1.6 : 1) * (prey.helmet ? 0.5 : 1))
+        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (z.brute ? 1.6 : 1) * (this.o.hard ? 1.5 : 1) * (prey.helmet ? 0.5 : 1))
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }

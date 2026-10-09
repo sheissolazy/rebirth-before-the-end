@@ -434,6 +434,9 @@ export class Household {
     this.visitDay = this.clock.day
   }
 
+  /** 困难模式（给设计者对比用：丧尸多一半、更狠、大块头更多、开局子弹减半） */
+  hard = false
+
   /** 这一世一共打倒了多少（算重生点用） */
   kills = 0
 
@@ -1269,6 +1272,8 @@ export class Household {
   /** 原型调试用：马上来一波 */
   startSiege(count: number, crisis: boolean, raid = false): void {
     if (!this.spawnZombie || this.siege) return
+    // 困难模式：每晚来的多一半（街上遇袭不走这里）
+    if (this.hard) count = Math.round(count * 1.5)
     this.cancelSearch()
     this.stopFishing()
     for (const a of this.actors) {
@@ -1282,7 +1287,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, crisis, trapKills: 0, fireKills: 0, bruteKills: 0,
     }
     this.siege = new Siege({
-      count, crisis, raid, solidWall: this.wall, navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a)), barriers: this.barriers, ammo: this.ammo,
+      count, crisis, raid, solidWall: this.wall, hard: this.hard, navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a)), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id), trap: this.trap,
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),

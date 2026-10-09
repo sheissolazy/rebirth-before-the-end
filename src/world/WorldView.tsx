@@ -185,6 +185,7 @@ export default function WorldView() {
           <div className="flex items-center gap-2 text-base font-semibold tabular-nums">
             <span>{hud.rain > 0.05 ? '🌧️' : hud.night ? '🌙' : '☀️'}</span>
             <span>{hud.time}</span>
+            {hud.hard && <span className="rounded bg-red-700 px-1 text-[10px] font-bold text-white">{t('world.hardTag')}</span>}
           </div>
           <div className="mt-1.5 flex items-center gap-1">
             {SPEEDS.map((n) => (
@@ -369,6 +370,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
+          <button onClick={() => world.current?.toggleHard()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>
           <button onClick={() => world.current?.debugDie()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.die')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>
