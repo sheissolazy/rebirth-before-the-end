@@ -28,17 +28,17 @@ export const LAYERS: Layer[] = [
   {
     id: 'gate', max: 180, reach: 1.9,
     bash: [f0(3.4, 13.75), f0(4.6, 13.75), f0(4.0, 13.85), f0(3.0, 14.25), f0(5.0, 14.25), f0(4.0, 14.5)],
-    posts: [f0(4, 10.3), f0(3.5, 12.3), f0(4.5, 12.3)],
+    posts: [f0(4, 10.3), f0(3.5, 12.3), f0(4.5, 12.3), f0(2.9, 12.4), f0(5.1, 12.4)],
   },
   {
     id: 'door', max: 160, reach: 1.9,
     bash: [f0(3.2, 6.7), f0(3.8, 6.7), f0(3.5, 7.15), f0(2.8, 7.3), f0(4.2, 7.3), f0(3.5, 7.7)],
-    posts: [f0(4.3, 4.3), f0(3.15, 5.3), f0(3.85, 5.3)],
+    posts: [f0(4.3, 4.3), f0(3.15, 5.3), f0(3.85, 5.3), f0(2.6, 5.3), f0(4.4, 5.3)],
   },
   {
     id: 'stairs', max: 70, reach: 3.2,
     bash: [f0(4.45, 4.25), f0(4.45, 4.75), f0(4.0, 4.5), f0(3.9, 3.9), f0(3.9, 5.1), f0(3.4, 4.5)],
-    posts: [f1(5.6, 5.25), f1(4.6, 4.7), f1(4.6, 4.2)],
+    posts: [f1(5.6, 5.25), f1(4.6, 4.7), f1(4.6, 4.2), f1(5.0, 5.3), f1(6.3, 5.3)],
   },
 ]
 
@@ -51,6 +51,7 @@ const WEAPONS = {
   crowbar: { range: 0, cool: 0.95, dmg: 16 },
   pin: { range: 0, cool: 1.05, dmg: 11 },
   knife: { range: 0, cool: 0.85, dmg: 12 },
+  machete: { range: 0, cool: 0.8, dmg: 15 },
 }
 const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 1.15 }
 
@@ -174,12 +175,13 @@ export class Siege {
   /** 玩家调过的守位：人 → 站位编号（0 后排、1/2 贴门） */
   private readonly postOf = new Map<Actor, number>()
 
-  /** 这个人现在守哪个位置 */
+  /** 这个人现在守哪个位置：拿枪的默认后排，其他人按顺序贴门 */
   post(a: Actor): number {
     const fixed = this.postOf.get(a)
     if (fixed !== undefined) return fixed
-    const r = this.roleOf(a)
-    return r === 'ranged' ? 0 : r === 'melee1' ? 1 : 2
+    if (a.weapon === 'shotgun') return 0
+    const melee = this.o.defenders.filter((d) => d.weapon !== 'shotgun')
+    return Math.min(4, 1 + melee.indexOf(a))
   }
 
   /** 玩家把某人换到某个站位，原来站那里的人换到他的位置 */
@@ -193,8 +195,7 @@ export class Siege {
   }
 
   roleOf(a: Actor): Role {
-    const k = this.o.defenders.indexOf(a)
-    return k === 0 ? 'ranged' : k === 1 ? 'melee2' : 'melee1'  // 女主、妈妈、爸爸
+    return a.weapon === 'shotgun' ? 'ranged' : a.weapon === 'crowbar' ? 'melee1' : 'melee2'
   }
 
   /** 打完了、尸体也清掉了 */
@@ -379,10 +380,9 @@ export class Siege {
 
   private defenderTick(a: Actor, dt: number): void {
     if (this.downed.has(a)) { a.pose = 'down'; return }
-    const role = this.roleOf(a)
     const layer = this.current
-    // 女主霰弹枪（没子弹就换菜刀），爸爸撬棍，妈妈擀面杖
-    const weapon = role === 'ranged' ? (this.o.ammo.n > 0 ? 'shotgun' : 'knife') : role === 'melee1' ? 'crowbar' : 'pin'
+    // 武器跟着人：女主霰弹枪（没子弹就换菜刀），爸爸撬棍，妈妈擀面杖，住进来的人拿砍刀
+    const weapon = a.weapon === 'shotgun' ? (this.o.ammo.n > 0 ? 'shotgun' : 'knife') : a.weapon
     const slot = this.post(a)
     // 回到这一层的站位（最后一层没了就原地打）
     if (layer) {

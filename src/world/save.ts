@@ -11,6 +11,8 @@ const KEY = `${PREFIX}-world-v1`
 
 interface ActorSave {
   name: string
+  /** 住进来的人用哪个模型（原来的三个人不用） */
+  model?: string
   x: number
   z: number
   floor: Floor
@@ -57,7 +59,7 @@ export function snapshot(life: Household): WorldSave {
     nightDone: life.nightDone,
     log: [...life.log],
     actors: life.actors.map((a) => ({
-      name: a.name, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
+      name: a.name, model: a.model, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
       needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, runaway: a.runaway, lowMood: a.lowMood,
     })),
     trip: life.trip ? { id: life.trip.def.id, members: life.trip.members.map((m) => m.name), back: life.trip.back } : null,
@@ -86,7 +88,9 @@ export function restore(life: Household, s: WorldSave): void {
   life.tip = s.tip ?? null
   life.storm = s.storm ?? -1
   for (const as of s.actors) {
-    const a = life.actors.find((x) => x.name === as.name)
+    let a = life.actors.find((x) => x.name === as.name)
+    // 后来住进来的人：重新请进门
+    if (!a && as.model) a = life.addResident(as.name, as.model, { x: as.x, z: as.z }) ?? undefined
     if (!a) continue
     // 存档时可能坐在沙发里（家具占的格子），挪到最近能站的地方
     const nav = life.navs[as.floor]

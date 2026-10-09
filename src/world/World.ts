@@ -196,6 +196,15 @@ export class World {
       this.scene.add(v.root)
       return v
     }
+    this.life.makeActor = (name, model, at) => {
+      const a = new Actor(name, '#8a6d4f', '#222222', 1.03, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+      a.model = model
+      this.setupActor(a)
+      this.dressResident(a)
+      return a
+    }
+    // 接着上次的进度（要在 makeActor 设好以后，住进来的人才能重建）
+    loadWorld(this.life)
     this.life.onKnock = () => {
       this.sound.knock()
       if (this.mode === 'home') this.setViewFloor(0)
@@ -297,6 +306,7 @@ export class World {
           if (this.actors[k].driver?.attach(w, 'RightHand')) this.weapons.push(w)
         })
       }
+      for (const a of this.actors.slice(3)) this.dressResident(a)
       this.addLamps()
       this.collectClickables()
       // 窗玻璃：夜里亮起暖光
@@ -539,21 +549,40 @@ export class World {
     this.heroine = new Actor('林知夏', '#d9534f', '#2b1d16', 1, { x: 3.2, z: 4.4 }, { hunger: 72, thirst: 66, energy: 92, mood: 64 })
     const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
     const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
+    this.heroine.weapon = 'shotgun'
+    this.heroine.model = 'heroine'
+    mom.weapon = 'pin'
+    mom.model = 'mom'
+    dad.weapon = 'crowbar'
+    dad.handy = true
+    dad.model = 'dad'
     this.actors.push(this.heroine, mom, dad)
-    for (const a of this.actors) {
-      // 出门回来抱着的纸箱
-      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.34), new THREE.MeshStandardMaterial({ color: '#b98d5a', roughness: 0.85 }))
-      crate.position.set(0, 1.0, 0.3)
-      crate.castShadow = true
-      crate.visible = false
-      a.root.userData.crate = crate
-      a.root.add(crate)
-      this.scene.add(a.root)
-    }
+    for (const a of this.actors) this.setupActor(a)
     this.selected = this.heroine
     this.life = new Household(this.actors, this.navs, this.style)
-    // 接着上次的进度
-    loadWorld(this.life)
+  }
+
+  /** 每个家庭成员都有：出门回来抱着的纸箱，放进场景 */
+  private setupActor(a: Actor): void {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.34), new THREE.MeshStandardMaterial({ color: '#b98d5a', roughness: 0.85 }))
+    crate.position.set(0, 1.0, 0.3)
+    crate.castShadow = true
+    crate.visible = false
+    a.root.userData.crate = crate
+    a.root.add(crate)
+    this.scene.add(a.root)
+  }
+
+  /** 住进来的人：先用卡通小人占位，真人模型加载好了就换上，再给一把砍刀 */
+  private dressResident(a: Actor): void {
+    if (a.driver) return
+    const model = this.siegeView.npc(a.model)
+    if (!model) return
+    a.setModel(model)
+    const blade = crowbar()
+    blade.visible = false
+    const driver = a.driver as { attach(o: THREE.Object3D, bone: string): boolean } | null
+    if (driver?.attach(blade, 'RightHand')) this.weapons.push(blade)
   }
 
   /** 屋里的暖灯和路灯：一直在场景里，白天亮度为 0（灯的数量不变，免得着色器重新编译） */
@@ -1081,7 +1110,7 @@ export class World {
   private visitHud(): Hud['visit'] {
     const def = this.life.talking
     if (!def) return null
-    const ctx = { food: this.life.stock.food } as Parameters<NonNullable<(typeof VISITORS)[number]['choices'][number]['need']>>[0]
+    const ctx = this.life.visitorCtx()
     return { id: def.id, icon: def.icon, choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })) }
   }
 

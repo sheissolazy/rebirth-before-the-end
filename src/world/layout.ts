@@ -212,16 +212,21 @@ export const PARADISE_SPOTS: Spot[] = [
   { kind: 'relax', x: 7.02, z: 9.2, floor: 0, face: -90, pose: 'sit', ax: 6.25, az: 9.2 },
 ]
 
-/** 每人一张床，按人的顺序分（女主、妈妈、爸爸）。x/z 是脚的位置，躺下后头朝 face 的反方向 */
+/** 每人一个睡觉的地方，按人的顺序分（女主、妈妈、爸爸、住进来的两个人）。x/z 是脚的位置，躺下后头朝 face 的反方向 */
 export const BEDS: Record<'toon' | 'paradise', Spot[]> = {
   toon: [
     { kind: 'sleep', x: 1, z: 2.1, floor: 1, face: 0, pose: 'sleep', ax: 1, az: 2.75 },
     { kind: 'sleep', x: 3, z: 2.1, floor: 1, face: 0, pose: 'sleep', ax: 3, az: 2.75 },
     { kind: 'sleep', x: 1.8, z: 5.15, floor: 0, face: 90, pose: 'sleep', y: -0.12, ax: 1.6, az: 4.25 },
+    { kind: 'sleep', x: 6.9, z: 2.1, floor: 1, face: 90, pose: 'sleep', y: -0.48, ax: 5.6, az: 2.4 },
+    { kind: 'sleep', x: 6.9, z: 2.65, floor: 1, face: 90, pose: 'sleep', y: -0.48, ax: 5.6, az: 2.4 },
   ],
   paradise: [
     { kind: 'sleep', x: 2.1, z: 0.52, floor: 1, face: 90, pose: 'sleep', y: -0.08, ax: 2.1, az: 1.25 },
     { kind: 'sleep', x: 0.52, z: 4.6, floor: 1, face: 0, pose: 'sleep', y: -0.08, ax: 1.25, az: 4.3 },
     { kind: 'sleep', x: 3.25, z: 5.48, floor: 1, face: 90, pose: 'sleep', y: -0.08, ax: 3.25, az: 4.75 },
+    // 住进来的人：一个睡一楼沙发，一个在二楼书房打地铺
+    { kind: 'sleep', x: 1.8, z: 5.15, floor: 0, face: 90, pose: 'sleep', y: -0.12, ax: 1.6, az: 4.25 },
+    { kind: 'sleep', x: 6.9, z: 2.1, floor: 1, face: 90, pose: 'sleep', y: -0.48, ax: 5.6, az: 2.4 },
   ],
 }

@@ -28,7 +28,7 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
     : t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
   return (
     <button onClick={onClick}
-      className={`w-44 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
+      className={`w-40 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
       <div className="flex items-baseline justify-between gap-1">
         <span className="whitespace-nowrap text-sm font-semibold">{p.name}</span>
         {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
@@ -264,6 +264,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
+          <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>

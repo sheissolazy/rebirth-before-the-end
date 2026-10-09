@@ -20,6 +20,8 @@ export interface VisitorCtx {
   seen: Record<string, number>
   /** 帮过王阿姨 */
   helpedNeighbor: boolean
+  /** 家里现在住几个人（最多 5） */
+  residents: number
 }
 
 export interface VisitorDef {
@@ -48,7 +50,7 @@ export const VISITORS: VisitorDef[] = [
   {
     id: 'beggar', model: 'stranger', icon: '🧔', chance: 0.12,
     when: (c) => !c.prologue && daytime(c) && (c.seen.beggar === undefined || c.day - c.seen.beggar >= 3),
-    choices: [{ id: 'give', need: (c) => c.food >= 1 }, { id: 'refuse' }],
+    choices: [{ id: 'give', need: (c) => c.food >= 1 }, { id: 'invite', need: (c) => c.residents < 5 }, { id: 'refuse' }],
   },
   {
     id: 'crow_tax', model: 'stranger', icon: '🐦‍⬛', chance: 0.25,

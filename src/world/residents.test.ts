@@ -13,6 +13,10 @@ function simulate(style: 'toon' | 'paradise', days: number) {
     new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 }),
     new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 }),
   ]
+  // 和 World 里一样：女主拿枪，妈妈擀面杖，爸爸撬棍、会修门
+  actors[0].weapon = 'shotgun'
+  actors[2].weapon = 'crowbar'
+  actors[2].handy = true
   const life = new Household(actors, navFloors(style), style)
   life.speed = 3
   const dt = 0.1
@@ -337,5 +341,34 @@ describe('月底危机夜跟着前世记忆走', () => {
     life.tick(dt, () => false)
     expect(life.stock.food).toBeLessThan(food)
     expect(life.log.some((l) => l.key === 'world.log.flood')).toBe(true)
+  })
+})
+
+describe('住进来的人', () => {
+  it('请门外的陌生人住进来：家里变四个人，晚上睡沙发，守夜站第四个位置，存档后还在', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _model, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'beggar')!)
+    const dt = 0.05
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(dt, () => false); life.visitor?.follow(dt, 1.7) }
+    life.answerVisitor('invite')
+    expect(life.residents).toBe(4)
+    const newcomer = life.actors[3]
+    expect(newcomer.name).toBe('阿杰')
+    expect(newcomer.weapon).toBe('machete')
+    // 守夜：第四个人站 3 号位（贴门）
+    life.spawnZombie = (at) => new Zombie(at)
+    life.startSiege(2, false)
+    expect(life.siege!.post(newcomer)).toBe(3)
+    life.siege = null
+    // 存档往返
+    const s = JSON.parse(JSON.stringify(snapshot(life)))
+    const b = simulate('paradise', 0).life
+    b.makeActor = life.makeActor
+    restore(b, s)
+    expect(b.actors.map((a) => a.name)).toContain('阿杰')
+    expect(b.actors.find((a) => a.name === '阿杰')?.weapon).toBe('machete')
   })
 })

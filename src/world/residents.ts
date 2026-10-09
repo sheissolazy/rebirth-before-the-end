@@ -60,6 +60,12 @@ export class Actor extends Walker {
   lowMood = 0
   /** 正和家人一起歇着/吃饭，聊着天 */
   chatting = false
+  /** 打丧尸用什么 */
+  weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' = 'pin'
+  /** 白天会去修门的人 */
+  handy = false
+  /** 用哪个模型（住进来的人存档要用） */
+  model = ''
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
   runaway: { back: number } | null = null
   lost = false
@@ -174,6 +180,9 @@ export interface Trip {
   back: number
 }
 
+/** 住进来的人叫什么 */
+const NEWCOMERS = ['阿杰', '老秦']
+
 const placeName = (id: string) => lt(locations.find((l) => l.id === id)?.name ?? { zh: id })
 
 /** 出门和回来都走街的东头 */
@@ -238,6 +247,8 @@ export class Household {
   storm = -1
   private flooded = -1
   spawnVisitor: ((def: VisitorDef, at: Pt) => Visitor) | null = null
+  /** World 提供：做一个新的家庭成员（带 3D 模型） */
+  makeActor: ((name: string, model: string, at: Pt) => Actor) | null = null
   onKnock: (() => void) | null = null
   private visitCheck = -1
   private readonly spots: Spot[]
@@ -294,12 +305,12 @@ export class Household {
 
   // --- 来敲门的人 -------------------------------------------------------------
 
-  private visitorCtx(): VisitorCtx {
+  visitorCtx(): VisitorCtx {
     const c = this.clock
     return {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
-      food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor,
+      food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
     }
   }
 
@@ -338,6 +349,23 @@ export class Household {
     this.seen[def.id] = this.clock.day
   }
 
+  /** 最多住 5 个人 */
+  static readonly MAX_RESIDENTS = 5
+
+  get residents(): number {
+    return this.actors.filter((a) => !a.lost).length
+  }
+
+  /** 有人住进来 */
+  addResident(name: string, model: string, at: Pt): Actor | null {
+    if (!this.makeActor || this.residents >= Household.MAX_RESIDENTS) return null
+    const a = this.makeActor(name, model, at)
+    a.model = model
+    a.weapon = 'machete'
+    this.actors.push(a)
+    return a
+  }
+
   /** 玩家在对话框里选了 */
   answerVisitor(choice: string): void {
     const v = this.visitor
@@ -352,7 +380,22 @@ export class Household {
       this.medkits += 1
       all(4)
     } else if (def.id === 'beggar') {
-      if (choice === 'give') { food(-1); all(5); this.tip = 'ruin_market' } else all(-4)
+      if (choice === 'give') { food(-1); all(5); this.tip = 'ruin_market' }
+      else if (choice === 'invite') {
+        // 让他住进来：门口的人直接变成家里人，走进院子
+        const name = NEWCOMERS.find((n) => !this.actors.some((a) => a.name === n)) ?? '新来的人'
+        const a = this.addResident(name, 'stranger', { x: v.pos.x, z: v.pos.z })
+        if (a) {
+          a.health = 70
+          a.needs = { hunger: 25, thirst: 40, energy: 50, mood: 70 }
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+          this.note('world.visit.beggar.log.invite', { who: name })
+          this.talking = null
+          v.root.removeFromParent()
+          this.visitor = null
+          return
+        }
+      } else all(-4)
     } else if (def.id === 'crow_tax') {
       if (choice === 'pay') food(-3)
       else this.raidTonight = true
@@ -726,7 +769,7 @@ export class Household {
     const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
     let task: Task | null = null
     // 白天爸爸有空就去修被丧尸砸坏的门
-    const handy = this.actors.indexOf(a) === 2 && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
+    const handy = a.handy && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
     if (handy) task = this.repairTask()
     if (task) { /* 修门 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
