@@ -352,7 +352,7 @@ export const zh = {
   'world.tripInfo.office': '还在正常上班。去一天领一份工资（3000 元）。',
   'world.tripInfo.supermarket': '囤吃的和水。两个人去能多扛一半。',
   'world.tripInfo.pharmacy': '买两个急救包：有人伤重时自动用掉，回 40 点健康。',
-  'world.tripInfo.hardware': '买钢板焊铁门：铁门耐久上限 +60（最多加两次），再做 3 个燃烧瓶。',
+  'world.tripInfo.hardware': '买钢板焊铁门：铁门耐久上限 +60（最多加两次），再做 3 个燃烧瓶。第一次去，老板还会从柜台底下拿出一把弩。',
   'world.tripInfo.blackmarket': '换 12 发霰弹枪子弹。有小概率被骗。',
   'world.tripInfo.ruin_market': '被抢过，但没抢干净：吃的和水。',
   'world.tripInfo.hospital': '急救包。丧尸很多。',
