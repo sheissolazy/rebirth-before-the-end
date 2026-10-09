@@ -21,6 +21,8 @@ import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
+import { npcs } from '../content/npcs'
+import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
@@ -66,7 +68,7 @@ export interface Hud {
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 有人在门口等回话 */
-  visit: { id: string; icon: string; choices: { id: string; ok: boolean }[] } | null
+  visit: { id: string; icon: string; name: string; textKey: string; choices: { id: string; ok: boolean }[] } | null
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -1138,7 +1140,22 @@ export class World {
     const def = this.life.talking
     if (!def) return null
     const ctx = this.life.visitorCtx()
-    return { id: def.id, icon: def.icon, choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })) }
+    // 男主用文字版的名字和身份
+    const npc = def.id.startsWith('jiangye') ? npcs.find((n) => n.id === 'jiangye') : null
+    return {
+      id: def.id, icon: def.icon,
+      name: npc ? `${lt(npc.name)} · ${lt(npc.title)}` : t(`world.visit.${def.id}.name` as UiKey),
+      textKey: def.id === 'jiangye_care' ? `world.visit.jiangye_care.text${this.life.careVariant}` : `world.visit.${def.id}.text`,
+      choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })),
+    }
+  }
+
+  /** 日记里"认识的人"：男主和好感 */
+  diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean }[] {
+    return Object.entries(this.life.affection).map(([id, v]) => {
+      const n = npcs.find((x) => x.id === id)
+      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met: this.life.seen[`${id}_meet`] !== undefined }
+    })
   }
 
   answerVisitor(choice: string): void {

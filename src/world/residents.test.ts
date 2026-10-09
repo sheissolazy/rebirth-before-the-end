@@ -459,3 +459,29 @@ describe('上街搜东西', () => {
     expect(life.report).toBeNull()
   })
 })
+
+describe('江野', () => {
+  it('序章把末日告诉他：好感 +15、给子弹；末日后他会来送东西，送斧子的话没子弹时女主用斧子', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: 1, hour: 10 }
+    const go = (id: string) => {
+      life.startVisit(VISITORS.find((v) => v.id === id)!)
+      for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    }
+    go('jiangye_meet')
+    const ammo = life.ammo.n
+    life.answerVisitor('warn')
+    expect(life.warnedJiangye).toBe(true)
+    expect(life.affection.jiangye).toBe(55)
+    expect(life.ammo.n).toBe(ammo + 6)
+    for (let i = 0; i < 4000 && life.visitor; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    expect(VISITORS.find((v) => v.id === 'jiangye_care')!.when(life.visitorCtx())).toBe(true)
+    go('jiangye_care')
+    life.careVariant = 1
+    life.answerVisitor('thanks')
+    expect(life.actors[0].sidearm).toBe('axe')
+    expect(life.affection.jiangye).toBe(60)
+  })
+})

@@ -63,6 +63,8 @@ export class Actor extends Walker {
   chatting = false
   /** 打丧尸用什么 */
   weapon: 'shotgun' | 'crowbar' | 'pin' | 'machete' = 'pin'
+  /** 枪没子弹时换的近战武器（江野送的斧子比菜刀好用） */
+  sidearm: 'knife' | 'axe' = 'knife'
   /** 白天会去修门的人 */
   handy = false
   /** 用哪个模型（住进来的人存档要用） */
@@ -240,6 +242,11 @@ export class Household {
   /** 已经来过的访客（id → 哪天） */
   seen: Record<string, number> = {}
   helpedNeighbor = false
+  /** 男主好感（江野是青梅竹马，一开始就有 40） */
+  affection: Record<string, number> = { jiangye: 40 }
+  warnedJiangye = false
+  /** 这次江野来送的是哪一样（0 罐头 / 1 斧子 / 2 焊铁门） */
+  careVariant = 0
   /** 拒绝了黑鸦：今晚他们来抢 */
   raidTonight = false
   /** 陌生人透露的线索：下次去那里搜刮翻倍 */
@@ -322,6 +329,7 @@ export class Household {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
+      affection: this.affection, warnedJiangye: this.warnedJiangye,
     }
   }
 
@@ -354,6 +362,7 @@ export class Household {
     if (this.visitor || !this.spawnVisitor) return
     const east = this.rand() < 0.5
     const at = { x: east ? 30 : -20, z: 18 }
+    if (def.id === 'jiangye_care') this.careVariant = Math.floor(this.rand() * 3)
     const v = this.spawnVisitor(def, at)
     v.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4 + (this.rand() - 0.5) * 0.6, z: 14.1, floor: 0 }) ?? [])
     this.visitor = v
@@ -477,6 +486,24 @@ export class Household {
     } else if (def.id === 'crow_tax') {
       if (choice === 'pay') food(-3)
       else this.raidTonight = true
+    } else if (def.id === 'jiangye_meet') {
+      const love = (n: number) => { this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + n) }
+      if (choice === 'warn') { love(15); this.warnedJiangye = true; this.ammo.n += 6 }
+      else if (choice === 'weld') {
+        love(6)
+        this.gateBonus = Math.min(120, this.gateBonus + 40)
+        this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 40)
+      } else { love(10); all(8) }
+    } else if (def.id === 'jiangye_care') {
+      this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + 5)
+      if (this.careVariant === 0) this.stock = { ...this.stock, food: this.stock.food + 4 }
+      else if (this.careVariant === 1) this.actors[0].sidearm = 'axe'
+      else this.barriers.gate = this.maxOf('gate')
+      this.note(`world.visit.jiangye_care.log${this.careVariant}`)
+      this.talking = null
+      v.phase = 'leave'
+      v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+      return
     }
     this.note(`world.visit.${def.id}.log.${choice}`)
     this.talking = null

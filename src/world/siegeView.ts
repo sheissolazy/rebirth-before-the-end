@@ -126,10 +126,11 @@ export class SiegeView {
     const loader = new GLTFLoader()
     const [gl, npcs] = await Promise.all([
       Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`))),
-      Promise.all(['neighbor', 'stranger'].map(loadPerson)),
+      Promise.all(['neighbor', 'stranger', 'jiangye'].map(loadPerson)),
     ])
     this.npcs.set('neighbor', npcs[0])
     this.npcs.set('stranger', npcs[1])
+    this.npcs.set('jiangye', npcs[2])
     this.templates = gl.map((g) => {
       g.scene.traverse((o) => {
         const m = o as THREE.Mesh

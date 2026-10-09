@@ -52,6 +52,7 @@ const WEAPONS = {
   pin: { range: 0, cool: 1.05, dmg: 11 },
   knife: { range: 0, cool: 0.85, dmg: 12 },
   machete: { range: 0, cool: 0.8, dmg: 15 },
+  axe: { range: 0, cool: 0.9, dmg: 18 },
 }
 const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 1.15 }
 
@@ -401,7 +402,7 @@ export class Siege {
     if (this.downed.has(a)) { a.pose = 'down'; return }
     const layer = this.current
     // 武器跟着人：女主霰弹枪（没子弹就换菜刀），爸爸撬棍，妈妈擀面杖，住进来的人拿砍刀
-    const weapon = a.weapon === 'shotgun' ? (this.o.ammo.n > 0 ? 'shotgun' : 'knife') : a.weapon
+    const weapon = a.weapon === 'shotgun' ? (this.o.ammo.n > 0 ? 'shotgun' : a.sidearm) : a.weapon
     const slot = this.post(a)
     // 回到这一层的站位（最后一层没了就原地打）
     if (layer) {

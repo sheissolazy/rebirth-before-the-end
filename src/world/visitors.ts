@@ -6,8 +6,8 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax'
-export type VisitorModel = 'neighbor' | 'stranger'
+export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care'
+export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye'
 
 export interface VisitorCtx {
   day: number
@@ -22,6 +22,10 @@ export interface VisitorCtx {
   helpedNeighbor: boolean
   /** 家里现在住几个人（最多 5） */
   residents: number
+  /** 男主好感（id → 0~100） */
+  affection: Record<string, number>
+  /** 跟江野说过末日的事 */
+  warnedJiangye: boolean
 }
 
 export interface VisitorDef {
@@ -51,6 +55,18 @@ export const VISITORS: VisitorDef[] = [
     id: 'beggar', model: 'stranger', icon: '🧔', chance: 0.12,
     when: (c) => !c.prologue && daytime(c) && (c.seen.beggar === undefined || c.day - c.seen.beggar >= 3),
     choices: [{ id: 'give', need: (c) => c.food >= 1 }, { id: 'invite', need: (c) => c.residents < 5 }, { id: 'refuse' }],
+  },
+  // 男主：江野（青梅竹马、佣兵团长）。序章就能遇到，他无条件信你
+  {
+    id: 'jiangye_meet', model: 'jiangye', icon: '🔥', chance: 0.3,
+    when: (c) => c.prologue && daytime(c) && c.seen.jiangye_meet === undefined,
+    choices: [{ id: 'warn' }, { id: 'weld' }, { id: 'tea' }],
+  },
+  {
+    id: 'jiangye_care', model: 'jiangye', icon: '🔥', chance: 0.25,
+    when: (c) => !c.prologue && daytime(c) && (c.warnedJiangye || (c.affection.jiangye ?? 0) >= 55)
+      && (c.seen.jiangye_care === undefined || c.day - c.seen.jiangye_care >= 3),
+    choices: [{ id: 'thanks' }],
   },
   {
     id: 'crow_tax', model: 'stranger', icon: '🐦‍⬛', chance: 0.25,

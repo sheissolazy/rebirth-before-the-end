@@ -4,7 +4,11 @@ import { memoriesYear1 } from '../content/memories'
 import { DAYS_PER_MONTH, PROLOGUE_DAYS, SUNSET, calendarLabel } from './life'
 import type { LogEntry } from './residents'
 
-export function DiaryPanel({ day, hour, log, onClose }: { day: number; hour: number; log: LogEntry[]; onClose: () => void }) {
+export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean }
+
+export function DiaryPanel({ day, hour, log, people, onClose }: {
+  day: number; hour: number; log: LogEntry[]; people: DiaryPerson[]; onClose: () => void
+}) {
   const after = day - PROLOGUE_DAYS
   const month = after >= 0 ? Math.floor(after / DAYS_PER_MONTH) + 1 : 0
   // 离"末日"或者"本月危机夜"还有多久（按游戏小时算）
@@ -49,6 +53,22 @@ export function DiaryPanel({ day, hour, log, onClose }: { day: number; hour: num
               )
             })}
           </ol>
+
+          {people.some((p) => p.met) && (
+            <>
+              <div className="mt-5 text-sm font-semibold text-red-900">{t('world.diary.people')}</div>
+              <ul className="mt-1 space-y-1">
+                {people.filter((p) => p.met).map((p) => (
+                  <li key={p.name} className="flex items-center gap-2 text-sm">
+                    <span className="text-lg">{p.icon}</span>
+                    <span className="font-semibold">{p.name}</span>
+                    <span className="text-xs text-zinc-500">{p.title}</span>
+                    <span className="ml-auto text-xs text-red-700">{'❤'.repeat(Math.max(1, Math.round(p.affection / 20)))} {Math.round(p.affection)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           <div className="mt-5 text-sm font-semibold text-red-900">{t('world.diary.now')}</div>
           {log.length === 0 && <div className="mt-1 text-sm text-zinc-500">{t('world.diary.empty')}</div>}

@@ -54,6 +54,12 @@ PEOPLE = {
         skin='young_asian_male', hair='short01', eyebrows='eyebrow011', eyelashes='eyelashes02',
         clothes=['male_casualsuit03', 'shoes06'],
     ),
+    # 江野：青梅竹马、佣兵团长，高个子、结实，短发，夹克
+    'jiangye': dict(
+        macro=dict(gender=1.0, age=0.5, muscle=0.72, weight=0.5, height=0.7, proportions=0.6, cupsize=0.5, firmness=0.6),
+        skin='young_asian_male', hair='short03', eyebrows='eyebrow007', eyelashes='eyelashes03',
+        clothes=['male_casualsuit06', 'shoes01'],
+    ),
 }
 
 

@@ -46,6 +46,9 @@ export interface WorldSave {
   space?: Stock
   spaceCap?: number
   molotovs?: number
+  affection?: Record<string, number>
+  warnedJiangye?: boolean
+  heroAxe?: boolean
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -74,6 +77,9 @@ export function snapshot(life: Household): WorldSave {
     space: { ...life.space },
     spaceCap: life.spaceCap,
     molotovs: life.molotovs,
+    affection: { ...life.affection },
+    warnedJiangye: life.warnedJiangye,
+    heroAxe: life.actors[0]?.sidearm === 'axe',
   }
 }
 
@@ -96,6 +102,9 @@ export function restore(life: Household, s: WorldSave): void {
   life.space = { ...(s.space ?? { food: 0, water: 0 }) }
   life.spaceCap = s.spaceCap ?? 6
   life.molotovs = s.molotovs ?? 2
+  life.affection = { jiangye: 40, ...(s.affection ?? {}) }
+  life.warnedJiangye = !!s.warnedJiangye
+  if (s.heroAxe && life.actors[0]) life.actors[0].sidearm = 'axe'
   for (const as of s.actors) {
     let a = life.actors.find((x) => x.name === as.name)
     // 后来住进来的人：重新请进门
