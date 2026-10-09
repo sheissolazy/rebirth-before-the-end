@@ -276,6 +276,7 @@ export const zh = {
   'world.away': '出门在外 · {where} · 还有 {h} 小时',
   'world.sound': '声音开关（点一下画面后才会出声）',
   'world.music': '背景音乐开关',
+  'world.helpAgain': '再看一遍玩法说明',
   'world.debug.night': '⏭ 跳到末日第一晚',
   'world.debug.crisis': '☠ 跳到月底危机夜',
   'world.style': '画风：{name}（点我切换）',

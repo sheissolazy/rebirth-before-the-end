@@ -74,7 +74,7 @@ export default function WorldView() {
   const closeWelcome = (night: boolean) => {
     try { localStorage.setItem(WELCOME_KEY, '1') } catch { /* 隐私模式 */ }
     welcomeOpen.current = false
-    world.current?.setSpeed(1)
+    world.current?.setSpeed(resume.current || 1)
     setWelcome(false)
     if (night) world.current?.debugNight(false)
   }
@@ -255,6 +255,8 @@ export default function WorldView() {
           className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
           {hud.muted ? '🔇' : '🔊'}
         </button>
+        <button onClick={() => { const w = world.current; if (w && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) } welcomeOpen.current = true; setWelcome(true) }} title={t('world.helpAgain')}
+          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
           className={`rounded-full bg-white/90 px-2.5 py-1 text-xs shadow ${hud.music ? '' : 'opacity-40'}`}>
           🎵
