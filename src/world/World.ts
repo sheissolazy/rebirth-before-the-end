@@ -8,6 +8,7 @@ import {
   fenceSegments, isHome, type Floor, type Placement,
 } from './layout'
 import { buildNav, type NavGrid, type Pt } from './nav'
+import { PoseDriver, loadPerson, type PoseState } from './people'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
@@ -40,7 +41,9 @@ class Actor {
   readonly name: string
   readonly root: THREE.Group
   path: Pt[] = []
+  pose: PoseState = 'idle'
   private walkT = 0
+  private driver: PoseDriver | null = null
 
   constructor(name: string, shirt: string, hair: string, height: number, at: Pt) {
     this.name = name
@@ -80,7 +83,20 @@ class Actor {
     this.root.rotation.y += diff * Math.min(1, dt * 12)
   }
 
+  /** 换成真人模型（世外桃源画风） */
+  setModel(model: THREE.Object3D): void {
+    for (const c of [...this.root.children]) this.root.remove(c)
+    this.root.scale.setScalar(1)
+    this.root.add(model)
+    this.root.userData.body = null
+    this.driver = new PoseDriver(model)
+  }
+
   animate(dt: number, walking: boolean): void {
+    if (this.driver) {
+      this.driver.update(dt, walking ? 'walk' : this.pose)
+      return
+    }
     const body = this.root.userData.body as THREE.Object3D
     this.walkT = walking ? this.walkT + dt * 11 : 0
     body.position.y = 0.55 + (walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0)
@@ -226,9 +242,10 @@ export class World {
 
   private async loadVilla(): Promise<void> {
     try {
-      const [gltf, paradise] = await Promise.all([
+      const [gltf, paradise, people] = await Promise.all([
         new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
         this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
+        this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map(loadPerson)) : Promise.resolve(null),
       ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
@@ -238,6 +255,7 @@ export class World {
       }
       this.assembleVilla(kit)
       if (paradise) this.applyParadise(paradise)
+      if (people) people.forEach((m, k) => this.actors[k].setModel(m))
       this.setHud({ loading: false })
     } catch (e) {
       this.setHud({ loading: false, error: `模型加载失败：${String(e)}` })
