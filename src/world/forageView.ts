@@ -207,6 +207,32 @@ function stubs(kind: ForageKind, r: () => number): THREE.Group {
   return g
 }
 
+/** 把一棵植物里的小零件按材质合成几个大网格（每棵从几十次绘制降到两三次） */
+function flatten(g: THREE.Group): THREE.Group {
+  g.updateMatrixWorld(true)
+  const inv = new THREE.Matrix4().copy(g.matrixWorld).invert()
+  const buckets = new Map<THREE.Material, THREE.BufferGeometry[]>()
+  g.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    const geo = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld))
+    for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k)
+    const mat = m.material as THREE.Material
+    const list = buckets.get(mat) ?? []
+    list.push(geo)
+    buckets.set(mat, list)
+  })
+  const out = new THREE.Group()
+  for (const [mat, list] of buckets) {
+    const merged = mergeGeometries(list)
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = true
+    out.add(mesh)
+  }
+  return out
+}
+
 interface Item { spot: ForageSpot; full: THREE.Group; empty: THREE.Group; glint: THREE.Mesh; hit: THREE.Mesh; ripe: boolean }
 
 export class ForageView {
@@ -222,8 +248,8 @@ export class ForageView {
       holder.rotation.y = r() * Math.PI * 2
       // 游戏镜头很高：小东西放大一点才看得清（树不用）
       if (s.kind !== 'honey' && s.kind !== 'bamboo') holder.scale.setScalar(1.4)
-      const full = plant(s.kind, r)
-      const empty = stubs(s.kind, seeded(Math.round(s.at.x * 17 + s.at.z * 3 + 999)))
+      const full = flatten(plant(s.kind, r))
+      const empty = flatten(stubs(s.kind, seeded(Math.round(s.at.x * 17 + s.at.z * 3 + 999))))
       const glint = new THREE.Mesh(G.glint, M.glint)
       glint.position.y = s.kind === 'honey' ? 2.35 : 0.75
       const hit = new THREE.Mesh(G.hit, M.hit)
