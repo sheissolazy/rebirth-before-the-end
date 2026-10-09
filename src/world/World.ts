@@ -151,7 +151,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -1400,6 +1400,8 @@ export class World {
         for (let i = this.life.log.length - 1; i >= 0 && this.life.log[i] !== this.lastLog && fresh.length < 12; i--) fresh.push(this.life.log[i])
         if (fresh.some((l) => l.key.startsWith('world.log.died.'))) { this.toast('world.toast.died', 5); this.sound.eerie() }
         else if (fresh.some((l) => l.key === 'world.log.dying')) this.toast('world.toast.dying', 5)
+        else if (fresh.some((l) => l.key === 'world.visit.jiangye_care.log.stay')) this.toast('world.toast.moveIn', 5, { who: '江野' })
+        else if (fresh.some((l) => l.key === 'world.visit.shenyan_meet.log.stay')) this.toast('world.toast.moveIn', 5, { who: '沈砚' })
       }
       this.lastLog = last
     }
