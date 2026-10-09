@@ -389,11 +389,12 @@ export class PoseDriver {
         this.rot('LeftForeArm', SIDE, -0.8)
         this.rot('RightForeArm', SIDE, -0.8)
       } else {
+        // 手臂自然下垂、小幅前后甩（以前甩得太高、小臂弯得太多，看着像一直举着手）
         const a = Math.sin(this.t - 0.25)
-        this.rotMany('LeftArm', [[SIDE, a * 0.42 * amp], [FWD, 0.07]], leftDown)
-        this.rotMany('RightArm', [[SIDE, -a * 0.42 * amp], [FWD, -0.07]], rightDown)
-        this.rot('LeftForeArm', SIDE, -0.25 - Math.max(0, -a) * 0.4)
-        this.rot('RightForeArm', SIDE, -0.25 - Math.max(0, a) * 0.4)
+        this.rotMany('LeftArm', [[SIDE, a * 0.28 * amp], [FWD, 0.05]], leftDown)
+        this.rotMany('RightArm', [[SIDE, -a * 0.28 * amp], [FWD, -0.05]], rightDown)
+        this.rot('LeftForeArm', SIDE, -0.12 - Math.max(0, -a) * 0.22)
+        this.rot('RightForeArm', SIDE, -0.12 - Math.max(0, a) * 0.22)
       }
       this.model.position.y = Math.abs(c) * (carry ? 0.02 : 0.028)
       this.model.position.x = -Math.cos(p) * 0.016
