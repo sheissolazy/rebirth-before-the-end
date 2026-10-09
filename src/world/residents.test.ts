@@ -1253,3 +1253,11 @@ describe('第五轮审查（回归测试）', () => {
     expect(b.actors.find((a) => a.name === '沈砚')?.weapon).toBe('pin')
   })
 })
+
+describe('闲着的时候找点事', () => {
+  it('一天里有人会凑到家人身边说话、有人会收拾屋子（不再原地发呆）', () => {
+    const { stats } = simulate('paradise', 1.5)
+    const kinds = new Set(stats.flatMap((s) => [...s.kinds]))
+    expect(kinds.has('company') || kinds.has('tidy')).toBe(true)
+  })
+})

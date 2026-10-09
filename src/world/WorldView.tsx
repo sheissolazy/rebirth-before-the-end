@@ -379,6 +379,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
+          <button onClick={() => world.current?.togglePeople()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.people')}</button>
           <button onClick={() => world.current?.toggleHard()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>
           <button onClick={() => world.current?.debugDie()} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.die')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>

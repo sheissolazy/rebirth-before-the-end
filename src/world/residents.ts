@@ -25,6 +25,7 @@ import { lt, t, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
+  | 'company' | 'tidy'
 
 interface Task {
   kind: TaskKind
@@ -36,6 +37,8 @@ interface Task {
   then?: () => Task | null
   /** 修哪一层防线 */
   layer?: LayerId
+  /** 陪谁说话 */
+  with?: Actor
 }
 
 
@@ -888,7 +891,7 @@ export class Household {
 
   /** 一起坐着歇、一起吃饭的人会聊起来：心情慢慢变好 */
   private chatTick(hours: number): void {
-    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat') && !a.away
+    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company') && !a.away
     for (const a of this.actors) {
       a.chatting = social(a) && this.actors.some((b) => b !== a && social(b) && b.floor === a.floor
         && Math.hypot(b.root.position.x - a.root.position.x, b.root.position.z - a.root.position.z) < 2.4)
@@ -1529,6 +1532,9 @@ export class Household {
     if (t.kind === 'sit') return 'relax'
     if (t.kind === 'walk' || t.kind === 'guard') return 'idle'
     if (t.kind === 'repair' || t.kind === 'garden') return 'cook'
+    // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
+    if (t.kind === 'company') return 'relax'
+    if (t.kind === 'tidy') return 'idle'
     return t.kind
   }
 
@@ -1561,6 +1567,14 @@ export class Household {
     if (handy) task = this.repairTask()
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
     if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
+    // 闲着的时候找点事：凑到家人身边说说话，或者收拾收拾屋子（不再一个人原地发呆）
+    // （晚上 9 点以后、累了就不折腾了，该准备睡觉）
+    const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
+    if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
+      const r = this.rand()
+      if (r < 0.5) task = this.companyTask(a)
+      if (!task && r < 0.85) task = this.tidyTask(a)
+    }
     if (task) { /* 修门 / 种地 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
     else if (want === 'eat') task = this.eatTask(a)
@@ -1569,6 +1583,33 @@ export class Household {
     } else if (want === 'stroll') task = this.spotTask(a, this.pick(this.freeSpots('stroll')), 'stroll', 0.5 + this.rand() * 0.5)
     if (!task) task = { kind: 'idle', spot: null, phase: 'use', hours: 0.25 + this.rand() * 0.4, manual: false }
     this.assign(a, task)
+  }
+
+  /** 凑到一个正在歇着 / 吃饭 / 干活的家人身边，面对面说说话 */
+  private companyTask(a: Actor): Task | null {
+    const busy = (b: Actor) => !!b.task && b.task.phase === 'use' && ['relax', 'sit', 'eat', 'cook', 'garden', 'repair', 'tidy'].includes(b.task.kind)
+    const pool = this.actors.filter((b) => b !== a && !b.away && !b.lost && !b.dead && !b.runaway && !this.onTrip(b)
+      && (busy(b) || (b === this.actors[0] && !b.path.length && this.isHomeBody(b))))
+    const b = pool[Math.floor(this.rand() * pool.length)]
+    if (!b) return null
+    let dx = a.pos.x - b.pos.x
+    let dz = a.pos.z - b.pos.z
+    const len = Math.hypot(dx, dz)
+    if (len < 0.2) { dx = Math.sin(b.root.rotation.y); dz = Math.cos(b.root.rotation.y) } else { dx /= len; dz /= len }
+    const x = b.pos.x + dx * 0.95
+    const z = b.pos.z + dz * 0.95
+    const face = THREE.MathUtils.radToDeg(Math.atan2(b.pos.x - x, b.pos.z - z))
+    const spot: Spot = { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
+    return { kind: 'company', spot, phase: 'go', hours: 0.4 + this.rand() * 0.5, manual: false, with: b }
+  }
+
+  /** 收拾屋子：在屋里随便找个地方擦擦、扫扫 */
+  private tidyTask(a: Actor): Task | null {
+    const x = HOUSE.x0 + 0.8 + this.rand() * (HOUSE.x1 - HOUSE.x0 - 1.6)
+    const z = HOUSE.z0 + 0.8 + this.rand() * (HOUSE.z1 - HOUSE.z0 - 1.6)
+    const floor = this.rand() < 0.7 ? a.floor : (a.floor === 0 ? 1 : 0)
+    const spot: Spot = { kind: 'stroll', x, z, floor: floor as Spot['floor'], face: this.rand() * 360, pose: 'work' }
+    return { kind: 'tidy', spot, phase: 'go', hours: 0.25 + this.rand() * 0.35, manual: false }
   }
 
   private spotTask(a: Actor, spot: Spot | undefined, kind: TaskKind, hours: number, manual = false): Task | null {
@@ -1650,6 +1691,8 @@ export class Household {
       return
     }
     t.hours -= hours
+    // 陪聊：一直面朝对方
+    if (t.kind === 'company' && t.with) a.face(t.with.pos.x - a.pos.x, t.with.pos.z - a.pos.z, 0.05)
     if (t.kind === 'repair' && t.layer) {
       const max = this.maxOf(t.layer)
       this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
@@ -1663,8 +1706,13 @@ export class Household {
     if (t.kind === 'sleep' && !t.spot) return n.energy >= 40
     if (t.kind === 'sleep') return (t.hours <= 0 && shouldWake(n, this.clock)) || n.hunger < 6 || n.thirst < 6
     if (t.hours <= 0) return true
-    // 放松、溜达、发呆时，饿了渴了困了就不干了
-    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle')) {
+    // 陪着说话的人走开了（或者不歇了），就散了
+    if (t.kind === 'company' && t.with) {
+      const b = t.with
+      if (b.away || b.dead || b.floor !== a.floor || Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) > 2.2) return true
+    }
+    // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
+    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy')) {
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false

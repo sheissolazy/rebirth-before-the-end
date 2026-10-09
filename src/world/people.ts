@@ -89,6 +89,21 @@ function restyle(mat: THREE.MeshStandardMaterial, o: Outfit): void {
   tex.needsUpdate = true
 }
 
+/** 一家人用哪套模型：'real' = MakeHuman 真人，'toon' = Blender 捏的 Q 版（?people=toon 或者调试菜单切换） */
+export function peopleStyle(): 'real' | 'toon' {
+  try {
+    const q = new URLSearchParams(location.search).get('people')
+    if (q === 'toon' || q === 'real') return q
+    const v = localStorage.getItem('rbte-proto-people')
+    if (v === 'toon' || v === 'real') return v
+  } catch { /* 默认 */ }
+  return 'real'
+}
+
+export function setPeopleStyle(v: 'real' | 'toon'): void {
+  try { localStorage.setItem('rbte-proto-people', v) } catch { /* 没关系 */ }
+}
+
 export async function loadPerson(name: string): Promise<THREE.Object3D> {
   const g = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/people/${name}.glb`)
   g.scene.traverse((o) => {
@@ -116,7 +131,7 @@ export async function loadPerson(name: string): Promise<THREE.Object3D> {
   return g.scene
 }
 
-interface Joint { bone: THREE.Bone; rest: THREE.Quaternion; worldRest: THREE.Quaternion }
+interface Joint { bone: THREE.Bone; rest: THREE.Quaternion; worldRest: THREE.Quaternion; prev?: THREE.Quaternion }
 
 /** 按名字找骨骼（three.js 会把 "mixamorig:LeftUpLeg" 变成 "mixamorigLeftUpLeg"） */
 function findBone(root: THREE.Object3D, suffix: string): THREE.Bone | null {
@@ -158,7 +173,17 @@ export class PoseDriver {
     }
     const box = new THREE.Box3().setFromObject(model)
     this.height = box.max.y - box.min.y
+    // 大腿长度：Q 版人物腿短，坐下时身体往下放的距离要跟着缩短（以 MakeHuman 真人约 0.37 米为准）
+    const up = this.joints.get('LeftUpLeg')
+    const knee = this.joints.get('LeftLeg')
+    if (up && knee) {
+      const thigh = up.bone.getWorldPosition(new THREE.Vector3()).distanceTo(knee.bone.getWorldPosition(new THREE.Vector3()))
+      this.legK = THREE.MathUtils.clamp(thigh / 0.37, 0.6, 1.2)
+    }
   }
+
+  /** 腿长相对真人的比例（坐下时用） */
+  private legK = 1
 
   /** 把武器之类的东西挂到骨骼上（抵消骨骼链上的缩放） */
   attach(obj: THREE.Object3D, boneSuffix: string): boolean {
@@ -207,7 +232,48 @@ export class PoseDriver {
     this.kick = 0.18
   }
 
+  /** 头想转向哪边（弧度，正 = 往角色右手边看）；外面每帧设，这里平滑地跟过去 */
+  lookYaw = 0
+  private lookCur = 0
+  private lastState: PoseState | null = null
+  private prevY = 0
+  private prevRX = 0
+
   update(dt: number, state: PoseState, speed = 1): void {
+    this.pose(dt, state, speed)
+    // 转头看人：坐着、站着、干活时才转（走路、开枪、躺着不转）
+    const canLook = state === 'idle' || state === 'sit' || state === 'sitEat' || state === 'work' || state === 'drink' || state === 'fish'
+    this.lookCur += ((canLook ? this.lookYaw : 0) - this.lookCur) * Math.min(1, dt * 4)
+    if (Math.abs(this.lookCur) > 0.01) {
+      this.rot('Neck', UP, this.lookCur * 0.35)
+      this.rot('Head', UP, this.lookCur * 0.65)
+    }
+    // 和上一帧之间平滑过渡：换动作（站→坐、走→停）不再一下子跳过去；倒地、死亡要快一点
+    const fast = state === 'down' || state === 'dead' || state === 'shoot'
+    const k = this.lastState === null || dt <= 0 ? 1 : 1 - Math.exp(-dt * (fast ? 22 : 13))
+    for (const j of this.joints.values()) {
+      if (!j.prev) j.prev = j.bone.quaternion.clone()
+      else if (k < 1) j.bone.quaternion.copy(j.prev.slerp(j.bone.quaternion, k))
+      j.prev.copy(j.bone.quaternion)
+    }
+    if (this.lastState !== null && k < 1 && this.lastState !== state) {
+      // 位置（坐下的下沉、躺下的抬高）只在换动作的那一小段过渡
+      this.blendT = 0.25
+    }
+    if (this.blendT > 0 && dt > 0) {
+      this.blendT -= dt
+      const kk = 1 - Math.exp(-dt * 10)
+      this.model.position.y = this.prevY + (this.model.position.y - this.prevY) * kk
+      this.model.rotation.x = this.prevRX + (this.model.rotation.x - this.prevRX) * kk
+    }
+    this.prevY = this.model.position.y
+    this.prevRX = this.model.rotation.x
+    this.lastState = state
+  }
+
+  private blendT = 0
+
+  private pose(dt: number, state: PoseState, speed = 1): void {
     const rate = state === 'walk' || state === 'carry' ? 7.5 * speed : state === 'zwalk' ? 4.2 : state === 'zattack' ? 7 : state === 'melee' ? 6.5 : 1.6
     this.t += dt * rate
     this.kick = Math.max(0, this.kick - dt)
@@ -245,7 +311,7 @@ export class PoseDriver {
       this.rot('RightForeArm', SIDE, -1.0 - lift * 1.0)
       this.rotMany('Spine', [[SIDE, 0.12 - lift * 0.05]])
       this.rot('Head', SIDE, 0.12 - lift * 0.1)
-      this.model.position.y = -0.42
+      this.model.position.y = -0.42 * this.legK
     } else if (state === 'fish') {
       // 钓鱼：两手往前握着竿，偶尔轻轻抖一下
       const twitch = Math.sin(this.t * 0.7) > 0.95 ? Math.sin(this.t * 9) * 0.06 : 0
@@ -285,7 +351,7 @@ export class PoseDriver {
       this.rot('LeftForeArm', SIDE, -0.9)
       this.rot('RightForeArm', SIDE, -0.9)
       this.rot('Spine', SIDE, Math.sin(this.t) * 0.015)
-      this.model.position.y = -0.42
+      this.model.position.y = -0.42 * this.legK
     } else if (state === 'sleep') {
       this.rot('LeftArm', SIDE, 0, leftDown)
       this.rot('RightArm', SIDE, 0, rightDown)

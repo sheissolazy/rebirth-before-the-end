@@ -8,7 +8,7 @@ import {
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
-import { PoseDriver as PoseDriverFor, loadPerson } from './people'
+import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
@@ -532,7 +532,7 @@ export class World {
       const [gltf, paradise, people] = await Promise.all([
         new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/villa_kit.glb`),
         this.style === 'paradise' ? loadParadiseKit(this.renderer) : Promise.resolve(null),
-        this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map(loadPerson)) : Promise.resolve(null),
+        this.style === 'paradise' ? Promise.all(['heroine', 'mom', 'dad'].map((n) => loadPerson(peopleStyle() === 'toon' ? `${n}_toon` : n))) : Promise.resolve(null),
       ])
       if (this.disposed) return
       const kit = new Map<string, THREE.Object3D>()
@@ -604,6 +604,40 @@ export class World {
     this.gardenObj.add(this.ripeMark)
     this.gardenObj.visible = false
     this.scene.add(this.gardenObj)
+  }
+
+  /** 人会看人：门外有人走过来就看过去，不然看身边最近的家人（3 米内、同一层） */
+  private updateLooks(): void {
+    const others: { x: number; z: number; floor: number; far: boolean }[] = []
+    const v = this.life.visitor
+    if (v) others.push({ x: v.pos.x, z: v.pos.z, floor: 0, far: true })
+    const c = this.life.courier
+    if (c) others.push({ x: c.pos.x, z: c.pos.z, floor: 0, far: true })
+    for (const a of this.actors) {
+      const d = a.driver
+      if (!d) continue
+      let best: { x: number; z: number } | null = null
+      let bd = Infinity
+      for (const o of others) {
+        const dist = Math.hypot(o.x - a.pos.x, o.z - a.pos.z)
+        if (o.floor === a.floor && dist < 14 && dist < bd) { bd = dist; best = o }
+      }
+      if (!best) {
+        for (const b of this.actors) {
+          if (b === a || b.away || b.floor !== a.floor) continue
+          const dist = Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z)
+          if (dist < 3.2 && dist < bd) { bd = dist; best = b.pos }
+        }
+      }
+      let yaw = 0
+      if (best) {
+        yaw = Math.atan2(best.x - a.pos.x, best.z - a.pos.z) - a.root.rotation.y
+        yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw))
+        // 在身后的就不硬转头了
+        yaw = Math.abs(yaw) > 1.9 ? 0 : THREE.MathUtils.clamp(yaw, -1.1, 1.1)
+      }
+      d.lookYaw = yaw
+    }
   }
 
   /** 一座小坟：土堆 + 石碑 */
@@ -1439,6 +1473,7 @@ export class World {
     const rainNow = this.life.rain
     this.rain.update(Math.min(sim, 0.1), this.pose.target, rainNow)
     this.sound.ambience(this.nightness, !fighting, rainNow)
+    this.updateLooks()
     for (const a of this.actors) {
       let walking = a === this.heroine && this.keysMoving
       let gliding = false
@@ -1785,6 +1820,13 @@ export class World {
   answerVisitor(choice: string): void {
     this.life.answerVisitor(choice)
     this.pushLifeHud()
+  }
+
+  /** 原型调试：一家人换成 Q 版 / 真人（重新加载页面） */
+  togglePeople(): void {
+    setPeopleStyle(peopleStyle() === 'toon' ? 'real' : 'toon')
+    saveWorld(this.life)
+    location.reload()
   }
 
   /** 原型调试：普通 / 困难切换（切到困难时子弹减半） */
