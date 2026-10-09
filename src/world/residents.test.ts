@@ -374,6 +374,28 @@ describe('出门', () => {
     expect(hurt(true)).toBeLessThan(hurt(false) * 0.55)
   })
 
+  it('末日后白天开过车：发动机的动静当晚多引来一只丧尸', () => {
+    const { life } = simulate('paradise', 0)
+    // 找一个普通的丧尸夜（不是月底危机夜）
+    let day = PROLOGUE_DAYS + 1
+    while (Household.crisisKind({ day, hour: 21 }) || Household.nightCount({ day, hour: 21 }).count === 0) day++
+    const base = Household.nightCount({ day, hour: 21 }).count
+    life.spawnZombie = (at) => new Zombie(at)
+    let tonight = 0
+    life.onSiege = (e) => { if (e.kind === 'start') tonight = e.count }
+    life.clock = { day, hour: 9 }
+    life.speed = 3
+    life.startTrip('river', [life.actors[2]], true)
+    const dt = 0.1
+    for (let i = 0; i < (12.3 * DAY_SECONDS) / 24 / (dt * life.speed) && !life.siege; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+    expect(life.siege).toBeTruthy()
+    expect(tonight).toBe(base + 1)
+    expect(life.log.some((l) => l.key === 'world.log.vanNoise')).toBe(true)
+  })
+
   it('没油、车不在家、去上班都不能开车；加油站末日前花钱买油，末日后不要钱', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 0, hour: 8 }

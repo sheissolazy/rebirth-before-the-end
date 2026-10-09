@@ -46,6 +46,17 @@ describe('大橘', () => {
     expect(cat.floor).toBe(1)
   })
 
+  it('丧尸快来了：先弓背哈气，再躲到二楼', () => {
+    const cat = dummyCat()
+    const c = { ...ctx(20.5), danger: true }
+    cat.update(0.1, c)
+    expect(cat.hiss).toBeGreaterThan(2)
+    expect(cat.pose).toBe('stand')
+    for (let i = 0; i < 1500; i++) cat.update(0.1, c)
+    expect(cat.plan).toBe('hide')
+    expect(cat.floor).toBe(1)
+  })
+
   it('点一下：停下来坐着，冒心形泡泡', () => {
     const cat = dummyCat()
     cat.poke()

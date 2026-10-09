@@ -393,6 +393,13 @@ export class Sound {
     }
   }
 
+  /** 猫哈气：一口高频噪声 */
+  hiss(vol = 1): void {
+    const ctx = this.ready
+    if (!ctx) return
+    this.noiseBurst(ctx.currentTime, 'highpass', 3200, 0.7, 0.16 * vol, 0.55)
+  }
+
   /** 铁门吱呀一声：窄带噪声慢慢往上滑 */
   creak(vol = 1): void {
     const ctx = this.ready

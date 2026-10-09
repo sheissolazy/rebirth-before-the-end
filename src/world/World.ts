@@ -216,7 +216,9 @@ export class World {
   private van = new VanView(buildVan())
   /** 外婆家的橘猫大橘（模型加载好以后才有） */
   private cat: Cat | null = null
-  private catHeart = new THREE.Sprite(bubbleMaterial('💕'))
+  private catLove = bubbleMaterial('💕')
+  private catAngry = bubbleMaterial('😾')
+  private catHeart = new THREE.Sprite(this.catLove)
   private petT = 20
   private petting: Actor | null = null
   /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
@@ -1645,9 +1647,19 @@ export class World {
     }
     if (this.cat) {
       const cat = this.cat
-      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: this.life.clock.hour, siege: fighting, rain: this.life.rain > 0.1 })
+      // 天黑前半小时，今晚要来丧尸（或者来抢的人）：猫先察觉
+      const ck = this.life.clock
+      const danger = !fighting && ck.day >= PROLOGUE_DAYS && ck.hour >= 20.4 && ck.hour < 21
+        && (Household.nightCount(ck).count > 0 || this.life.raidTonight || !!Household.crisisKind(ck))
+      const hissing = cat.hiss > 0
+      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: ck.hour, siege: fighting, rain: this.life.rain > 0.1, danger })
+      if (!hissing && cat.hiss > 0) {
+        this.sound.hiss()
+        this.life.logNote('world.log.catHiss')
+      }
+      this.catHeart.material = cat.hiss > 0 ? this.catAngry : this.catLove
       cat.root.visible = !(upstairsHidden && cat.root.position.y > FLOOR_H - 0.4)
-      this.catHeart.visible = cat.hearts > 0 && cat.root.visible
+      this.catHeart.visible = (cat.hearts > 0 || cat.hiss > 0) && cat.root.visible
       this.catHeart.position.y = 0.62 + Math.sin(this.elapsed * 3) * 0.03
       // 猫趴着 / 坐着的时候，隔一会儿有个闲着的家里人过去蹲下摸摸它
       this.petT -= sim

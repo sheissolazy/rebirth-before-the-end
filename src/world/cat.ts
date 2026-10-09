@@ -19,6 +19,8 @@ export interface CatCtx {
   siege: boolean
   /** 下着雨：只在屋里待着 */
   rain?: boolean
+  /** 丧尸快来了（天黑前半小时）：猫先察觉，哈气、躲上楼 */
+  danger?: boolean
 }
 
 /** 打盹的地方：客厅沙发前的青色地毯、二楼床中间的地毯、院子长椅边晒太阳 */
@@ -50,6 +52,10 @@ export class Cat extends Walker {
   private repath = 0
   /** 被点了一下：心形泡泡还要冒多久（秒） */
   hearts = 0
+  /** 炸毛哈气：还要多久（秒） */
+  hiss = 0
+  /** 这一晚已经哈过气了 */
+  private warned = false
 
   constructor(model: THREE.Object3D, at: Where) {
     super()
@@ -84,7 +90,7 @@ export class Cat extends Walker {
     const home = c.family.filter((a) => !a.away && !a.dead)
     const night = c.hour >= 22 || c.hour < 6
     this.target = null
-    if (c.siege) {
+    if (c.siege || c.danger) {
       this.plan = 'hide'
       this.left = 30
       if (!this.go(c.navs, HIDE)) this.left = 3
@@ -153,6 +159,15 @@ export class Cat extends Walker {
   update(dt: number, c: CatCtx): boolean {
     this.left -= dt
     this.hearts = Math.max(0, this.hearts - dt)
+    this.hiss = Math.max(0, this.hiss - dt)
+    // 丧尸快来了：先冲院门哈一声，然后躲上楼（跟打丧尸时一样）
+    if (c.danger && !this.warned) {
+      this.warned = true
+      this.hiss = 2.5
+      this.path = []
+      this.left = 0
+    }
+    if (!c.danger && !c.siege) this.warned = false
     // 跟着女主：隔一会儿重新找路，离近了就停下坐着看她
     if (this.plan === 'follow' && this.target) {
       const d = Math.hypot(this.target.pos.x - this.pos.x, this.target.pos.z - this.pos.z)
@@ -171,19 +186,20 @@ export class Cat extends Walker {
     }
     // 打丧尸了：不管在干什么都先躲起来；天黑了回去睡
     const night = c.hour >= 22 || c.hour < 6
-    if (c.siege && this.plan !== 'hide') { this.left = 0; if (this.plan === 'follow') this.path = [] }
-    if (!c.siege && this.plan === 'hide') this.left = Math.min(this.left, 2)
+    if ((c.siege || c.danger) && this.plan !== 'hide' && this.hiss <= 0) { this.left = 0; if (this.plan === 'follow') this.path = [] }
+    if (!c.siege && !c.danger && this.plan === 'hide') this.left = Math.min(this.left, 2)
     if (night && !c.siege && this.plan !== 'bed' && this.plan !== 'poked') this.left = Math.min(this.left, 0.5)
     if (!night && this.plan === 'bed') this.left = Math.min(this.left, 2)
     // 下起雨来还在院子里：先回屋
     if (c.rain && this.floor === 0 && !inRect(HOUSE, this.pos.x, this.pos.z) && this.plan !== 'hide' && !this.path.length) this.left = 0
-    if (this.left <= 0 && !this.path.length) this.decide(c)
+    if (this.left <= 0 && !this.path.length && this.hiss <= 0) this.decide(c)
 
     let walking = false
     const far = this.plan === 'hide' || (this.plan === 'follow' && this.target && Math.hypot(this.target.pos.x - this.pos.x, this.target.pos.z - this.pos.z) > 3)
     for (let left = dt; left > 1e-6; left -= 0.05) walking = this.follow(Math.min(left, 0.05), far ? TROT : WALK) || walking
     // 到了地方摆什么姿势
-    if (walking) this.pose = 'walk'
+    if (this.hiss > 0) this.pose = 'stand'
+    else if (walking) this.pose = 'walk'
     else if (this.plan === 'nap' || this.plan === 'bed' || this.plan === 'cuddle' || this.plan === 'hide') this.pose = 'loaf'
     else if (this.plan === 'follow' || this.plan === 'poked') this.pose = 'sit'
     else this.pose = this.left > 2 ? 'sit' : 'stand'
@@ -229,6 +245,15 @@ export class Cat extends Walker {
     } else {
       want.hy = Math.sin(this.t * 0.5) * 0.45
       want.tail = [[-0.2, wag * 0.3], [0.2, Math.sin(this.t * 1.6 - 0.6) * 0.35], [0.25, Math.sin(this.t * 1.6 - 1.2) * 0.4]]
+    }
+    // 炸毛哈气：弓起背、尾巴竖得笔直、低着头
+    if (this.hiss > 0) {
+      want.by = this.bodyY + 0.035
+      want.bx = -0.1
+      want.legs = [0.12, 0.12, -0.12, -0.12]
+      want.hx = -0.28
+      want.hy = 0
+      want.tail = [[-0.75, 0], [0, 0], [0, 0]]
     }
     // 慢慢过渡过去
     const k = 1 - Math.exp(-dt * 8)

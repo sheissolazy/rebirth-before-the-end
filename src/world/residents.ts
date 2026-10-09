@@ -327,6 +327,8 @@ export class Household {
   vanKit = false
   /** 面包车改装过了：铁栏、防撞杠、钢板 */
   vanArmor = false
+  /** 末日后哪天开过车（发动机的动静会把丧尸引过来，当晚多来一只） */
+  noiseDay = -1
   /** 女主正在街上搜东西 */
   search: { spot: ScavengeSpot; left: number } | null = null
   /** 每个地方哪天搜过 */
@@ -1249,7 +1251,10 @@ export class Household {
       // 都上车了（或者走出街口了）
       for (const a of t.members) a.away = true
       t.phase = 'away'
-      if (t.van) this.vanMove = { dir: 'out', t0: this.absHour }
+      if (t.van) {
+        this.vanMove = { dir: 'out', t0: this.absHour }
+        if (this.clock.day >= PROLOGUE_DAYS) this.noiseDay = this.clock.day
+      }
     } else if (t.phase === 'away' && this.vanMove?.dir === 'out') {
       if (this.absHour >= this.vanMove.t0 + VAN_OUT_H) { this.vanMove = null; this.vanAway = true }
     } else if (t.phase === 'away' && this.absHour >= t.back) {
@@ -1412,8 +1417,10 @@ export class Household {
         this.startSiege(3, false)
       } else if (count > 0) {
         // 顾沉的对讲机提醒过东门有尸群：提前堵好了，少来两只
-        const n = this.fewerTonight ? Math.max(1, count - 2) : count
+        let n = this.fewerTonight ? Math.max(1, count - 2) : count
         this.fewerTonight = false
+        // 白天开车出去过：发动机的动静引来一只
+        if (this.noiseDay === c.day) { n += 1; this.note('world.log.vanNoise') }
         this.startSiege(n, crisis)
       }
     }
