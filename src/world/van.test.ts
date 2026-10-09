@@ -48,13 +48,17 @@ describe('自己开面包车', () => {
     // ① 从车位往前开（往东）：开得出来，不会一起步就撞
     const out = drive({ x: VAN_PARK.x, z: VAN_PARK.z, rot: VAN_PARK.rot, speed: 0 }, 1, 0, 1.2)
     expect(out.x).toBeGreaterThan(VAN_PARK.x + 2)
-    // ② 房子南边的空地上往右打满：能掉个头（转弯半径小，不撞房子、长椅、围栏）
-    let turn: DriveState = { x: 3.2, z: 7.6, rot: Math.PI / 2, speed: 1.5 }
+    // ② 檐廊前的水泥院坝只有 5 米深，一把掉不了头：前进打右、倒车打左，来回几把（三点掉头）能把车头调过来
+    let turn: DriveState = { x: 5.5, z: 10.6, rot: Math.PI / 2, speed: 0 }
     let angle = 0
-    for (let t = 0; t < 4 && Math.abs(angle) < Math.PI; t += 0.05) {
-      const n = driveStep(turn, 0.15, -1, 0.05, blocked)
-      angle += n.rot - turn.rot
-      turn = n
+    for (let k = 0; k < 8 && Math.abs(angle) < Math.PI; k++) {
+      const fwd = k % 2 === 0
+      for (let t = 0; t < 1.6; t += 0.05) {
+        const n = driveStep(turn, fwd ? 0.6 : -0.6, fwd ? -1 : 1, 0.05, blocked)
+        angle += n.rot - turn.rot
+        turn = n
+      }
+      turn = { ...turn, speed: 0 }
     }
     expect(Math.abs(angle)).toBeGreaterThanOrEqual(Math.PI)
     // ③ 在铁门正北面、车头朝南：一路开出铁门到街上

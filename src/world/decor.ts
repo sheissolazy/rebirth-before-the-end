@@ -163,13 +163,24 @@ export function parchmentMap(): THREE.Group {
     g.lineWidth = 6
     g.strokeRect(3, 3, 442, 314)
   })
+  // 立在地上的地图板（两条腿撑着，靠墙放）：屋里的隔墙在家里视角会压低，挂在墙上会悬空
   const g = new THREE.Group()
-  const board = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 1.4), new THREE.MeshStandardMaterial({ color: '#5b3d26', roughness: 0.7 }))
-  board.position.y = 1.5
+  const wood = new THREE.MeshStandardMaterial({ color: '#5b3d26', roughness: 0.7 })
+  const board = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 1.4), wood)
+  board.position.y = 1.25
   const paper = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.92), mat(tex, 0.9))
   paper.rotation.y = Math.PI / 2
-  paper.position.set(0.017, 1.5, 0)
+  paper.position.set(0.017, 1.25, 0)
   g.add(board, paper)
+  for (const z of [-0.6, 0.6]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.75, 0.05), wood)
+    leg.position.set(-0.03, 0.875, z)
+    leg.rotation.z = 0.08
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.06), wood)
+    foot.position.set(0.0, 0.02, z)
+    g.add(leg, foot)
+  }
+  g.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
   return g
 }
 
@@ -215,12 +226,13 @@ export function decorateHouse(scene: THREE.Object3D, upper: THREE.Object3D, tabl
   add(curtains('#e9cfa0'), 0.14, 0, 3.5, Math.PI / 2)
   add(curtains('#d9b7c4'), 0.14, FLOOR_H, -1.5, Math.PI / 2)
   add(curtains('#d9b7c4'), 0.14, FLOOR_H, 3.5, Math.PI / 2)
-  // 墙上的画：堂屋神龛上面一幅中堂、堂屋东墙一幅；爸妈屋里一幅；二楼女主床头一幅、小客厅一幅
-  add(painting(0, 0.62, 0.86), 6.4, 1.72, -0.37, 0)
-  add(painting(2, 0.44, 0.6), 7.87, 1.55, 4.2, -Math.PI / 2)
-  add(painting(1, 0.7, 0.5), 0.13, 1.55, 5.0, Math.PI / 2)
-  add(painting(2, 0.8, 0.55), 0.13, FLOOR_H + 1.5, 2.2, Math.PI / 2)
-  add(painting(0, 0.6, 0.45), 5.0, FLOOR_H + 1.6, 0.63, 0)
+  // 墙上的画
+  // （只挂在北墙、西墙这两面外墙上：屋里的隔墙在家里视角会压低，挂上去会悬空）
+  add(painting(0, 0.5, 0.62), 1.0, 1.65, -2.87, 0) // 厨房灶台上方的挂历
+  add(painting(1, 0.7, 0.5), 0.13, 1.55, 5.0, Math.PI / 2) // 爸妈屋里
+  add(painting(2, 0.8, 0.55), 0.13, FLOOR_H + 1.5, 2.2, Math.PI / 2) // 女主床头
+  add(painting(0, 0.6, 0.45), 2.6, FLOOR_H + 1.6, -2.87, 0) // 客房二
+  add(painting(2, 0.55, 0.7), 9.2, FLOOR_H + 1.55, -2.87, 0) // 客房一
   // 桌上的花
   const v = vase()
   v.position.set(6, tableTop, 2.6)

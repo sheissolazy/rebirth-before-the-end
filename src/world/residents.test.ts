@@ -425,7 +425,8 @@ describe('出门', () => {
     life.startTrip('factory', [hero, mom], true)
     let modded = false
     const dt = 0.1
-    for (let i = 0; i < (9 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+    // 开车去工厂来回 + 爸爸找个空改装（新房子里他白天还要压水、喂鸡），一般 10 个多小时
+    for (let i = 0; i < (14 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
       life.tick(dt, (a) => life.isHomeBody(a))
       for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
       if (dad.task?.kind === 'modvan') modded = true

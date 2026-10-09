@@ -108,7 +108,7 @@ export const FURNITURE: Placement[] = [
   { piece: 'chair', x: 6, z: 3.25, rot: 0, floor: 0 },
   { piece: 'chair', x: 5.12, z: 2.6, rot: -90, floor: 0 },
   { piece: 'chair', x: 6.88, z: 2.6, rot: 90, floor: 0 },
-  { piece: 'wall_map', x: 4.12, z: 4.6, rot: 90, floor: 0 },
+  { piece: 'wall_map', x: 4.6, z: 4.4, rot: 90, floor: 0 },
   // 储藏室：囤的东西一箱一箱码着
   { piece: 'crate', x: 11.4, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35] },
   { piece: 'crate', x: 10.7, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35] },
@@ -138,11 +138,11 @@ export const FURNITURE: Placement[] = [
 
 /** 世外桃源画风里额外摆的 Poly Haven 模型（卡通画风里没有） */
 export const PARADISE_EXTRAS: Placement[] = [
-  // 堂屋：神龛（中式柜子）靠北墙、角落一盆绿植、八仙桌上的吊灯、门边的摇椅
+  // 堂屋：神龛（中式柜子）靠北墙、角落一盆绿植、八仙桌上的吊灯、东北角的摇椅
   { piece: 'chinese_cabinet', x: 6.4, z: -0.05, rot: 0, floor: 0, block: [0.65, 0.32], scale: 0.85 },
   { piece: 'potted_plant_01', x: 7.55, z: 0.1, rot: 0, floor: 0, block: [0.3, 0.3] },
   { piece: 'chinese_chandelier', x: 6, z: 2.6, rot: 0, floor: 0, y: 1.7, scale: 0.8 },
-  { piece: 'Rockingchair_01', x: 4.75, z: 5.0, rot: 135, floor: 0, block: [0.4, 0.45] },
+  { piece: 'Rockingchair_01', x: 7.35, z: 1.1, rot: -120, floor: 0, block: [0.4, 0.45] },
   // 爸妈卧室：床边的小桌
   { piece: 'WoodenTable_01', x: 3.55, z: 5.3, rot: 90, floor: 0, block: [0.63, 0.23], scale: 0.7 },
   // 一楼爸妈的两张床
@@ -261,7 +261,7 @@ export const SPOTS: Spot[] = [
 
 /** 世外桃源画风多出来能坐的地方：堂屋的摇椅、院坝的长椅 */
 export const PARADISE_SPOTS: Spot[] = [
-  { kind: 'relax', x: 4.75, z: 5.0, floor: 0, face: 135, pose: 'sit', y: 0.04, ax: 5.4, az: 4.4 },
+  { kind: 'relax', x: 7.35, z: 1.1, floor: 0, face: -120, pose: 'sit', y: 0.04, ax: 6.25, az: 1.6 },
   { kind: 'relax', x: 10.62, z: 9.6, floor: 0, face: -90, pose: 'sit', ax: 9.85, az: 9.6 },
 ]
 

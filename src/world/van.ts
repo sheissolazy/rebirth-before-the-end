@@ -3,7 +3,7 @@
 // 车怎么动全看游戏时间（Household.van），这里只负责摆姿势，快进、存档读档都不会对不上。
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { GARDEN, HOUSE, PROPS, STREET_LAMPS, VAN_IN_H, VAN_OUT_H, VAN_PARK, WORLD, fenceSegments, type Placement, type Rect, type VanMove } from './layout'
+import { GARDEN, HOUSE, PROPS, STREET_LAMPS, VAN_IN_H, VAN_OUT_H, VAN_PARK, WORLD, fenceSegments, type Placement, type Rect, type VanMove, PORCH, WELL, COOP } from './layout'
 import { CLOTHESLINE } from './decor'
 
 const L = 1.8 // 半车长（车身轮廓 x 从 -L 到 L）
@@ -451,6 +451,10 @@ export function vehicleBlocker(extra: Placement[] = [], gardenBuilt: () => boole
     else add(s.x - 0.08, s.z - 0.5, s.x + 0.08, s.z + 0.5)
   }
   add(HOUSE.x0 - 0.1, HOUSE.z0 - 0.1, HOUSE.x1 + 0.1, HOUSE.z1 + 0.1)
+  // 檐廊（车开不上去）、压水井、鸡圈
+  add(PORCH.x0 - 0.1, PORCH.z0, PORCH.x1 + 0.1, PORCH.z1 + 0.1)
+  add(WELL.x - 0.45, WELL.z - 0.45, WELL.x + 0.45, WELL.z + 0.45)
+  add(COOP.x0 - 0.1, COOP.z0 - 0.1, COOP.x1 + 0.1, COOP.z1 + 0.1)
   for (const p of PROPS) {
     if (p.kind === 'tree') { add(p.x - 0.35, p.z - 0.35, p.x + 0.35, p.z + 0.35); continue }
     const swap = Math.abs(p.rot) % 180 >= 45 && Math.abs(p.rot) % 180 <= 135
