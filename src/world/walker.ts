@@ -5,6 +5,11 @@ import type { Pt } from './nav'
 
 export interface Where extends Pt { floor: Floor }
 
+/** 小于这个距离（米）就不按方向转身 */
+const MIN_FACE = 0.12
+/** 转身最快多少弧度每秒 */
+const TURN_SPEED = 9
+
 /** 沿路点走，楼梯上高度跟着变 */
 export class Walker {
   readonly root = new THREE.Group()
@@ -51,10 +56,17 @@ export class Walker {
   }
 
   face(dx: number, dz: number, dt: number): void {
+    // 离得太近（两个人叠在一起、丧尸贴脸、快走到路点）方向全是噪声：不转，不然会原地疯狂打转
+    if (dx * dx + dz * dz < MIN_FACE * MIN_FACE) return
+    const r = this.root.rotation.y
     const want = Math.atan2(dx, dz)
-    let diff = want - this.root.rotation.y
+    let diff = want - r
     diff = Math.atan2(Math.sin(diff), Math.cos(diff))
-    this.root.rotation.y += diff * Math.min(1, dt * 12)
+    // 转身也有最快速度：一秒最多转一圈半
+    const max = TURN_SPEED * dt
+    const turn = Math.max(-max, Math.min(max, diff * Math.min(1, dt * 12)))
+    const next = r + turn
+    this.root.rotation.y = Math.atan2(Math.sin(next), Math.cos(next))
   }
 }
 
