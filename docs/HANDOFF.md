@@ -100,11 +100,14 @@ fuser -k 4173/tcp                   # 关预览；别用 pkill -f，会把自己
 
 - 分支 `proto-2.5d` → https://sheissolazy.github.io/rebirth-before-the-end/proto/ 。每一步做了什么、为什么、怎么验证的，按时间记在 `docs/DEVLOG.md`（开头有"早上先看这里"的总结和"下一步"）。
 - 代码地图（`src/world/`）：
-  - `life.ts` 时钟/需求/自主决策（纯函数）· `residents.ts` 一家人（Actor、Household：任务、出门、访客、丧尸夜调度、种田、空间、存货）· `walker.ts` 走路
-  - `siege.ts` 丧尸夜的逻辑（防线、守位、武器、燃烧瓶、街上遇袭）· `siegeView.ts` 丧尸夜的画面（模型、特效、血条、铁门/大门）
-  - `visitors.ts` 来敲门的人 · `expedition.ts` 地图出门 · `scavenge.ts` 街上搜东西 · `weather.ts` 下雨 · `daylight.ts` 昼夜 · `sound.ts` 合成音效和音乐 · `bubbles.ts` 想法泡泡 · `save.ts` 自动存档
+  - `life.ts` 时钟/需求/自主决策（纯函数）· `residents.ts` 一家人（Actor、Household：任务、出门、访客、丧尸夜调度、种田、空间、存货、男主送东西 `giveCare`/`courierTick`、借人给顾沉 `lent`、生死 `die`/`over`、钉板 `trap`）· `walker.ts` 走路
+  - `people.ts` MakeHuman 人物加载 + 代码摆骨骼（PoseDriver）+ **衣服贴图修改 `WARDROBE`**（盖掉 MakeHuman 标志、换上衣颜色、改发色）
+  - `siege.ts` 丧尸夜的逻辑（防线、守位、武器、燃烧瓶、钉板 `TRAP`、危机夜大块头、街上遇袭）· `siegeView.ts` 丧尸夜的画面（模型、特效、血条、铁门/大门）
+  - `visitors.ts` 来敲门的人（`VISITORS` 表）+ 送东西的男主（`Courier`）· `expedition.ts` 地图出门 · `scavenge.ts` 街上搜东西 · `weather.ts` 下雨 · `daylight.ts` 昼夜 · `sound.ts` 合成音效和音乐 · `bubbles.ts` 想法泡泡 · `save.ts` 自动存档 + 第几世 / 重生点 / 开局加成（`currentLife`、`awardRebirthPoints`、`PERK_DEFS`、`applyPerks`）
   - `World.ts` 把以上接到 three.js 场景、镜头、输入、HUD 数据 · `WorldView.tsx` / `DiaryPanel.tsx` / `MapPanel.tsx` 界面
 - 3D 里的台词和数据尽量直接读文字版 `src/content/`（memories、locations、npcs、events），没在 3D 里另写一套世界观。
-- 测试：`npx vitest run src/world`（80+ 个，含不渲染跑 10 天的长跑测试）。改了逻辑先跑这个。
+- 测试：`npx vitest run src/world`（110 个，含不渲染跑 10 天 / 30 天的长跑测试）。改了逻辑先跑这个。
+- 人物：`tools/blender/make_people.py` 用 MakeHuman 生成（`blender --background --factory-startup --python tools/blender/make_people.py -- x.zip <out> 名字...`；资源包已经装进 MPFB，zip 路径随便填）。现在有 13 个：女主、爸妈、王阿姨、陌生人、两个幸存者、江野、沈砚、顾沉、谢临、两种丧尸。
+- 面板藏着时看画面：见 `~/Documents/MyGames/KNOWLEDGE.md` 里"面板藏着也能看画面"（离屏渲染 + POST 回本地）。
 - 预览面板读不了 `~/Documents`：用 `VITE_SAVE_PREFIX=rbte-proto npx vite build --outDir <scratchpad>/proto-dist` 再用 python http.server 看；页面带 `?debug` 时可以在控制台用 `window.__world`。
 - 还没做、等用户拍板的见 `docs/DEVLOG.md` 文末"下一步"。
