@@ -417,6 +417,10 @@ export function hills(mat: THREE.Material): THREE.Group {
   ]
   for (const [x, z, r, h] of spots) {
     const geo = new THREE.SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)
+    // 球的贴图坐标是 0~1，草地材质却是按"米"铺的：换算成米，不然整座山只铺了一小块图，糊成一片
+    const uv = geo.attributes.uv as THREE.BufferAttribute
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.PI * 2 * r, uv.getY(i) * (Math.PI / 2) * h)
+    uv.needsUpdate = true
     const m = new THREE.Mesh(geo, mat)
     m.scale.set(1, h / r, 1)
     m.position.set(x, -0.5, z)
