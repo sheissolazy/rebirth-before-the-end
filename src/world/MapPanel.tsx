@@ -11,7 +11,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
   prologue: boolean
   check: (id: string, van: boolean) => Check
   members: MapMember[]
-  van: { fuel: number; home: boolean; armored: boolean }
+  van: { fuel: number; home: boolean; armored: boolean; parkedOut: boolean }
   onGo: (id: string, names: string[], van: boolean) => void
   onClose: () => void
 }) {
@@ -89,7 +89,7 @@ export function MapPanel({ prologue, check, members, van, onGo, onClose }: {
                     </span>
                   </label>
                 ) : (
-                  <div className="mt-2 rounded-lg bg-white/40 p-2 text-xs text-zinc-500">{t(van.home ? 'world.map.vanNoFuel' : 'world.map.vanAway')}</div>
+                  <div className="mt-2 rounded-lg bg-white/40 p-2 text-xs text-zinc-500">{t(van.parkedOut ? 'world.map.vanParked' : van.home ? 'world.map.vanNoFuel' : 'world.map.vanAway')}</div>
                 )
               )}
               <div className="mt-3 text-xs font-semibold text-zinc-700">{t('world.map.who')}</div>

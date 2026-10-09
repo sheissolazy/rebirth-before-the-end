@@ -332,6 +332,8 @@ export class Household {
   vanArmor = false
   /** 末日后哪天开过车（发动机的动静会把丧尸引过来，当晚多来一只） */
   noiseDay = -1
+  /** 女主自己把车开到别处停着（null = 停在院子里的车位上） */
+  vanAt: { x: number; z: number; rot: number } | null = null
   /** 院子西边晾着衣服 */
   laundryOut = false
   /** 哪天晾过了（一天晾一次） */
@@ -1247,7 +1249,7 @@ export class Household {
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
   /** 面包车在家、有油，这趟能开车去 */
   vanReady(id: string): boolean {
-    return this.fuel > 0 && !this.vanAway && !this.vanMove && vanAllowed(id)
+    return this.fuel > 0 && !this.vanAway && !this.vanMove && !this.vanAt && vanAllowed(id)
   }
 
   startTrip(id: string, members: Actor[], van = false): boolean {
@@ -1849,7 +1851,7 @@ export class Household {
   /** 改装面包车：蹲在车边焊钢板、装铁栏，干一个多小时 */
   private modVanTask(): Task | null {
     if (this.vanAway || this.vanMove) return null
-    if (this.trip?.van && this.trip.phase === 'out') return null
+    if ((this.trip?.van && this.trip.phase === 'out') || this.vanAt) return null
     // 一个人改就够了
     if (this.actors.some((o) => o.task?.kind === 'modvan')) return null
     // 站在车头前面装防撞杠（离上车的门远一点，不挡人上车）
@@ -1859,7 +1861,7 @@ export class Household {
 
   /** 擦车：站到车北边，面朝车 */
   private washTask(): Task | null {
-    if (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out')) return null
+    if (this.vanAway || this.vanMove || this.vanAt || (this.trip?.van && this.trip.phase === 'out')) return null
     // 擦车头或者车尾（车门那边留给上下车的人）；那一头有人在擦 / 在改装就去另一头，两头都有人就算了
     const busyEnd = (fx: number) => this.actors.some((o) => (o.task?.kind === 'wash' || o.task?.kind === 'modvan') && o.task.spot && Math.abs(o.task.spot.x - fx) < 0.5)
     const fx = VAN_PARK.x + 2.45
@@ -1981,7 +1983,7 @@ export class Household {
     }
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了、不改了
-    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || (this.trip?.van && this.trip.phase === 'out'))) return true
+    if ((t.kind === 'wash' || t.kind === 'modvan') && (this.vanAway || this.vanMove || this.vanAt || (this.trip?.van && this.trip.phase === 'out'))) return true
     if (t.kind === 'modvan' && this.vanArmor) return true
     // 晾到一半下雨了：不晾了
     if (t.kind === 'hang' && this.rain > 0.1) return true

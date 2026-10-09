@@ -3,7 +3,8 @@
 // 车怎么动全看游戏时间（Household.van），这里只负责摆姿势，快进、存档读档都不会对不上。
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { VAN_IN_H, VAN_OUT_H, VAN_PARK, type VanMove } from './layout'
+import { GARDEN, HOUSE, PROPS, STREET_LAMPS, VAN_IN_H, VAN_OUT_H, VAN_PARK, WORLD, fenceSegments, type Placement, type Rect, type VanMove } from './layout'
+import { CLOTHESLINE } from './decor'
 
 const L = 1.8 // 半车长（车身轮廓 x 从 -L 到 L）
 const W = 1.5 // 车宽
@@ -406,12 +407,12 @@ const ease = (u: number) => u * u * (3 - 2 * u)
 
 export interface VanPose { x: number; z: number; rot: number; visible: boolean; speed: number; loaded: boolean }
 
-/** 现在车在哪：按游戏时间算（absHour = day*24+hour） */
-export function vanPose(move: VanMove | null, away: boolean, absHour: number): VanPose {
+/** 现在车在哪：按游戏时间算（absHour = day*24+hour）；at = 女主自己开到别处停着 */
+export function vanPose(move: VanMove | null, away: boolean, absHour: number, at?: { x: number; z: number; rot: number } | null): VanPose {
   if (!move) {
-    return away
-      ? { x: 0, z: 0, rot: 0, visible: false, speed: 0, loaded: false }
-      : { x: VAN_PARK.x, z: VAN_PARK.z, rot: VAN_PARK.rot, visible: true, speed: 0, loaded: false }
+    if (away) return { x: 0, z: 0, rot: 0, visible: false, speed: 0, loaded: false }
+    if (at) return { x: at.x, z: at.z, rot: at.rot, visible: true, speed: 0, loaded: false }
+    return { x: VAN_PARK.x, z: VAN_PARK.z, rot: VAN_PARK.rot, visible: true, speed: 0, loaded: false }
   }
   const dur = move.dir === 'out' ? VAN_OUT_H : VAN_IN_H
   const u = Math.min(1, Math.max(0, (absHour - move.t0) / dur))
@@ -435,6 +436,69 @@ export function vanPose(move: VanMove | null, away: boolean, absHour: number): V
   const d = IN_REVERSE.getTangentAt(k)
   // 倒车：车头朝着走的反方向
   return { x: p.x, z: p.z, rot: Math.atan2(-d.x, -d.z), visible: true, speed: u < 0.47 ? 0.05 : -0.5 * Math.sin(Math.PI * k) - 0.05, loaded: true }
+}
+
+// --- 女主自己开车 ----------------------------------------------------------------
+
+/** 开车用的碰撞：比走路的格子图（半米一格）细，按真实的围栏、房子、树、车、木桶、长椅算；
+ *  铁门那两米是空的，自家车位不算挡 */
+export function vehicleBlocker(extra: Placement[] = []): (x: number, z: number) => boolean {
+  const rects: Rect[] = []
+  const add = (x0: number, z0: number, x1: number, z1: number) => rects.push({ x0, z0, x1, z1 })
+  for (const s of fenceSegments()) {
+    if (s.gate) continue
+    if (s.axis === 'x') add(s.x - 0.5, s.z - 0.08, s.x + 0.5, s.z + 0.08)
+    else add(s.x - 0.08, s.z - 0.5, s.x + 0.08, s.z + 0.5)
+  }
+  add(HOUSE.x0 - 0.1, HOUSE.z0 - 0.1, HOUSE.x1 + 0.1, HOUSE.z1 + 0.1)
+  add(GARDEN.x0, GARDEN.z0, GARDEN.x1, GARDEN.z1)
+  for (const p of PROPS) {
+    if (p.kind === 'tree') { add(p.x - 0.35, p.z - 0.35, p.x + 0.35, p.z + 0.35); continue }
+    const swap = Math.abs(p.rot) % 180 >= 45 && Math.abs(p.rot) % 180 <= 135
+    const [hw, hd] = swap ? [p.d / 2, p.w / 2] : [p.w / 2, p.d / 2]
+    add(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
+  }
+  for (const p of extra) {
+    if (p.floor !== 0 || !p.block) continue
+    const swap = Math.abs(p.rot) % 180 === 90
+    const [hw, hd] = swap ? [p.block[1], p.block[0]] : p.block
+    add(p.x - hw, p.z - hd, p.x + hw, p.z + hd)
+  }
+  for (const z of [CLOTHESLINE.z0, CLOTHESLINE.z1]) add(CLOTHESLINE.x - 0.12, z - 0.12, CLOTHESLINE.x + 0.12, z + 0.12)
+  for (const l of STREET_LAMPS) add(l.x - 0.15, l.z - 0.15, l.x + 0.15, l.z + 0.15)
+  return (x, z) => x < WORLD.x0 + 0.5 || x > WORLD.x1 - 0.5 || z < WORLD.z0 + 0.5 || z > WORLD.z1 - 0.5
+    || rects.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1)
+}
+
+export interface DriveState { x: number; z: number; rot: number; speed: number }
+/** 油门加速度、刹车、最高速（米/秒）、倒车最高速、松油门的阻力、方向盘最大角度、轴距（转弯半径约 2 米，比真车灵活，好在院子里掉头） */
+export const DRIVE = { accel: 4, brake: 8, maxF: 7, maxR: 2.8, drag: 3, steer: 0.75, wheelbase: 1.9 }
+
+/** 车身四个角（左右各 0.6 米、前后各 1.85 米）：撞墙判定用（左右比车身窄一点，过两米宽的铁门不用太准） */
+const CORNERS: [number, number][] = [[0.6, 1.85], [-0.6, 1.85], [0.6, -1.85], [-0.6, -1.85], [0, 1.95], [0, -1.95]]
+
+/** 开一帧：throttle 1 = 油门（W）、-1 = 刹车 / 倒车（S）；steer 1 = 往左（A）、-1 = 往右（D）。
+ *  blocked(x, z) 说这个点能不能进；撞上了就停在原地（速度清零） */
+export function driveStep(s: DriveState, throttle: number, steer: number, dt: number, blocked: (x: number, z: number) => boolean): DriveState {
+  let v = s.speed
+  if (throttle > 0) v += (v < 0 ? DRIVE.brake : DRIVE.accel) * dt
+  else if (throttle < 0) v -= (v > 0 ? DRIVE.brake : DRIVE.accel * 0.6) * dt
+  else v -= Math.sign(v) * Math.min(Math.abs(v), DRIVE.drag * dt)
+  v = Math.max(-DRIVE.maxR, Math.min(DRIVE.maxF, v))
+  // 自行车模型：转向角越大、开得越快，车头转得越快（倒车时方向反过来，跟真车一样）
+  const rot = s.rot + (v / DRIVE.wheelbase) * Math.tan(steer * DRIVE.steer) * dt
+  const x = s.x + Math.sin(rot) * v * dt
+  const z = s.z + Math.cos(rot) * v * dt
+  const hits = (px: number, pz: number, r: number) => {
+    const fx = Math.sin(r)
+    const fz = Math.cos(r)
+    return CORNERS.some(([lx, lz]) => blocked(px + fz * lx + fx * lz, pz - fx * lx + fz * lz))
+  }
+  if (!hits(x, z, rot)) return { x, z, rot, speed: v }
+  // 撞上了：顺着墙蹭过去（只走一个方向，或者只转车头），速度掉一大截；都不行才停住
+  const tries: [number, number, number, number][] = [[x, s.z, rot, 0.8], [s.x, z, rot, 0.8], [x, s.z, s.rot, 0.8], [s.x, z, s.rot, 0.8], [s.x, s.z, rot, 0.35]]
+  for (const [tx, tz, tr, keep] of tries) if (!hits(tx, tz, tr)) return { x: tx, z: tz, rot: tr, speed: v * keep }
+  return { x: s.x, z: s.z, rot: s.rot, speed: 0 }
 }
 
 /** 每帧摆好车：位置、朝向、轮子转、车身轻轻颠 */

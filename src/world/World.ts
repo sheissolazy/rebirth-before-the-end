@@ -4,13 +4,13 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, VAN_PARK, WALLS, WORLD, YARD,
+  FLOOR_H, FURNITURE, GARDEN, GATE, HOUSE, HOUSE_CENTER, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
 import { clothesline, decorateHouse, parchmentMap } from './decor'
-import { VanView, buildVan, vanPose } from './van'
+import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
@@ -155,7 +155,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.cat' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.cat' | 'world.toast.parked' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -214,6 +214,11 @@ export class World {
   private nightness = 0
   /** 家里的旧面包车 */
   private van = new VanView(buildVan())
+  /** 女主自己在开面包车（null = 没在开） */
+  private driving: DriveState | null = null
+  private carBlocked: ((x: number, z: number) => boolean) | null = null
+  /** 走到车边时提示过"按 F 上车"了（走开再回来才再提示） */
+  private driveHinted = false
   /** 院子西边的晾衣绳 */
   private line = clothesline()
   /** 外婆家的橘猫大橘（模型加载好以后才有） */
@@ -1111,7 +1116,7 @@ export class World {
     // 两米宽的铁门
     this.scene.add(placeModel(kit, 'large_iron_gate', GATE.x, 0, GATE.z, 0, 0.68))
     // 街边的路灯
-    for (const x of [-18, -6, 6, 18, 30]) {
+    for (const { x } of STREET_LAMPS) {
       this.scene.add(placeModel(kit, 'street_lamp_01', x, 0, STREET.z0 - 0.7, 0, 0.9))
       this.addBulb(x, 3.05, STREET.z0 - 0.7, Math.abs(x) === 6 ? 9 : 0)
     }
@@ -1398,9 +1403,12 @@ export class World {
     this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && this.keysMoving))
     const fighting = !!this.life.siege && !this.life.siege.done
     const busy = fighting || this.life.onTrip(this.heroine)
-    if (!busy) this.updateHeroineKeys(sim)
+    // 打起来了还在车上：先下车
+    if (this.driving && fighting) this.exitVan(true)
+    if (this.driving) this.updateDriving(Math.min(sim, dt * 1.5))
+    else if (!busy) this.updateHeroineKeys(sim)
     else this.keysMoving = false
-    if (!busy) this.updateFollowers(dt)
+    if (!busy && !this.driving) this.updateFollowers(dt)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
@@ -1410,12 +1418,13 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
-    const vp = vanPose(this.life.vanMove, this.life.vanAway, this.life.absHour)
+    const vp = vanPose(this.life.vanMove, this.life.vanAway, this.life.absHour, this.life.vanAt)
+    if (this.driving) vp.speed = this.driving.speed
     this.van.update(Math.min(sim, 0.1), vp, this.nightness, this.life.vanArmor)
     // 发动机声：离家越远越小（开出去上了街、开回来刚进街口时听得见）
     const vanFar = Math.hypot(vp.x - VAN_PARK.x, vp.z - VAN_PARK.z)
     // 铁门：车要过就全开，家里人走到门口开一半，过去了再关上（打丧尸时不开）
-    const vanAtGate = !!this.life.vanMove && vp.visible && Math.hypot(vp.x - GATE.x, vp.z - GATE.z) < 6.5
+    const vanAtGate = (!!this.life.vanMove || !!this.driving) && vp.visible && Math.hypot(vp.x - GATE.x, vp.z - GATE.z) < (this.driving ? 5 : 6.5)
     const walker = !fighting && this.actors.some((a) => !a.away && a.floor === 0 && Math.abs(a.pos.x - GATE.x) < 1.3 && Math.abs(a.pos.z - GATE.z) < 1.5)
     const gateWant = vanAtGate ? 1.5 : walker ? 1.0 : 0
     // 门刚要开：吱呀一声（离镜头远就小声点）
@@ -1429,7 +1438,9 @@ export class World {
     this.honked = this.life.vanMove?.dir === 'in' ? this.honked || !!honkNow : false
     this.gateAngle += (gateWant - this.gateAngle) * Math.min(1, dt * (gateWant > this.gateAngle ? 4 : 2))
     for (const d of this.gateDoors) d.pivot.rotation.y = d.sign * this.gateAngle
-    this.sound.engine(this.life.vanMove && vp.visible && this.life.speed > 0 ? Math.max(0, 1 - vanFar / 34) : 0, Math.min(1, Math.abs(vp.speed) / 2))
+    this.sound.engine(this.driving && this.life.speed > 0 ? 0.85
+      : this.life.vanMove && vp.visible && this.life.speed > 0 ? Math.max(0, 1 - vanFar / 34) : 0,
+    Math.min(1, Math.abs(vp.speed) / (this.driving ? 7 : 2)))
     // 鸟：白天、不下雨时，一群鸟从西边慢慢飞到东边，循环
     const dayCalm = this.nightness < 0.3 && this.life.rain < 0.05
     this.birds.g.visible = dayCalm
@@ -1688,6 +1699,13 @@ export class World {
         }
       }
     }
+    // 开车时女主坐在车里（藏起来）；走到车边提示一次"按 F 上车"
+    if (this.driving) this.heroine.root.visible = false
+    else {
+      const near = this.canDrive() && Math.hypot(this.heroine.pos.x - vp.x, this.heroine.pos.z - vp.z) < 2.6
+      if (near && !this.driveHinted) this.toast('world.toast.driveHint', 3)
+      this.driveHinted = near
+    }
     // 晾着的衣服随风摆（下雨风大）
     this.line.clothes.visible = this.life.laundryOut
     this.line.update(this.elapsed, this.life.rain > 0.1 ? 2 : 1)
@@ -1814,6 +1832,7 @@ export class World {
       if (this.life.over) return
       const k = e.key.toLowerCase()
       if (k === 'e' && !e.repeat) this.searchHere()
+      if (k === 'f' && !e.repeat) this.toggleDrive()
       this.keys.add(k)
     }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
@@ -1830,6 +1849,71 @@ export class World {
   private zoomBy(f: number): void {
     const z = this.zoom[this.mode] * f
     this.zoom[this.mode] = THREE.MathUtils.clamp(z, this.mode === 'home' ? 0.55 : 0.6, this.mode === 'home' ? 1.5 : 1.8)
+  }
+
+  /** 现在能不能上车：车在、没出门、没打丧尸、女主在一楼 */
+  private canDrive(): boolean {
+    const l = this.life
+    return !l.vanAway && !l.vanMove && !l.trip?.van && !(l.siege && !l.siege.done) && !l.onTrip(this.heroine)
+      && this.heroine.floor === 0 && !this.heroine.away && l.speed > 0
+  }
+
+  /** F：走到车边上车，开着车停稳了再按一次下车 */
+  toggleDrive(): void {
+    if (this.driving) { this.exitVan(false); return }
+    const vp = vanPose(this.life.vanMove, this.life.vanAway, this.life.absHour, this.life.vanAt)
+    if (!this.canDrive() || Math.hypot(this.heroine.pos.x - vp.x, this.heroine.pos.z - vp.z) > 3) {
+      if (Math.hypot(this.heroine.pos.x - vp.x, this.heroine.pos.z - vp.z) <= 3) this.toast('world.toast.noDrive', 2)
+      return
+    }
+    this.life.cancel(this.heroine)
+    this.life.cancelSearch()
+    this.life.stopFishing()
+    this.driving = { x: vp.x, z: vp.z, rot: vp.rot, speed: 0 }
+    this.life.vanAt = { x: vp.x, z: vp.z, rot: vp.rot }
+    this.selected = this.heroine
+    this.toast('world.toast.drive', 4)
+  }
+
+  /** 下车：站到车门边（左边不行就右边、后面）；车停回院子车位附近就算停好了 */
+  private exitVan(force: boolean): void {
+    const d = this.driving
+    if (!d) return
+    if (!force && Math.abs(d.speed) > 0.6) { this.toast('world.toast.stopFirst', 1.5); return }
+    const fx = Math.sin(d.rot)
+    const fz = Math.cos(d.rot)
+    const nav = this.navs[0]
+    const spots = [[fz * 1.25, -fx * 1.25], [-fz * 1.25, fx * 1.25], [-fx * 2.6, -fz * 2.6], [fx * 2.6, fz * 2.6]]
+    const at = spots.map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find((p) => !nav.isBlockedAt(p.x, p.z)) ?? { x: d.x + fz * 1.25, z: d.z - fx * 1.25 }
+    this.heroine.root.position.set(at.x, 0, at.z)
+    this.heroine.floor = 0
+    this.driving = null
+    this.keysMoving = false
+    // 停回自家车位附近（两米多以内、车头大致朝东或朝西）：自动摆正停好，可以再派车出门
+    const dr = Math.atan2(Math.sin(d.rot - VAN_PARK.rot), Math.cos(d.rot - VAN_PARK.rot))
+    const aligned = Math.abs(dr) < 0.7 || Math.abs(dr) > Math.PI - 0.7
+    if (Math.hypot(d.x - VAN_PARK.x, d.z - VAN_PARK.z) < 2.5 && aligned) {
+      this.life.vanAt = null
+      this.toast('world.toast.parked', 2)
+    }
+    else this.life.vanAt = { x: d.x, z: d.z, rot: d.rot }
+  }
+
+  /** 开车：W/S 油门刹车（倒车），A/D 转向；撞墙就停；女主跟着车走（镜头、家里/屋外的切换都照常） */
+  private updateDriving(dt: number): void {
+    const d = this.driving!
+    const k = this.keys
+    const throttle = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0)
+    const steer = (k.has('a') || k.has('arrowleft') ? 1 : 0) - (k.has('d') || k.has('arrowright') ? 1 : 0)
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [])
+    const next = driveStep(d, throttle, steer, dt, this.carBlocked)
+    this.driving = next
+    this.life.vanAt = { x: next.x, z: next.z, rot: next.rot }
+    const h = this.heroine
+    h.root.position.set(next.x, 0, next.z)
+    h.root.rotation.y = next.rot
+    h.floor = 0
+    this.keysMoving = true
   }
 
   private petCat(): void {
@@ -1950,8 +2034,9 @@ export class World {
   }
 
   /** 地图上"开面包车去"要用：还剩几桶油、车在不在家 */
-  vanInfo(): { fuel: number; home: boolean; armored: boolean } {
-    return { fuel: this.life.fuel, home: !this.life.vanAway && !this.life.vanMove, armored: this.life.vanArmor }
+  vanInfo(): { fuel: number; home: boolean; armored: boolean; parkedOut: boolean } {
+    const l = this.life
+    return { fuel: l.fuel, home: !l.vanAway && !l.vanMove && !l.vanAt, armored: l.vanArmor, parkedOut: !!l.vanAt && !l.vanAway && !l.vanMove }
   }
 
   /** 在家、能出门的人 */

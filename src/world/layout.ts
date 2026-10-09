@@ -38,6 +38,8 @@ export const YARD: Rect = { x0: -4, z0: -3, x1: 12, z1: 13 }
 export const GATE = { x: 4, z: 13 }
 export const STREET: Rect = { x0: -24, z0: 15, x1: 32, z1: 21 }
 export const WORLD: Rect = { x0: -24, z0: -8, x1: 32, z1: 30 }
+/** 街边路灯（人行道上，铁门这一侧） */
+export const STREET_LAMPS = [-18, -6, 6, 18, 30].map((x) => ({ x, z: STREET.z0 - 0.7 }))
 export const HOUSE_CENTER = { x: 4, z: 3 }
 
 /** 家里那辆旧面包车停在院子西南角（车头朝东、朝着铁门那边），rot 是 rotation.y */

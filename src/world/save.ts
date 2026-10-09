@@ -54,6 +54,7 @@ export interface WorldSave {
   laundryOut?: boolean
   laundryDay?: number
   noiseDay?: number
+  vanAt?: { x: number; z: number; rot: number } | null
   affection?: Record<string, number>
   warnedJiangye?: boolean
   heroAxe?: boolean
@@ -117,6 +118,7 @@ export function snapshot(life: Household): WorldSave {
     laundryOut: life.laundryOut,
     laundryDay: life.laundryDay,
     noiseDay: life.noiseDay,
+    vanAt: life.vanAt,
     affection: { ...life.affection },
     warnedJiangye: life.warnedJiangye,
     heroAxe: life.actors[0]?.sidearm === 'axe',
@@ -170,6 +172,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.laundryOut = !!s.laundryOut
   life.laundryDay = s.laundryDay ?? -1
   life.noiseDay = s.noiseDay ?? -1
+  life.vanAt = s.vanAt ?? null
   life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, ...(s.affection ?? {}) }
   life.xielinNotes = s.xielinNotes ?? 0
   if (s.garden) life.garden = { ...s.garden }
