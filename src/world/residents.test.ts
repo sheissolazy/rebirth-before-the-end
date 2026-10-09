@@ -667,6 +667,58 @@ describe('来敲门的人', () => {
   })
 })
 
+describe('竹尖刺', () => {
+  it('砍竹子 → 爸爸削一个小时 → 铁门里插上一排；丧尸冲进院子踩上去掉血，扎够 8 只就烂', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 9 }
+    expect(life.craftSpikes()).toBe('bamboo')
+    life.bamboo = 3
+    expect(life.craftSpikes()).toBe('ok')
+    const dad = life.actors[2]
+    expect(dad.task?.kind).toBe('craft')
+    expect(life.bamboo).toBe(0)
+    for (let i = 0; i < 6000 && dad.task?.kind === 'craft'; i++) {
+      life.tick(0.1, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(0.3, 2.2); a.updateSettle(0.3) }
+    }
+    expect(life.spikes[0].hits).toBe(8)
+    expect(life.nextSpikeRow()).toBe(1)
+    // 削第二排削到一半被打断：竹子退回来
+    life.bamboo = 3
+    expect(life.craftSpikes()).toBe('ok')
+    life.cancel(dad)
+    life.tick(0.1, (a) => life.isHomeBody(a))
+    expect(life.bamboo).toBe(3)
+    expect(life.craftSpikes()).toBe('ok')
+    expect(life.log.some((l) => l.key === 'world.log.spikes')).toBe(true)
+    // 存档里带着
+    const s = snapshot(life)
+    const { life: other } = simulate('paradise', 0)
+    restore(other, s)
+    expect(other.spikes[0].hits).toBe(8)
+  })
+
+  it('丧尸走过一排竹尖刺：先扎一下再一路掉血', () => {
+    const { life } = simulate('paradise', 0)
+    life.spikes[0].hits = 8
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 21.2 }
+    life.startSiege(1, false)
+    // 丧尸是陆续冒出来的：等第一只出来，把它放到铁门里面，让它往堂屋走
+    for (let i = 0; i < 400 && !life.siege?.zombies.length; i++) life.tick(0.05, () => false)
+    const z = life.siege!.zombies[0]
+    z.root.position.set(4, 0, 12.6)
+    const hp0 = z.hp
+    for (let i = 0; i < 60; i++) {
+      z.setPath([{ x: 4, y: 0, z: 10.4, floor: 0 }])
+      z.follow(0.05, z.speed * (z.slowed ? 0.55 : 1))
+      life.tick(0.05, () => false)
+    }
+    expect(life.spikes[0].hits).toBe(7)
+    expect(z.hp).toBeLessThan(hp0 - 14)
+  })
+})
+
 describe('来踩点的陌生人', () => {
   function tickUntil(life: Household, cond: () => boolean, max = 4000) {
     const dt = 0.05

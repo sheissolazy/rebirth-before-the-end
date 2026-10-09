@@ -10,7 +10,7 @@ import {
   DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
-import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
+import { LAYERS, SPIKE, SPIKE_ROWS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type SpikeRow, type Zombie } from './siege'
 import { TRIPS, canGo, settleTrip, tripCost, tripHours, vanAllowed, type TripDef } from './expedition'
 import { locations } from '../content/locations'
 import { npcs } from '../content/npcs'
@@ -27,7 +27,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft'
 
 interface Task {
   kind: TaskKind
@@ -52,6 +52,9 @@ interface Task {
 
 const SETTLE_S = 0.45
 const rad = THREE.MathUtils.degToRad
+
+/** 院子里削竹尖刺的地方（铁门东边的空地上） */
+const CRAFT_SPOT = { x: 8.6, z: 11.4 }
 
 function shortestAngle(from: number, to: number): number {
   const d = to - from
@@ -287,6 +290,11 @@ export class Household {
   /** 野外采集：每一处上次采的是哪天；攒着的草药（够 3 份妈妈就捣成急救包） */
   forageDay: Record<string, number> = {}
   herbs = 0
+  /** 砍回来的竹子；院子里两排竹尖刺（hits = 还能扎几只，0 = 没有） */
+  bamboo = 0
+  readonly spikes: SpikeRow[] = SPIKE_ROWS.map((r) => ({ ...r, hits: 0 }))
+  /** 正在削的那一排（削好之前别再派人） */
+  private crafting = -1
   trip: Trip | null = null
   /** 这场雨木桶接了多少水 */
   private rainWater = 0
@@ -1469,6 +1477,7 @@ export class Household {
   private siegeTick(simSeconds: number): void {
     const c = this.clock
     this.guestTick()
+    this.checkCraft()
     if (!this.siege && this.spawnZombie && c.hour >= 21 && this.nightDone !== c.day) {
       const { count, crisis } = Household.nightCount(c)
       this.nightDone = c.day
@@ -1553,7 +1562,7 @@ export class Household {
     }
     this.siege = new Siege({
       count, crisis, raid, solidWall: this.wall, hard: this.hard, navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a)), barriers: this.barriers, ammo: this.ammo,
-      maxOf: (id) => this.maxOf(id), trap: this.trap,
+      maxOf: (id) => this.maxOf(id), trap: this.trap, spikes: this.spikes,
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
     })
@@ -1571,6 +1580,8 @@ export class Household {
 
   private onSiegeEvent(e: SiegeEvent): void {
     if (e.kind === 'trapBroken') { this.note('world.log.trapGone'); this.onSiege?.(e); return }
+    if (e.kind === 'spikeBroken') { this.note('world.log.spikeGone'); this.onSiege?.(e); return }
+    if (e.kind === 'spike') { this.onSiege?.(e); return }
     if (e.kind === 'start') this.note(e.ambush ? 'world.log.ambush' : e.raid ? 'world.log.raid' : e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
     else if (e.kind === 'broken') {
       this.note(`world.log.broken.${e.layer}`)
@@ -1644,6 +1655,42 @@ export class Household {
   static readonly GARDEN_CORES = 2
 
   /** 开菜地：末日前花钱买种子和工具，末日后用晶核（跟军区换种子） */
+  static readonly SPIKE_BAMBOO = 3
+
+  /** 下一排要削的竹尖刺（先补烂掉的，按铁门里 → 堂屋门前的顺序）；都好好的就是 -1 */
+  nextSpikeRow(): number {
+    return this.spikes.findIndex((r) => r.hits <= 0)
+  }
+
+  /** 削竹尖刺：3 根竹子，派家里手巧的人（爸爸）在院子里削一个小时，削好插到下一排 */
+  /** 削到一半被打断了（打仗、被叫走）：竹子退回来，按钮也不会一直卡在"腾不出人手" */
+  private checkCraft(): void {
+    if (this.crafting < 0 || this.actors.some((a) => a.task?.kind === 'craft')) return
+    this.crafting = -1
+    this.bamboo += Household.SPIKE_BAMBOO
+  }
+
+  craftSpikes(): 'ok' | 'bamboo' | 'full' | 'busy' {
+    this.checkCraft()
+    const k = this.nextSpikeRow()
+    if (k < 0) return 'full'
+    if (this.crafting >= 0 || (this.siege && !this.siege.done)) return 'busy'
+    if (this.bamboo < Household.SPIKE_BAMBOO) return 'bamboo'
+    const free = (a: Actor) => !this.isOut(a) && !a.dead && !a.guest && a.floor === 0 && a.task?.kind !== 'sleep'
+    const who = this.actors.find((a) => a.handy && free(a)) ?? this.actors.slice(1).find(free) ?? (free(this.actors[0]) ? this.actors[0] : undefined)
+    if (!who) return 'busy'
+    this.bamboo -= Household.SPIKE_BAMBOO
+    this.crafting = k
+    this.cancel(who)
+    this.assign(who, { kind: 'craft', spot: { kind: 'stroll', ...CRAFT_SPOT, floor: 0, face: 180, pose: 'work' }, phase: 'go', hours: 1, manual: true })
+    if ((who.task as Task | null)?.kind !== 'craft') {
+      this.crafting = -1
+      this.bamboo += Household.SPIKE_BAMBOO
+      return 'busy'
+    }
+    return 'ok'
+  }
+
   buildGarden(): boolean {
     // 车停在那块地上：先挪车
     const v = this.vanAt
@@ -1716,6 +1763,7 @@ export class Household {
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
     if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
     if (t.kind === 'forage') return 'stroll'
+    if (t.kind === 'craft') return 'cook'
     if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
@@ -2076,6 +2124,14 @@ export class Household {
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
     if (t.kind === 'forage' && t.hours <= 0 && t.forage) this.pickForage(a, t.forage)
+    if (t.kind === 'craft') {
+      const k = this.crafting
+      this.crafting = -1
+      if (t.hours <= 0 && k >= 0) {
+        this.spikes[k].hits = SPIKE.hits
+        this.note('world.log.spikes', { who: a.name, n: k + 1 })
+      } else this.bamboo += Household.SPIKE_BAMBOO
+    }
     // 晾的时候下起雨来就不晾了（抱回屋）
     if (t.kind === 'hang' && t.hours <= 0 && this.rain < 0.1) { this.laundryOut = true; this.laundryDay = this.clock.day }
     if (t.kind === 'fetch' && t.hours <= 0) this.laundryOut = false
@@ -2145,6 +2201,7 @@ export class Household {
     if (y.family) for (const b of this.actors) if (b !== a && !b.dead && !this.isOut(b)) b.needs = { ...b.needs, mood: Math.min(100, b.needs.mood + y.family) }
     if (y.sting) a.health = Math.max(1, a.health - y.sting)
     this.herbs += y.herbs
+    this.bamboo += y.bamboo
     let medkit = false
     if (this.herbs >= HERBS_PER_MEDKIT) {
       this.herbs -= HERBS_PER_MEDKIT

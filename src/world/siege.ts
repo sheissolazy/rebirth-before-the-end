@@ -62,6 +62,16 @@ const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 
 export const TRAP = { x0: 2.2, x1: 5.8, z0: 13.6, z1: 16.0, dps: 2, wear: 0.6, slow: 0.55 }
 export const inTrap = (p: Pt) => p.x > TRAP.x0 && p.x < TRAP.x1 && p.z > TRAP.z0 && p.z < TRAP.z1
 
+/** 院子里的竹尖刺：一排能扎 8 只丧尸（踩进去先扎一下，走过去的这段一直掉血、走得慢） */
+export const SPIKE = { hits: 8, hit: 14, dps: 4 }
+export interface SpikeRow { x0: number; x1: number; z0: number; z1: number; hits: number }
+/** 两排的位置：铁门里面一排、堂屋门前一排（丧尸冲进院子以后去砸门正好踩过） */
+export const SPIKE_ROWS: Omit<SpikeRow, 'hits'>[] = [
+  { x0: 2.6, x1: 6.0, z0: 11.0, z1: 12.2 },
+  { x0: 2.0, x1: 5.4, z0: 7.3, z1: 8.4 },
+]
+export const inRow = (r: Omit<SpikeRow, 'hits'>, p: Pt) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1
+
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
   /** 危机夜里的大块头：高大、皮厚、走得慢，砸门砸得狠 */
@@ -82,6 +92,8 @@ export class Zombie extends Walker {
   burn = 0
   /** 正踩在钉板上（走得慢） */
   slowed = false
+  /** 正踩在第几排竹尖刺上（-1 = 没有） */
+  inSpike = -1
   driver: PoseDriver | null = null
   private inner: THREE.Object3D
 
@@ -125,6 +137,8 @@ export type SiegeEvent =
   | { kind: 'kill'; at: Pt; by: string; raider: boolean; brute?: boolean }
   | { kind: 'brute' }
   | { kind: 'trapBroken' }
+  | { kind: 'spike'; at: Pt }
+  | { kind: 'spikeBroken' }
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'bolt'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
@@ -152,6 +166,8 @@ export interface SiegeOpts {
   maxOf?: (id: LayerId) => number
   /** 铁门外的钉板（耐久 0~100，打仗时会磨损，和 Household 共用一个对象） */
   trap?: { hp: number }
+  /** 院子里的竹尖刺（和 Household 共用） */
+  spikes?: SpikeRow[]
   spawn: (at: Pt, raider: boolean, brute?: boolean) => Zombie
   emit: (e: SiegeEvent) => void
 }
@@ -347,6 +363,24 @@ export class Siege {
       z.hp -= TRAP.dps * dt
       if (trap.hp <= 0) this.o.emit({ kind: 'trapBroken' })
       if (z.hp <= 0) { this.kill(z, 'trap'); return }
+    }
+    // 院子里的竹尖刺：踩进去先扎一下，走过去这一段一直掉血、走得慢；扎够 8 只这一排就烂了
+    const rows = this.o.spikes
+    if (rows && z.floor === 0 && z.state !== 'leave' && !this.o.ambushAt) {
+      const k = rows.findIndex((r) => r.hits > 0 && inRow(r, z.pos))
+      if (k >= 0) {
+        const r = rows[k]
+        if (z.inSpike !== k) {
+          z.inSpike = k
+          z.hp -= SPIKE.hit
+          r.hits -= 1
+          this.o.emit({ kind: 'spike', at: z.pos })
+          if (r.hits <= 0) this.o.emit({ kind: 'spikeBroken' })
+        }
+        z.hp -= SPIKE.dps * dt
+        z.slowed = true
+        if (z.hp <= 0) { this.kill(z, 'trap'); return }
+      } else z.inSpike = -1
     }
     if (z.state === 'leave') {
       if (!z.path.length) { z.state = 'dead'; z.deadT = 7 }

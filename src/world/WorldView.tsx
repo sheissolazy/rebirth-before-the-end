@@ -326,6 +326,16 @@ export default function WorldView() {
                 {t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}
               </div>
             )}
+            {hud.spikeNext >= 0 ? (
+              <button onClick={() => world.current?.craftSpikes()} disabled={hud.bamboo < 3} className={BUILD}
+                title={t('world.spikes.tip')}>
+                {t('world.spikes.build', { n: hud.spikeNext + 1, have: hud.bamboo })}
+              </button>
+            ) : (
+              <div className="rounded-sm bg-white/5 px-2 py-0.5 text-[11px] text-[#e6c78f] ring-1 ring-white/10">
+                {t('world.spikes.left', { a: hud.spikes[0], b: hud.spikes[1] })}
+              </div>
+            )}
           </div>
           {spaceOpen && (
             <div className="relative mt-2 w-64 rounded-md bg-[#2a2747]/70 p-2 text-xs ring-1 ring-[#9aa0ff]/25">

@@ -21,7 +21,7 @@ import {
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
 import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
-import { LAYERS, TRAP, type LayerId } from './siege'
+import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -90,6 +90,10 @@ export interface Hud {
   trap: number
   /** 攒着的草药（够 3 份捣成急救包） */
   herbs: number
+  /** 竹子；两排竹尖刺还能扎几只；下一排是第几排（-1 = 都插满了） */
+  bamboo: number
+  spikes: number[]
+  spikeNext: number
   /** 末日前要做的事（做完打勾） */
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
@@ -174,7 +178,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.search.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -182,7 +186,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -427,7 +431,7 @@ export class World {
     this.life.onForage = (s, y, medkit) => {
       this.sound.pluck()
       if (y.sting) { this.sound.buzz(); this.sound.hurt() }
-      const vars = { what: s.name, food: y.food.toFixed(1), n: String(this.life.herbs), max: String(HERBS_PER_MEDKIT) }
+      const vars = { what: s.name, food: y.food.toFixed(1), n: String(this.life.herbs), max: String(HERBS_PER_MEDKIT), have: String(this.life.bamboo) }
       if (medkit) this.toast('world.forage.medkit', 4, vars)
       else this.toast(`world.forage.${y.key}`, 3.5, vars)
     }
@@ -515,7 +519,8 @@ export class World {
       else if (e.kind === 'kill') this.sound.squelch()
       else if (e.kind === 'hit') this.sound.hurt()
       else if (e.kind === 'fire') this.sound.fire()
-      else if (e.kind === 'trapBroken') this.sound.crash()
+      else if (e.kind === 'trapBroken' || e.kind === 'spikeBroken') this.sound.crash()
+      else if (e.kind === 'spike') this.sound.squelch()
       else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1, 0.55) }
       else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
       // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
@@ -900,6 +905,54 @@ export class World {
     this.stoneWall = g
     this.scene.add(g)
     this.collectClickables()
+  }
+
+  private spikeMeshes: THREE.Group[] = []
+
+  /** 两排削尖的竹子：一根横竹竿绑着一排斜插的尖竹，像拒马（游戏镜头很高，做粗一点、颜色亮一点才看得见） */
+  private makeSpikes(): THREE.Group[] {
+    const cane = new THREE.MeshStandardMaterial({ color: '#e0c77e', roughness: 0.7, flatShading: true })
+    const rope = new THREE.MeshStandardMaterial({ color: '#7a5a34', roughness: 0.9 })
+    const stake = new THREE.ConeGeometry(0.065, 1.0, 6)
+    stake.translate(0, 0.5, 0)
+    return SPIKE_ROWS.map((r, k) => {
+      const g = new THREE.Group()
+      const len = r.x1 - r.x0
+      const cols = Math.round(len / 0.28)
+      const mz = (r.z0 + r.z1) / 2
+      for (let i = 0; i < cols; i++) {
+        const m = new THREE.Mesh(stake, cane)
+        m.position.set(r.x0 + 0.14 + i * ((len - 0.28) / Math.max(1, cols - 1)), 0, mz + (i % 2 ? 0.12 : -0.12))
+        // 尖朝南（朝着冲进来的丧尸）斜着，左右稍微错开
+        m.rotation.set(0.45 + (i % 3) * 0.05, 0, ((i % 3) - 1) * 0.07)
+        m.castShadow = true
+        g.add(m)
+      }
+      // 横着绑的竹竿（最后加，不算在"还立着几根"里）
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, len, 6), cane)
+      pole.rotation.z = Math.PI / 2
+      pole.position.set((r.x0 + r.x1) / 2, 0.32, mz + 0.1)
+      pole.castShadow = true
+      pole.userData.keep = true
+      g.add(pole)
+      for (let i = 0; i < 4; i++) {
+        const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 6), rope)
+        tie.rotation.z = Math.PI / 2
+        tie.position.set(r.x0 + 0.3 + i * ((len - 0.6) / 3), 0.32, mz + 0.1)
+        tie.userData.keep = true
+        g.add(tie)
+      }
+      g.name = `spikes${k}`
+      this.scene.add(g)
+      return g
+    })
+  }
+
+  craftSpikes(): void {
+    const r = this.life.craftSpikes()
+    const who = this.actors.find((a) => a.task?.kind === 'craft')?.name ?? ''
+    this.toast(`world.spikes.${r}`, 3.5, { n: String(Household.SPIKE_BAMBOO), have: String(this.life.bamboo), who })
+    this.pushLifeHud()
   }
 
   buildGateTrap(): void {
@@ -1665,6 +1718,16 @@ export class World {
       this.scene.add(this.trapMesh)
     }
     if (this.trapMesh) this.trapMesh.visible = this.life.trap.hp > 0
+    // 竹尖刺：每一排按还能扎几只，显示还立着的几根
+    if (!this.spikeMeshes.length && !this.hud.loading) this.spikeMeshes = this.makeSpikes()
+    this.life.spikes.forEach((r, k) => {
+      const g = this.spikeMeshes[k]
+      if (!g) return
+      const stakes = g.children.filter((c) => !c.userData.keep)
+      const n = Math.ceil((r.hits / SPIKE.hits) * stakes.length)
+      stakes.forEach((c, i) => { c.visible = i < n })
+      g.visible = r.hits > 0
+    })
     SCAVENGE.forEach((sp, k) => {
       const m = this.spotMarks[k]
       m.visible = this.mode === 'outside' && this.life.canSearch(sp) === 'ok'
@@ -2538,6 +2601,9 @@ export class World {
       wall: this.life.wall,
       trap: Math.ceil(this.life.trap.hp),
       herbs: this.life.herbs,
+      bamboo: this.life.bamboo,
+      spikes: this.life.spikes.map((r) => r.hits),
+      spikeNext: this.life.nextSpikeRow(),
       fishing: { active: !!this.life.fishing, near: this.mode === 'outside' && nearFishing(this.heroine.pos), caught: this.life.fishCaught },
       ammo: this.life.ammo.n,
       cores: this.life.cores,

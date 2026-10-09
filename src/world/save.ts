@@ -38,6 +38,8 @@ export interface WorldSave {
   medkits: number
   forageDay?: Record<string, number>
   herbs?: number
+  bamboo?: number
+  spikes?: number[]
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -98,6 +100,8 @@ export function snapshot(life: Household): WorldSave {
     medkits: life.medkits,
     forageDay: { ...life.forageDay },
     herbs: life.herbs,
+    bamboo: life.bamboo,
+    spikes: life.spikes.map((r) => r.hits),
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
@@ -162,6 +166,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.medkits = s.medkits
   life.forageDay = { ...(s.forageDay ?? {}) }
   life.herbs = s.herbs ?? 0
+  life.bamboo = s.bamboo ?? 0
+  ;(s.spikes ?? []).forEach((h, k) => { if (life.spikes[k]) life.spikes[k].hits = h })
   life.gateBonus = s.gateBonus
   life.barriers = { ...s.barriers }
   life.nightDone = s.nightDone

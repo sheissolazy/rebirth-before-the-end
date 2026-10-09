@@ -1,6 +1,7 @@
 // 野外能采的东西长什么样：代码捏的小模型（野菜、野花、草药、蘑菇、红伞伞、竹笋、野果丛、挂着蜂窝的树），
 // 能采的时候头顶飘一个小亮点；采过了只剩一点点茬，过几天再长出来。
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { FORAGE, ripe, type ForageKind, type ForageSpot } from './forage'
 
 const mat = (color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
@@ -67,6 +68,55 @@ function add(g: THREE.Group, geo: THREE.BufferGeometry, m: THREE.Material, x: nu
   return o
 }
 
+/** 一丛竹子：一节一节的竹竿（竹节深一点），上半截一簇簇细长的竹叶；按材质合成两个网格，省绘制次数 */
+function bambooGrove(r: () => number, canes: number, spread: number): THREE.Group {
+  const stalks: THREE.BufferGeometry[] = []
+  const nodes: THREE.BufferGeometry[] = []
+  const leaves: THREE.BufferGeometry[] = []
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const e = new THREE.Euler()
+  const put = (geo: THREE.BufferGeometry, list: THREE.BufferGeometry[], x: number, y: number, z: number, rx: number, ry: number, rz: number, sx = 1, sy = 1, sz = 1) => {
+    q.setFromEuler(e.set(rx, ry, rz, 'YXZ'))
+    m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz))
+    list.push(geo.clone().applyMatrix4(m))
+  }
+  const seg = new THREE.CylinderGeometry(0.032, 0.036, 0.5, 6)
+  const ring = new THREE.CylinderGeometry(0.042, 0.042, 0.035, 6)
+  const leaf = new THREE.ConeGeometry(0.09, 0.75, 4)
+  leaf.translate(0, 0.375, 0)
+  for (let i = 0; i < canes; i++) {
+    const x = (r() - 0.5) * spread
+    const z = (r() - 0.5) * spread * 0.7
+    const h = 2.8 + r() * 1.4
+    const lean = (r() - 0.5) * 0.12
+    const n = Math.round(h / 0.5)
+    for (let k = 0; k < n; k++) {
+      const y = 0.25 + k * 0.5
+      put(seg, stalks, x + lean * y, y, z, 0, 0, -lean)
+      put(ring, nodes, x + lean * (y + 0.25), y + 0.25, z, 0, 0, -lean)
+    }
+    // 上半截：几簇竹叶，每簇 4 片朝外、往下垂
+    for (let t = 0; t < 6; t++) {
+      const y = h * (0.5 + t * 0.085)
+      const yaw = r() * Math.PI * 2
+      for (let l = 0; l < 5; l++) {
+        const a = yaw + (l / 5) * Math.PI * 2
+        put(leaf, leaves, x + lean * y, y, z, 1.75 + r() * 0.5, a, 0, 1, 1, 0.22)
+      }
+    }
+  }
+  const g = new THREE.Group()
+  for (const [list, mat] of [[stalks, M.leaf], [nodes, M.leafDark], [leaves, M.crown]] as const) {
+    const merged = mergeGeometries(list)
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = true
+    g.add(mesh)
+  }
+  return g
+}
+
 /** 长着的样子 */
 function plant(kind: ForageKind, r: () => number): THREE.Group {
   const g = new THREE.Group()
@@ -100,16 +150,18 @@ function plant(kind: ForageKind, r: () => number): THREE.Group {
     })
   } else if (kind === 'shoots') {
     // 后面一小丛竹子，前面地里冒出几根笋
-    for (let i = 0; i < 6; i++) {
-      const x = -0.9 + (r() - 0.5) * 0.7
-      const z = -0.5 + (r() - 0.5) * 0.8
-      add(g, G.cane, M.leaf, x, 1.3, z, 0.9 + r() * 0.3, (r() - 0.5) * 0.12, (r() - 0.5) * 0.12)
-      add(g, G.blob, M.leafDark, x, 2.3 + r() * 0.4, z, 3 + r() * 1.5).scale.y = 1.6
-    }
+    const grove = bambooGrove(r, 6, 0.9)
+    grove.position.set(-0.9, 0, -0.5)
+    grove.scale.setScalar(1 / 1.4)
+    g.add(grove)
     around(4, 0.22, (x, z) => {
       add(g, G.shoot, M.shoot, x, 0.14, z, 0.8 + r() * 0.5)
       add(g, G.dot, M.shootTip, x, 0.3, z, 1.5)
     })
+  } else if (kind === 'bamboo') {
+    g.add(bambooGrove(r, 9, 1.4))
+    // 能砍的几根砍好了放在前面
+    for (let i = 0; i < 3; i++) add(g, G.cane, M.shoot, (i - 1) * 0.07, 0.05, 0.45, 0.5, 0, Math.PI / 2)
   } else if (kind === 'berries') {
     add(g, G.bush, M.leafDark, 0, 0.26, 0, 1).scale.y = 0.75
     add(g, G.bush, M.leaf, 0.22, 0.2, 0.1, 0.7).scale.y = 0.7
@@ -142,13 +194,10 @@ function stubs(kind: ForageKind, r: () => number): THREE.Group {
     add(g, G.crown, M.leafDark, 0.6, 2.7, 0.3, 0.6)
     return g
   }
-  if (kind === 'shoots') {
-    for (let i = 0; i < 6; i++) {
-      const x = -0.9 + (r() - 0.5) * 0.7
-      const z = -0.5 + (r() - 0.5) * 0.8
-      add(g, G.cane, M.leaf, x, 1.3, z, 0.9 + r() * 0.3)
-      add(g, G.blob, M.leafDark, x, 2.3 + r() * 0.4, z, 3 + r() * 1.5).scale.y = 1.6
-    }
+  if (kind === 'shoots' || kind === 'bamboo') {
+    const grove = bambooGrove(r, kind === 'bamboo' ? 6 : 6, kind === 'bamboo' ? 1.4 : 0.9)
+    if (kind === 'shoots') { grove.position.set(-0.9, 0, -0.5); grove.scale.setScalar(1 / 1.4) }
+    g.add(grove)
   }
   if (kind === 'berries') {
     add(g, G.bush, M.leafDark, 0, 0.26, 0, 1).scale.y = 0.75
@@ -172,7 +221,7 @@ export class ForageView {
       holder.position.set(s.at.x, ground(s.at.x, s.at.z), s.at.z)
       holder.rotation.y = r() * Math.PI * 2
       // 游戏镜头很高：小东西放大一点才看得清（树不用）
-      if (s.kind !== 'honey') holder.scale.setScalar(1.4)
+      if (s.kind !== 'honey' && s.kind !== 'bamboo') holder.scale.setScalar(1.4)
       const full = plant(s.kind, r)
       const empty = stubs(s.kind, seeded(Math.round(s.at.x * 17 + s.at.z * 3 + 999)))
       const glint = new THREE.Mesh(G.glint, M.glint)
