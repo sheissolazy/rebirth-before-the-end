@@ -4,7 +4,7 @@ import { Actor, Household } from './residents'
 import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
 import { Zombie } from './siege'
 import { restore, snapshot } from './save'
-import { VISITORS, Visitor } from './visitors'
+import { Courier, VISITORS, Visitor } from './visitors'
 import { SCAVENGE } from './scavenge'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
@@ -734,5 +734,40 @@ describe('第二轮审查（回归测试）', () => {
     ;(life as unknown as { onSiegeEvent: (e: unknown) => void }).onSiegeEvent({ kind: 'end', won: true, kills: 1, broken: [], ambush: true })
     expect(life.actors[0].pose).toBe('idle')
     expect(life.actors[1].pose).toBe('idle')
+  })
+})
+
+describe('长得不一样的陌生人、男主送东西上门', () => {
+  it('门外是姑娘：住进来用她的模型和女名，日志用"她"', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _model, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    life.startVisit(VISITORS.find((v) => v.id === 'beggar')!)
+    life.visitModel = 'survivor_f'
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    expect(life.visitVars().ta).toBe('她')
+    life.answerVisitor('invite')
+    const a = life.actors[3]
+    expect(a.model).toBe('survivor_f')
+    expect(['小雨', '阿芳', '晓晓', '小美', '阿花', '小婷', '阿梅']).toContain(a.name)
+    expect(life.log.at(-1)?.vars?.ta).toBe('她')
+  })
+
+  it('顾沉走到铁门外放下东西再走；日志等放下了才记，东西马上到账', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 9 }
+    life.spawnCourier = (who, at) => new Courier(who, at)
+    const phases: string[] = []
+    life.onCourier = (_c, p) => phases.push(p)
+    const before = { food: life.stock.food, aff: life.affection.guchen ?? 0 }
+    life.giveCare('guchen')
+    expect(life.courier).not.toBeNull()
+    expect(life.affection.guchen).toBeGreaterThan(before.aff)
+    expect(life.log.some((l) => l.key.startsWith('world.army.care'))).toBe(false)
+    for (let i = 0; i < 20000 && life.courier; i++) { life.tick(0.05, () => false); life.courier?.follow(0.05, 1.8) }
+    expect(life.courier).toBeNull()
+    expect(phases).toEqual(['drop', 'gone'])
+    expect(life.log.some((l) => l.key.startsWith('world.army.care'))).toBe(true)
   })
 })

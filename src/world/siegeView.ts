@@ -45,6 +45,9 @@ class Bar {
   }
 }
 
+/** 正常人模型：访客、住进来的幸存者、男主 */
+const NPC_MODELS = ['neighbor', 'stranger', 'jiangye', 'shenyan', 'survivor_f', 'survivor_m', 'guchen', 'xielin']
+
 const BAR_AT: Record<LayerId, THREE.Vector3> = {
   gate: new THREE.Vector3(4, 2.7, 13),
   door: new THREE.Vector3(3.5, 2.9, 6.05),
@@ -127,12 +130,9 @@ export class SiegeView {
     const loader = new GLTFLoader()
     const [gl, npcs] = await Promise.all([
       Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`))),
-      Promise.all(['neighbor', 'stranger', 'jiangye', 'shenyan'].map(loadPerson)),
+      Promise.all(NPC_MODELS.map(loadPerson)),
     ])
-    this.npcs.set('neighbor', npcs[0])
-    this.npcs.set('stranger', npcs[1])
-    this.npcs.set('jiangye', npcs[2])
-    this.npcs.set('shenyan', npcs[3])
+    NPC_MODELS.forEach((n, k) => this.npcs.set(n, npcs[k]))
     // 丧尸：两个专门捏的，再加上老太太、年轻男人的丧尸版（复制一份材质，不影响正常来访的人）
     const zombify = (root: THREE.Object3D, copy: boolean) => {
       root.traverse((o) => {
@@ -143,7 +143,7 @@ export class SiegeView {
         const fix = (mat: THREE.Material) => {
           const std = (copy ? mat.clone() : mat) as THREE.MeshStandardMaterial
           const n = std.name
-          if (/eyebrow|eyelash|short|long|hair|bob|ponytail/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; return std }
+          if (/eyebrow|eyelash|short|long|hair|bob|ponytail|braid/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; return std }
           std.transparent = false
           if (n.endsWith('.body')) { std.color.set('#9aab8c'); bloody(std, 0.5) }
           else if (n.endsWith('low-poly')) std.color.set('#e8e2b8')
@@ -156,8 +156,10 @@ export class SiegeView {
     }
     this.templates = [
       ...gl.map((g) => zombify(g.scene, false)),
-      zombify(cloneSkinned(npcs[0]), true),
-      zombify(cloneSkinned(npcs[1]), true),
+      zombify(cloneSkinned(this.npcs.get('neighbor')!), true),
+      zombify(cloneSkinned(this.npcs.get('stranger')!), true),
+      zombify(cloneSkinned(this.npcs.get('survivor_f')!), true),
+      zombify(cloneSkinned(this.npcs.get('survivor_m')!), true),
     ]
   }
 

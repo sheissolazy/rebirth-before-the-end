@@ -86,20 +86,20 @@ export const VISITORS: VisitorDef[] = [
   },
 ]
 
-/** 来敲门的人：一个会走路的 NPC */
-export class Visitor extends Walker {
-  readonly def: VisitorDef
-  phase: 'walk' | 'knock' | 'talk' | 'leave' = 'walk'
-  knockT = 0
+/** 门外陌生人可能长的样子（住进来以后也是这个模型）；survivor_f 是女的 */
+export const STRANGER_MODELS = ['stranger', 'survivor_f', 'survivor_m'] as const
+export const isFemaleModel = (m: string) => m === 'survivor_f' || m === 'neighbor'
+
+/** 街上走来走去的 NPC：有 MakeHuman 模型就用骨骼摆姿势，没有就用代码画的小人 */
+class StreetWalker extends Walker {
   readonly home: Pt
   private readonly driver: PoseDriver | null
   private readonly inner: THREE.Object3D
 
-  constructor(def: VisitorDef, at: Pt, model?: THREE.Object3D) {
+  constructor(at: Pt, model: THREE.Object3D | undefined, female: boolean) {
     super()
-    this.def = def
     this.home = { ...at }
-    this.inner = model ?? person(def.model === 'neighbor' ? '#b07a9a' : '#3c3c44', '#2a2a2a', def.model === 'neighbor' ? 0.92 : 1.02)
+    this.inner = model ?? person(female ? '#b07a9a' : '#3c3c44', '#2a2a2a', female ? 0.92 : 1.02)
     this.driver = model ? new PoseDriver(model) : null
     this.root.add(this.inner)
     this.root.position.set(at.x, 0, at.z)
@@ -111,5 +111,33 @@ export class Visitor extends Walker {
       const body = this.inner.userData.body as THREE.Object3D | undefined
       if (body) body.position.y = 0.55 + (walking ? Math.abs(Math.sin(performance.now() / 90)) * 0.05 : 0)
     }
+  }
+}
+
+/** 来敲门的人 */
+export class Visitor extends StreetWalker {
+  readonly def: VisitorDef
+  phase: 'walk' | 'knock' | 'talk' | 'leave' = 'walk'
+  knockT = 0
+
+  constructor(def: VisitorDef, at: Pt, model?: THREE.Object3D, female = def.model === 'neighbor') {
+    super(at, model, female)
+    this.def = def
+  }
+}
+
+/** 男主送东西：走到铁门外放下就走，不敲门、不打扰（顾沉放一箱物资，沈砚放药，谢临塞纸条） */
+export type CourierId = 'guchen' | 'shenyan' | 'xielin'
+export class Courier extends StreetWalker {
+  readonly who: CourierId
+  phase: 'walk' | 'drop' | 'leave' = 'walk'
+  /** 放东西停留的游戏小时 */
+  wait = 0
+  /** 放下东西时才记进日志（路上就记的话，人还没到字先出来了） */
+  pending: { key: string; vars: Record<string, string | number> } | null = null
+
+  constructor(who: CourierId, at: Pt, model?: THREE.Object3D) {
+    super(at, model, false)
+    this.who = who
   }
 }

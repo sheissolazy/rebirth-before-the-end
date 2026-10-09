@@ -18,7 +18,7 @@ import { survivorNames, survivorTraits } from '../content/survivors'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
-import { VISITORS, Visitor, type VisitorCtx, type VisitorDef } from './visitors'
+import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { lt, t, type UiKey } from '../i18n'
 
@@ -194,6 +194,8 @@ export interface Trip {
 
 /** 住进来的人叫什么 */
 const NEWCOMERS = ['阿杰', '老秦', '小周', '阿梅', '老郑', '小林', '阿彬']
+/** 文字版幸存者名字里的女名（门外是姑娘的话从这里挑） */
+const FEMALE_NAMES = new Set(['小雨', '阿芳', '晓晓', '小美', '阿花', '小婷', '阿梅'])
 
 const placeName = (id: string) => lt(locations.find((l) => l.id === id)?.name ?? { zh: id })
 
@@ -248,6 +250,10 @@ export class Household {
   private rainWater = 0
   /** 正在门口的访客 */
   visitor: Visitor | null = null
+  /** 这次门外陌生人长什么样（STRANGER_MODELS 之一） */
+  visitModel = 'stranger'
+  /** 男主正在往铁门送东西 */
+  courier: Courier | null = null
   /** 访客到了门口、等玩家回话（界面弹对话框） */
   talking: VisitorDef | null = null
   /** 已经来过的访客（id → 哪天） */
@@ -292,7 +298,10 @@ export class Household {
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
   flooded = -1
-  spawnVisitor: ((def: VisitorDef, at: Pt) => Visitor) | null = null
+  spawnVisitor: ((def: VisitorDef, at: Pt, model: string) => Visitor) | null = null
+  spawnCourier: ((who: CourierId, at: Pt) => Courier) | null = null
+  /** 送东西的人在铁门外放下了东西 / 走了 */
+  onCourier: ((c: Courier, phase: 'drop' | 'gone') => void) | null = null
   /** World 提供：做一个新的家庭成员（带 3D 模型） */
   makeActor: ((name: string, model: string, at: Pt) => Actor) | null = null
   onKnock: (() => void) | null = null
@@ -338,6 +347,7 @@ export class Household {
     this.streetTick()
     this.chatTick(hours)
     this.visitorTick()
+    this.courierTick(hours)
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -400,11 +410,49 @@ export class Household {
     const east = this.rand() < 0.5
     const at = { x: east ? 30 : -20, z: 18 }
     if (def.id === 'jiangye_care') this.careVariant = Math.floor(this.rand() * 3)
-    const v = this.spawnVisitor(def, at)
+    // 讨饭的陌生人每次长得不一样（男女老少），黑鸦的人还是那个年轻男人
+    this.visitModel = def.id === 'beggar' ? STRANGER_MODELS[Math.floor(this.rand() * STRANGER_MODELS.length)] : def.model
+    const v = this.spawnVisitor(def, at, this.visitModel)
     v.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4 + (this.rand() - 0.5) * 0.6, z: 14.1, floor: 0 }) ?? [])
     this.visitor = v
     // 一天最多来一个；"来过"等回完话再记（路上刷新网页的话，这个访客以后还会来）
     this.visitDay = this.clock.day
+  }
+
+  /** 对话里的代词：门外是姑娘就用"她" */
+  visitVars(): Record<string, string> {
+    return { ta: isFemaleModel(this.visitModel) ? '她' : '他' }
+  }
+
+  /** 男主送东西上门。有 3D 就真的走到铁门外放下再走，日志等放下了再记；没有（测试、卡通版没模型）就直接记 */
+  private sendCourier(who: CourierId, key: string, vars: Record<string, string | number>): void {
+    if (!this.spawnCourier || this.courier) { this.note(key, vars); return }
+    const east = this.rand() < 0.5
+    const at = { x: east ? 30 : -20, z: 18 }
+    const c = this.spawnCourier(who, at)
+    c.pending = { key, vars }
+    c.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4.6 + (this.rand() - 0.5) * 0.8, z: 14.3, floor: 0 }) ?? [])
+    this.courier = c
+  }
+
+  private courierTick(hours: number): void {
+    const c = this.courier
+    if (!c) return
+    if (c.phase === 'walk' && !c.path.length) {
+      c.phase = 'drop'
+      c.wait = 0.2
+      c.face(0, -1, 1)
+      if (c.pending) this.note(c.pending.key, c.pending.vars)
+      c.pending = null
+      this.onCourier?.(c, 'drop')
+    } else if (c.phase === 'drop' && (c.wait -= hours) <= 0) {
+      c.phase = 'leave'
+      c.setPath(route(this.navs, { ...c.pos, floor: 0 }, { ...c.home, floor: 0 }) ?? [])
+    } else if (c.phase === 'leave' && !c.path.length) {
+      c.root.removeFromParent()
+      this.courier = null
+      this.onCourier?.(c, 'gone')
+    }
   }
 
   /** 最多住 5 个人 */
@@ -593,16 +641,18 @@ export class Household {
       else if (choice === 'invite') {
         // 让他住进来：门口的人直接变成家里人，走进院子
         const taken = (n: string) => this.actors.some((a) => a.name === n)
-        const pool = survivorNames.map((n) => lt(n)).filter((n) => !taken(n))
-        let name = pool[Math.floor(this.rand() * pool.length)] ?? NEWCOMERS.find((n) => !taken(n)) ?? '新来的人'
+        const female = isFemaleModel(this.visitModel)
+        const fits = (n: string) => !taken(n) && FEMALE_NAMES.has(n) === female
+        const pool = survivorNames.map((n) => lt(n)).filter(fits)
+        let name = pool[Math.floor(this.rand() * pool.length)] ?? NEWCOMERS.find(fits) ?? '新来的人'
         for (let k = 2; taken(name); k++) name = `新来的人${k}`
-        const a = this.addResident(name, 'stranger', { x: v.pos.x, z: v.pos.z })
+        const a = this.addResident(name, this.visitModel, { x: v.pos.x, z: v.pos.z })
         if (a) {
           a.health = 70
           a.needs = { hunger: 25, thirst: 40, energy: 50, mood: 70 }
           a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
           const tr = survivorTraits.find((x) => x.id === a.trait)
-          this.note('world.visit.beggar.log.invite', { who: name, trait: tr ? `${lt(tr.name)}——${lt(tr.desc)}` : '' })
+          this.note('world.visit.beggar.log.invite', { who: name, trait: tr ? `${lt(tr.name)}——${lt(tr.desc)}` : '', ...this.visitVars() })
           this.talking = null
           v.root.removeFromParent()
           this.visitor = null
@@ -635,7 +685,7 @@ export class Household {
       v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
       return
     }
-    this.note(`world.visit.${def.id}.log.${choice}`)
+    this.note(`world.visit.${def.id}.log.${choice}`, this.visitVars())
     this.talking = null
     v.phase = 'leave'
     v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
@@ -858,39 +908,42 @@ export class Household {
     const c = this.clock
     if (c.day < PROLOGUE_DAYS || c.hour < 8 || this.careDay === c.day) return
     this.careDay = c.day
-    const careText = (id: string, k: number) => {
-      const npc = npcs.find((n) => n.id === id)
+    // 谢临：同为重生者。第一张纸条一定是"下个月比你记得的更糟"
+    if (this.xielinNotes === 0 || this.rand() < 0.15) this.giveCare('xielin')
+    // 顾沉：末日前去军区门口见过他的话
+    else if (this.guchenMet && this.rand() < 0.35) this.giveCare('guchen')
+    // 沈砚：让他治过伤或送过他急救包的话
+    else if ((this.affection.shenyan ?? 0) >= 10 && this.rand() < 0.3) this.giveCare('shenyan')
+  }
+
+  /** 男主送来的东西（东西马上到账；有 3D 的话人会走到铁门外放下） */
+  giveCare(who: CourierId): void {
+    const careText = (k: number) => {
+      const npc = npcs.find((n) => n.id === who)
       return npc?.care?.[k] ? lt(npc.care[k].text) : ''
     }
-    const love = (id: string, n: number) => { this.affection[id] = Math.min(100, (this.affection[id] ?? 0) + n) }
-    // 谢临：同为重生者。第一张纸条一定是"下个月比你记得的更糟"
-    if (this.xielinNotes === 0 || this.rand() < 0.15) {
+    const love = (n: number) => { this.affection[who] = Math.min(100, (this.affection[who] ?? 0) + n) }
+    if (who === 'xielin') {
       const k = this.xielinNotes === 0 ? 0 : 1 + Math.floor(this.rand() * 2)
       this.xielinNotes++
       if (k === 1) this.molotovs += 2
       else if (k === 2) this.cores += 1
-      love('xielin', 4)
-      this.note(`world.xielin.note${k}`, { text: careText('xielin', k) })
-      return
-    }
-    // 顾沉：末日前去军区门口见过他的话
-    if (this.guchenMet && this.rand() < 0.35) {
+      love(4)
+      this.sendCourier('xielin', `world.xielin.note${k}`, { text: careText(k) })
+    } else if (who === 'guchen') {
       const k = Math.floor(this.rand() * 3)
       if (k === 0) this.stock = { ...this.stock, food: this.stock.food + 3 }
       else if (k === 1) this.fewerTonight = true
       else { this.helmet = true; this.actors[0].helmet = true }
-      love('guchen', 3)
-      this.note(`world.army.care${k}`, { text: careText('guchen', k) })
-      return
-    }
-    // 沈砚：让他治过伤或送过他急救包的话
-    if ((this.affection.shenyan ?? 0) >= 10 && this.rand() < 0.3) {
+      love(3)
+      this.sendCourier('guchen', `world.army.care${k}`, { text: careText(k) })
+    } else {
       const k = Math.floor(this.rand() * 3)
       if (k === 0) this.medkits += 2
       else if (k === 1) for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 15)
       else this.stock = { ...this.stock, water: this.stock.water + 4 }
-      love('shenyan', 3)
-      this.note(`world.shenyan.care${k}`, { text: careText('shenyan', k) })
+      love(3)
+      this.sendCourier('shenyan', `world.shenyan.care${k}`, { text: careText(k) })
     }
   }
 

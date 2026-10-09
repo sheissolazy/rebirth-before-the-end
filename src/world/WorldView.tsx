@@ -350,6 +350,8 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
           <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.jiangye')}</button>
           <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.shenyan')}</button>
+          <button onClick={() => world.current?.debugCourier('guchen')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.guchen')}</button>
+          <button onClick={() => world.current?.debugCourier('xielin')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.xielin')}</button>
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>
@@ -399,12 +401,12 @@ export default function WorldView() {
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-amber-200/70 text-5xl">{hud.visit.icon}</div>
             <div className="flex-1">
               <div className="text-sm font-bold">{hud.visit.name}</div>
-              <p className="mt-1 text-sm leading-relaxed">{t(hud.visit.textKey as UiKey)}</p>
+              <p className="mt-1 text-sm leading-relaxed">{t(hud.visit.textKey as UiKey, hud.visit.vars)}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {hud.visit.choices.map((c) => (
                   <button key={c.id} disabled={!c.ok} onClick={() => world.current?.answerVisitor(c.id)}
                     className="rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-amber-50 shadow disabled:opacity-40">
-                    {t(`world.visit.${hud.visit!.id}.choice.${c.id}` as UiKey)}
+                    {t(`world.visit.${hud.visit!.id}.choice.${c.id}` as UiKey, hud.visit!.vars)}
                   </button>
                 ))}
               </div>

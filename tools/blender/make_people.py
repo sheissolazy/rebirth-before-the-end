@@ -66,6 +66,29 @@ PEOPLE = {
         skin='young_asian_male', hair='short02', eyebrows='eyebrow002', eyelashes='eyelashes01',
         clothes=['male_elegantsuit01', 'shoes03'],
     ),
+    # 住进来的幸存者：扎辫子的年轻姑娘、戴礼帽的中年大叔（和"陌生人"轮着用）
+    'survivor_f': dict(
+        macro=dict(gender=0.0, age=0.42, muscle=0.55, weight=0.42, height=0.5, proportions=0.6, cupsize=0.5, firmness=0.5),
+        skin='young_asian_female', hair='braid01', eyebrows='eyebrow003', eyelashes='eyelashes02',
+        clothes=['female_sportsuit01', 'shoes05'],
+    ),
+    'survivor_m': dict(
+        macro=dict(gender=1.0, age=0.66, muscle=0.5, weight=0.66, height=0.48, proportions=0.5, cupsize=0.5, firmness=0.45),
+        skin='middleage_asian_male', hair='short04', eyebrows='eyebrow008', eyelashes='eyelashes01',
+        clothes=['male_casualsuit02', 'shoes02', 'fedora01'],
+    ),
+    # 顾沉：军区基地长，最高最壮，寸头
+    'guchen': dict(
+        macro=dict(gender=1.0, age=0.52, muscle=0.82, weight=0.55, height=0.76, proportions=0.62, cupsize=0.5, firmness=0.65),
+        skin='young_asian_male', hair='short04', eyebrows='eyebrow012', eyelashes='eyelashes03',
+        clothes=['male_casualsuit04', 'shoes03'],
+    ),
+    # 谢临：同为重生者，长发，清瘦苍白（游戏里把衣服调成黑色）
+    'xielin': dict(
+        macro=dict(gender=1.0, age=0.5, muscle=0.45, weight=0.36, height=0.68, proportions=0.65, cupsize=0.5, firmness=0.5),
+        skin='young_asian_male', hair='long01', eyebrows='eyebrow004', eyelashes='eyelashes02',
+        clothes=['male_casualsuit01', 'shoes06'],
+    ),
 }
 
 

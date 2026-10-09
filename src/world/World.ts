@@ -27,7 +27,7 @@ import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
-import { VISITORS, Visitor } from './visitors'
+import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -79,7 +79,7 @@ export interface Hud {
   /** 全新开局的片头正在放 */
   intro: boolean
   /** 有人在门口等回话 */
-  visit: { id: string; icon: string; name: string; textKey: string; choices: { id: string; ok: boolean }[] } | null
+  visit: { id: string; icon: string; name: string; textKey: string; choices: { id: string; ok: boolean }[]; vars: Record<string, string> } | null
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -95,9 +95,24 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 const TMP_FWD = new THREE.Vector3()
+
+/** 谢临：衣服换成黑色（复制材质，不影响别人） */
+function darkCoat(model: THREE.Object3D): void {
+  model.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    const fix = (mat: THREE.Material) => {
+      if (!/suit|shoes/.test(mat.name)) return mat
+      const c = mat.clone() as THREE.MeshStandardMaterial
+      c.color.set('#2a2a30')
+      return c
+    }
+    m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material)
+  })
+}
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -221,6 +236,8 @@ export class World {
   private bite = 0
   /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
   private cameo: { obj: THREE.Object3D; until: number } | null = null
+  /** 送东西的人放在铁门外的箱子 / 纸条 */
+  private dropped: THREE.Object3D | null = null
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
   private readonly torch = new THREE.SpotLight('#fff1cf', 0, 20, 0.5, 0.45, 1.4)
   private readonly bubbles = new Bubbles()
@@ -309,10 +326,38 @@ export class World {
     this.buildGarden()
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
-    this.life.spawnVisitor = (def, at) => {
-      const v = new Visitor(def, at, this.siegeView.npc(def.model))
+    this.life.spawnVisitor = (def, at, model) => {
+      const v = new Visitor(def, at, this.siegeView.npc(model) ?? this.siegeView.npc(def.model), isFemaleModel(model))
       this.scene.add(v.root)
       return v
+    }
+    this.life.spawnCourier = (who, at) => {
+      const model = this.siegeView.npc(who)
+      if (model && who === 'xielin') darkCoat(model)
+      const c = new Courier(who, at, model)
+      this.scene.add(c.root)
+      return c
+    }
+    this.life.onCourier = (c, phase) => {
+      if (phase === 'drop') {
+        this.sound.knock()
+        this.toast(`world.courier.${c.who}`, 4)
+        // 铁门外留下一箱东西（谢临只是一张纸条）
+        const g = c.who === 'xielin'
+          ? new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.01, 0.14), new THREE.MeshStandardMaterial({ color: '#f4efe4' }))
+          : new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.4), new THREE.MeshStandardMaterial({ color: c.who === 'shenyan' ? '#e8e8e8' : '#9a7a4e' }))
+        // 纸条从门缝塞进院子里；箱子放在他脚边（铁门外）
+        if (c.who === 'xielin') g.position.set(c.pos.x, 0.02, c.pos.z - 0.6)
+        else g.position.set(c.pos.x + 0.55, 0.18, c.pos.z + 0.05)
+        g.castShadow = true
+        this.dropped?.removeFromParent()
+        this.dropped = g
+        this.scene.add(g)
+      } else {
+        // 走远了，东西也被家里人收进去了
+        this.dropped?.removeFromParent()
+        this.dropped = null
+      }
     }
     this.life.makeActor = (name, model, at) => {
       const a = new Actor(name, '#8a6d4f', '#222222', 1.03, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
@@ -1136,6 +1181,14 @@ export class World {
       for (let left = sim; left > 1e-6; left -= 0.05) walking = visitor.follow(Math.min(left, 0.05), 1.7) || walking
       visitor.animate(Math.min(sim, 0.1), walking)
     }
+    // 送东西的男主（谢临走得快）
+    const courier = this.life.courier
+    if (courier) {
+      let walking = false
+      const v = courier.who === 'xielin' ? 2.6 : 1.8
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = courier.follow(Math.min(left, 0.05), v) || walking
+      courier.animate(Math.min(sim, 0.1), walking)
+    }
     for (const w of this.weapons) w.visible = fighting
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     if (this.life.wall && !this.stoneWall && !this.hud.loading) this.raiseStoneWall()
@@ -1479,8 +1532,9 @@ export class World {
     // 男主用文字版的名字和身份
     const lead = ['jiangye', 'shenyan'].find((id) => def.id.startsWith(id))
     const npc = lead ? npcs.find((n) => n.id === lead) : null
+    const vars = this.life.visitVars()
     return {
-      id: def.id, icon: def.icon,
+      id: def.id, icon: def.id === 'beggar' && vars.ta === '她' ? '👩' : def.icon, vars,
       name: npc ? `${lt(npc.name)} · ${lt(npc.title)}` : t(`world.visit.${def.id}.name` as UiKey),
       textKey: def.id === 'jiangye_care' ? `world.visit.jiangye_care.text${this.life.careVariant}` : `world.visit.${def.id}.text`,
       choices: def.choices.map((c) => ({ id: c.id, ok: !c.need || c.need(ctx) })),
@@ -1499,6 +1553,12 @@ export class World {
   answerVisitor(choice: string): void {
     this.life.answerVisitor(choice)
     this.pushLifeHud()
+  }
+
+  /** 原型调试：顾沉 / 谢临马上送东西来 */
+  debugCourier(who: 'guchen' | 'xielin'): void {
+    if (this.life.clock.day < PROLOGUE_DAYS) this.life.clock = { day: PROLOGUE_DAYS, hour: 9 }
+    this.life.giveCare(who)
   }
 
   /** 原型调试：马上让某个访客来敲门 */
