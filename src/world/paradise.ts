@@ -17,7 +17,8 @@ export function loadStyle(): ArtStyle {
     const v = localStorage.getItem(STYLE_KEY)
     if (v === 'toon' || v === 'paradise') return v
   } catch { /* 隐私模式下读不了，就用默认 */ }
-  return 'toon'
+  // 默认世外桃源：真人模型、换装、大块头这些都只在这个画风里有（2026-10-09 起；右上角可以切回卡通）
+  return 'paradise'
 }
 
 export function saveStyle(s: ArtStyle): void {
