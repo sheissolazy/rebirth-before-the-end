@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useStore } from './ui/store'
 import { StartScreen } from './ui/StartScreen'
 import { Game } from './ui/Game'
 import { EndingScreen } from './ui/EndingScreen'
+
+// 2.5D 原型单独打包，文字版不用下载 three.js
+const WorldView = lazy(() => import('./world/WorldView'))
+const IS_PROTO = import.meta.env.VITE_SAVE_PREFIX === 'rbte-proto'
 
 export default function App() {
   const store = useStore()
@@ -15,6 +19,7 @@ export default function App() {
   useEffect(() => { if (store.error) { const id = setTimeout(store.clearError, 2500); return () => clearTimeout(id) } }, [store.error, store.clearError])
   useEffect(() => { if (store.notice) { const id = setTimeout(store.clearNotice, 5000); return () => clearTimeout(id) } }, [store.notice, store.clearNotice])
 
+  if (hash === '#world' || (IS_PROTO && hash === '')) return <Suspense fallback={null}><WorldView /></Suspense>
   if (store.state?.ending && !store.report) return <EndingScreen state={store.state} store={store} />
   if (store.state && hash === '#game') return <Game state={store.state} store={store} />
   return <StartScreen store={store} />

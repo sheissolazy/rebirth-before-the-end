@@ -2,3 +2,8 @@
 
 :root { color-scheme: dark; }
 body { margin: 0; min-height: 100vh; }
+
+/* 2.5D 原型横屏优先：竖着拿手机时提示横过来 */
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-hint { display: flex; }
+}

@@ -1,6 +1,17 @@
 /** UI 字符串（中文）。key 用英文点分命名，按页面分组。 */
 export const zh = {
   'app.title': '重生末日之前',
+  'world.loading': '正在搬进外婆的老宅…',
+  'world.mode.home': '家里 · 45° 视角',
+  'world.mode.outside': '屋外 · 跟拍',
+  'world.floor1': '一楼',
+  'world.floor2': '二楼',
+  'world.selected': '当前：{name}',
+  'world.help.home': '点人选中，点地面让 TA 走过去；拖动平移，滚轮或双指缩放；WASD 控制女主',
+  'world.help.outside': '点地面走路或用 WASD；爸妈会跟着你。走回铁门里就回家',
+  'world.textVersion': '文字版',
+  'world.rotate': '请把手机横过来玩',
+  'world.floor2Hint': '二楼原型里还不能走上去，只能看',
   'nav.map': '地图',
   'nav.base': '基地',
   'nav.warehouse': '仓库',
