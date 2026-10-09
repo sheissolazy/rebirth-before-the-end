@@ -1769,12 +1769,14 @@ export class World {
   }
 
   /** 日记里"认识的人"：男主和好感 */
-  diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean; home: boolean }[] {
+  diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean; home: boolean; canStay: boolean }[] {
     return Object.entries(this.life.affection).map(([id, v]) => {
       const n = npcs.find((x) => x.id === id)
       const met = id === 'guchen' ? this.life.guchenMet : id === 'xielin' ? this.life.xielinNotes > 0 : this.life.seen[`${id}_meet`] !== undefined
       const home = (id === 'jiangye' && this.life.jiangyeHome) || (id === 'shenyan' && this.life.shenyanHome)
-      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met, home }
+      // 好感够了、家里还有位置：下次他来时可以请他住下来
+      const canStay = (id === 'jiangye' || id === 'shenyan') && !home && v >= 70 && this.life.residents < Household.MAX_RESIDENTS
+      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met, home, canStay }
     })
   }
 

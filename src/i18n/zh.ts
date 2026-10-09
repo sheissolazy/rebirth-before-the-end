@@ -67,6 +67,7 @@ export const zh = {
   'world.diary': '日记',
   'world.diary.title': '重生日记',
   'world.diary.home': '🏠 住在家里',
+  'world.diary.canStay': '💬 下次来可以请他住下来',
   'world.diary.lastLife': '上一世：末日后撑了 {days} 天，{cause}。这一次，别再那样了。',
   'world.diary.cause.starve': '最后是饿死的',
   'world.diary.cause.thirst': '最后是渴死的',

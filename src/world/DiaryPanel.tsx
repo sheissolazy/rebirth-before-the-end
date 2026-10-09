@@ -5,7 +5,7 @@ import { DAYS_PER_MONTH, PROLOGUE_DAYS, SUNSET, calendarLabel } from './life'
 import type { LogEntry } from './residents'
 import { currentLife, lastDeath, rebirthPoints } from './save'
 
-export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean; home?: boolean }
+export interface DiaryPerson { icon: string; name: string; title: string; affection: number; met: boolean; home?: boolean; canStay?: boolean }
 
 export function DiaryPanel({ day, hour, log, people, onClose }: {
   day: number; hour: number; log: LogEntry[]; people: DiaryPerson[]; onClose: () => void
@@ -73,6 +73,7 @@ export function DiaryPanel({ day, hour, log, people, onClose }: {
                     <span className="font-semibold">{p.name}</span>
                     <span className="text-xs text-zinc-500">{p.title}</span>
                     {p.home && <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-800">{t('world.diary.home')}</span>}
+                    {p.canStay && <span className="rounded bg-rose-100 px-1 text-[10px] text-rose-800">{t('world.diary.canStay')}</span>}
                     <span className="ml-auto text-xs text-red-700">{'❤'.repeat(Math.max(1, Math.round(p.affection / 20)))} {Math.round(p.affection)}</span>
                   </li>
                 ))}
