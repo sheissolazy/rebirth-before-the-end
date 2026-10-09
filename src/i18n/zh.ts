@@ -143,7 +143,7 @@ export const zh = {
   'world.log.died.crisis': '危机夜里，{who}没能撑过去',
   'world.log.fishBagAmmo': '钓鱼时钩上来一个顺江漂下来的背包，里面有 3 发子弹',
   'world.log.fishBagMedkit': '钓鱼时钩上来一个顺江漂下来的背包，里面有一个急救包',
-  'world.log.crossbow': '五金店的老板从柜台底下拿出一把弩："这个不用子弹。"——爸爸守夜时改用弩，射得比霰弹枪还远',
+  'world.log.crossbow': '五金店的老板从柜台底下拿出一把弩："这个不用子弹。"——{who}守夜时改用弩，射得比霰弹枪还远',
   'world.log.dying': '{who}已经撑不了多久了，快给吃的喝的！',
   'world.intro.skip': '点一下跳过',
   'world.chat.calm0': '外婆这房子真结实',

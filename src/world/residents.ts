@@ -1217,7 +1217,7 @@ export class Household {
       if (t.def.id === 'hardware' && !this.crossbow) {
         this.crossbow = true
         this.equipCrossbow()
-        this.note('world.log.crossbow')
+        this.note('world.log.crossbow', { who: this.actors.find((a) => a.weapon === 'crossbow')?.name ?? '爸爸' })
       }
       if (r.gateBonus) {
         this.gateBonus = Math.min(120, this.gateBonus + r.gateBonus)
