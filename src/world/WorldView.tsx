@@ -282,7 +282,7 @@ export default function WorldView() {
             🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })} · ⛽ {t('world.fuel', { n: hud.fuel })}
           </div>
           <div className="relative mt-0.5 text-xs text-[#d9ccb4]">
-            💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}
+            💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}{hud.herbs > 0 ? ` · ${t('world.herbs', { n: hud.herbs, max: 3 })}` : ''}
           </div>
           <div className="relative mt-2 flex gap-1.5">
             <button onClick={() => setDiary(true)}

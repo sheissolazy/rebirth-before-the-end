@@ -30,6 +30,8 @@ import { Rain } from './weather'
 import { applyPerks, awardRebirthPoints, clearWorld, currentLife, dayStartClock, hardPref, loadWorld, nextLife, recordDeath, rewindToDayStart, saveDayStart, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
+import { ForageView } from './forageView'
+import { HERBS_PER_MEDKIT, type ForageSpot } from './forage'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
@@ -86,6 +88,8 @@ export interface Hud {
   over: { when: string; cause: string; days: number; points: number; kills: number; mourned: string[] } | null
   /** 钉板耐久（0 = 没有） */
   trap: number
+  /** 攒着的草药（够 3 份捣成急救包） */
+  herbs: number
   /** 末日前要做的事（做完打勾） */
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
@@ -170,7 +174,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -178,7 +182,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -418,6 +422,14 @@ export class World {
       if (caught) this.toast('world.toast.fish', 1.5)
     }
     this.buildGarden()
+    this.forage = new ForageView(this.scene)
+    this.life.onForage = (s, y, medkit) => {
+      this.sound.pluck()
+      if (y.sting) { this.sound.buzz(); this.sound.hurt() }
+      const vars = { what: s.name, food: y.food.toFixed(1), n: String(this.life.herbs), max: String(HERBS_PER_MEDKIT) }
+      if (medkit) this.toast('world.forage.medkit', 4, vars)
+      else this.toast(`world.forage.${y.key}`, 3.5, vars)
+    }
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider, brute) => this.siegeView.spawn(at, raider, brute)
     this.life.spawnVisitor = (def, at, model) => {
@@ -1753,6 +1765,8 @@ export class World {
     const sp = this.selected.root.position
     this.ring.position.set(sp.x, sp.y + 0.03, sp.z)
     this.ring.visible = this.mode === 'home' && this.selected.root.visible && this.selected.pose !== 'sleep'
+    this.forage?.sync(this.life.forageDay, this.life.clock.day)
+    this.forage?.update(dt, !this.life.siege || this.life.siege.done)
     this.hudTimer -= dt
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25
@@ -2005,6 +2019,9 @@ export class World {
       this.petCat()
       return
     }
+    // 点野外的野菜、草药、蘑菇、蜂窝……：女主走过去采
+    const fs = floor === 0 ? this.forage?.pick(this.raycaster) ?? null : null
+    if (fs) { this.tapForage(fs); return }
     if (this.mode === 'home') {
       const hits = this.raycaster.intersectObjects(this.actors.filter((a) => a.root.visible).map((a) => a.root), true)
       if (hits.length) {
@@ -2057,7 +2074,23 @@ export class World {
     const over = this.raycaster.intersectObjects(people, true).length > 0
       || (!!this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length > 0)
       || (this.mode === 'home' && (this.raycaster.intersectObject(this.van.parts.root, true).length > 0 || !!this.furnitureUnder(floor)))
+      || (floor === 0 && !!this.forage?.pick(this.raycaster))
     el.style.cursor = over ? 'pointer' : ''
+  }
+
+  private forage: ForageView | null = null
+
+  private tapForage(s: ForageSpot): void {
+    if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
+    const h = this.heroine
+    if (h.dead || this.life.isOut(h)) { this.toast('world.forage.no', 2.5, { what: s.name }); return }
+    if (this.selected !== h) this.select(h)
+    this.life.cancelSearch()
+    this.life.stopFishing()
+    const r = this.life.commandForage(h, s.id)
+    if (r === 'picked') this.toast('world.forage.picked', 2.5, { what: s.name })
+    else if (r === 'no') this.toast('world.forage.no', 2.5, { what: s.name })
+    else this.flashMarker(s.at.x, 0, s.at.z)
   }
 
   /** 打丧尸时点了地上的守位圈（哪怕上面站着人）：把选中的人换过去 */
@@ -2441,6 +2474,7 @@ export class World {
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
       wall: this.life.wall,
       trap: Math.ceil(this.life.trap.hp),
+      herbs: this.life.herbs,
       fishing: { active: !!this.life.fishing, near: this.mode === 'outside' && nearFishing(this.heroine.pos), caught: this.life.fishCaught },
       ammo: this.life.ammo.n,
       cores: this.life.cores,

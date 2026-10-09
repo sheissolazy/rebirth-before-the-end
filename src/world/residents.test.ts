@@ -508,6 +508,34 @@ describe('出门', () => {
   })
 })
 
+describe('野外采集（点了以后）', () => {
+  it('女主走过去蹲下采，回来家里多了吃的；刚采过的再点就说"过两天"；三份草药捣成一个急救包', () => {
+    const { life } = simulate('paradise', 0)
+    const h = life.actors[0]
+    life.clock = { day: 1, hour: 9 }
+    life.speed = 3
+    const run = (id: string) => {
+      expect(life.commandForage(h, id)).toBe('ok')
+      for (let i = 0; i < 4000 && h.task?.kind === 'forage'; i++) {
+        life.tick(0.1, (a) => life.isHomeBody(a))
+        for (const a of life.actors) { a.follow(0.3, 2.2); a.updateSettle(0.3) }
+      }
+      expect(h.task?.kind).not.toBe('forage')
+    }
+    const food = life.stock.food
+    run('greens_w')
+    expect(life.stock.food).toBeGreaterThan(food)
+    expect(life.forageDay.greens_w).toBe(life.clock.day)
+    expect(life.commandForage(h, 'greens_w')).toBe('picked')
+    const kits = life.medkits
+    run('herb_river')
+    run('herb_w')
+    run('herb_e')
+    expect(life.medkits).toBe(kits + 1)
+    expect(life.herbs).toBe(0)
+  })
+})
+
 describe('需求归零的后果', () => {
   it('读档后同一天不会把"渴得嘴唇裂开"再记一遍', () => {
     const { life } = simulate('paradise', 0)

@@ -308,6 +308,23 @@ export class Sound {
     this.tone(t + 0.01, 'triangle', 180, 120, 0.18, 0.18 * vol)
   }
 
+  /** 采东西：窸窸窣窣一下，再叮一声 */
+  pluck(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    this.noiseBurst(t, 'highpass', 3200, 0.7, 0.18, 0.12)
+    this.tone(t + 0.12, 'sine', 1320, 1760, 0.12, 0.08)
+  }
+
+  /** 野蜂嗡嗡 */
+  buzz(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    for (let i = 0; i < 3; i++) this.tone(t + i * 0.09, 'sawtooth', 210 + i * 25, 190 + i * 30, 0.32, 0.05)
+  }
+
   /** 水花 */
   splash(): void {
     const ctx = this.ready

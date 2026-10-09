@@ -21,12 +21,13 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
+import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
 import { lt, t, t as t_, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage'
 
 interface Task {
   kind: TaskKind
@@ -44,6 +45,8 @@ interface Task {
   wave?: number
   /** 迎接：看见人以后再等一会儿才喊（几个人错开，话泡不叠在一起） */
   waitT?: number
+  /** 采集：采哪一处（FORAGE 的 id） */
+  forage?: string
 }
 
 
@@ -281,6 +284,9 @@ export class Household {
   money = 18000
   medkits = 0
   gateBonus = 0
+  /** 野外采集：每一处上次采的是哪天；攒着的草药（够 3 份妈妈就捣成急救包） */
+  forageDay: Record<string, number> = {}
+  herbs = 0
   trip: Trip | null = null
   /** 这场雨木桶接了多少水 */
   private rainWater = 0
@@ -731,6 +737,8 @@ export class Household {
 
   /** World 提供：钓到/跑了（画面上浮漂一沉、溅水花） */
   onFish: ((caught: boolean) => void) | null = null
+  /** 采到东西了（界面弹提示、出声音）；medkit = 这次草药凑够捣成了急救包 */
+  onForage: ((s: ForageSpot, y: ForageYield, medkit: boolean) => void) | null = null
 
   /** 街上遇袭：一两只丧尸从附近冒出来扑向女主和跟着的人 */
   private ambush(spot: ScavengeSpot, count?: number): void {
@@ -1686,6 +1694,7 @@ export class Household {
     if (t.kind === 'company') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
     if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
+    if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
@@ -2045,6 +2054,7 @@ export class Household {
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
+    if (t.kind === 'forage' && t.hours <= 0 && t.forage) this.pickForage(a, t.forage)
     // 晾的时候下起雨来就不晾了（抱回屋）
     if (t.kind === 'hang' && t.hours <= 0 && this.rain < 0.1) { this.laundryOut = true; this.laundryDay = this.clock.day }
     if (t.kind === 'fetch' && t.hours <= 0) this.laundryOut = false
@@ -2088,6 +2098,46 @@ export class Household {
     a.setPath(path)
     a.task = { kind: 'walk', spot: null, phase: 'go', hours: 0, manual: true }
     return path
+  }
+
+  /** 点了野外的一丛野菜 / 草药 / 蜂窝…：走过去蹲下采。'picked' = 刚采过还没长出来 */
+  commandForage(a: Actor, id: string): 'ok' | 'picked' | 'no' {
+    const s = FORAGE.find((f) => f.id === id)
+    if (!s || this.isOut(a) || a.floor !== 0) return 'no'
+    if (!ripe(s, this.forageDay, this.clock.day)) return 'picked'
+    this.cancel(a)
+    const at = standAt(s)
+    this.assign(a, {
+      kind: 'forage', spot: { kind: 'stroll', x: at.x, z: at.z, floor: 0, face: at.face, pose: 'work' },
+      phase: 'go', hours: FORAGE_HOURS[s.kind], manual: true, forage: s.id,
+    })
+    return (a.task as Task | null)?.kind === 'forage' ? 'ok' : 'no'
+  }
+
+  private pickForage(a: Actor, id: string): void {
+    const s = FORAGE.find((f) => f.id === id)
+    if (!s || !ripe(s, this.forageDay, this.clock.day)) return
+    this.forageDay[s.id] = this.clock.day
+    const y = harvest(s.kind, () => this.rand())
+    this.stock.food += y.food
+    a.needs = { ...a.needs, mood: Math.max(0, Math.min(100, a.needs.mood + y.mood)) }
+    if (y.family) for (const b of this.actors) if (b !== a && !b.dead && !this.isOut(b)) b.needs = { ...b.needs, mood: Math.min(100, b.needs.mood + y.family) }
+    if (y.sting) a.health = Math.max(1, a.health - y.sting)
+    this.herbs += y.herbs
+    let medkit = false
+    if (this.herbs >= HERBS_PER_MEDKIT) {
+      this.herbs -= HERBS_PER_MEDKIT
+      this.medkits += 1
+      medkit = true
+      this.note('world.log.herbMedkit')
+    }
+    if (s.kind === 'flowers') this.note('world.log.flowers', { who: a.name, what: s.name })
+    if (s.kind === 'honey') this.note(y.sting ? 'world.log.honeySting' : 'world.log.honey', { who: a.name })
+    this.onForage?.(s, y, medkit)
+    // 末日以后在外面蹲着采东西：可能招来丧尸（夜里更危险）
+    if (this.clock.day >= PROLOGUE_DAYS && this.rand() < (isNight(this.clock.hour) ? 0.3 : 0.08)) {
+      this.ambush({ id: `forage_${s.id}`, kind: 'barrel', at: s.at, hours: 0, danger: 1 }, 1)
+    }
   }
 
   /** 点了家具：去用它。返回 false 表示用不了（有人在用、没吃的…） */

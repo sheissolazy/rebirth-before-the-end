@@ -36,6 +36,8 @@ export interface WorldSave {
   ammo: number
   cores: number
   medkits: number
+  forageDay?: Record<string, number>
+  herbs?: number
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -94,6 +96,8 @@ export function snapshot(life: Household): WorldSave {
     ammo: life.ammo.n,
     cores: life.cores,
     medkits: life.medkits,
+    forageDay: { ...life.forageDay },
+    herbs: life.herbs,
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
@@ -156,6 +160,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.ammo.n = s.ammo
   life.cores = s.cores
   life.medkits = s.medkits
+  life.forageDay = { ...(s.forageDay ?? {}) }
+  life.herbs = s.herbs ?? 0
   life.gateBonus = s.gateBonus
   life.barriers = { ...s.barriers }
   life.nightDone = s.nightDone
