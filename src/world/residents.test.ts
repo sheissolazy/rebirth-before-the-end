@@ -1077,3 +1077,27 @@ describe('疫病夜和沈砚', () => {
     expect(life.actors[1].health).toBeGreaterThanOrEqual(64)
   })
 })
+
+describe('存档往返（今晚新加的字段）', () => {
+  it('钉板、困难模式、击杀数、借人、疫病后送药、钓鱼数、去世的人都能存下来', () => {
+    const { life } = simulate('paradise', 0)
+    life.trap.hp = 37
+    life.hard = true
+    life.kills = 41
+    life.lent = { name: '妈妈', back: 999 }
+    life.medicTomorrow = 12
+    life.fishCaught = 3
+    life.die(life.actors[2], 'crisis')
+    const b = simulate('paradise', 0).life
+    restore(b, JSON.parse(JSON.stringify(snapshot(life))))
+    expect(b.trap.hp).toBe(37)
+    expect(b.hard).toBe(true)
+    expect(b.kills).toBe(41)
+    expect(b.lent).toEqual({ name: '妈妈', back: 999 })
+    expect(b.medicTomorrow).toBe(12)
+    expect(b.fishCaught).toBe(3)
+    expect(b.actors[2].dead).toBe(true)
+    expect(b.actors[2].lost).toBe(true)
+    expect(b.over).toBeNull()
+  })
+})
