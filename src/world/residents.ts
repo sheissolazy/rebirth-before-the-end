@@ -252,6 +252,8 @@ export class Household {
   affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0 }
   /** 谢临塞进来的第几张纸条 */
   xielinNotes = 0
+  /** 第一个尸潮危机夜街尽头那个人（阿寂的伏笔），看过就不再出现 */
+  cameoSeen = false
   /** 菜地：开了没有、长到多少（1 = 能收）、哪天浇过水 */
   garden: { built: boolean; growth: number; watered: number } = { built: false, growth: 0, watered: -1 }
   /** 末日前去军区门口见过顾沉 */
@@ -964,6 +966,11 @@ export class Household {
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
     })
+  }
+
+  /** 给 World 用：记一条日记 */
+  logNote(key: string, vars?: Record<string, string | number>): void {
+    this.note(key, vars)
   }
 
   private note(key: string, vars?: Record<string, string | number>): void {

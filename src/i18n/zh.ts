@@ -79,6 +79,7 @@ export const zh = {
   'world.go.repair': '去修被砸坏的门',
   'world.go.guard': '赶去守位',
   'world.debug': '原型调试',
+  'world.log.aji': '铁门对面的街边站着一个脸色苍白的男人，丧尸从他身边走过，像没看见他一样。一眨眼，他不见了。',
   'world.log.scene': '【{title}】{text}——{end}',
   'world.goal.title': '📝 末日前要做的事',
   'world.goal.food': '囤够 20 份吃的（超市）',

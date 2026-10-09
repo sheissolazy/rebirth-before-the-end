@@ -247,6 +247,31 @@ export class Sound {
     for (let k = 0; k < 14; k++) this.noiseBurst(t + 0.3 + Math.random() * 2.6, 'highpass', 2500 + Math.random() * 2000, 1, 0.12 + Math.random() * 0.1, 0.03)
   }
 
+  /** 说不清的诡异：一个慢慢升高、带颤音的低音 */
+  eerie(): void {
+    const ctx = this.ready
+    if (!ctx) return
+    const t = ctx.currentTime
+    const o = ctx.createOscillator()
+    o.type = 'sine'
+    o.frequency.setValueAtTime(98, t)
+    o.frequency.exponentialRampToValueAtTime(196, t + 4)
+    const lfo = ctx.createOscillator()
+    lfo.frequency.value = 6
+    const lg = ctx.createGain()
+    lg.gain.value = 4
+    lfo.connect(lg).connect(o.frequency)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.linearRampToValueAtTime(0.12, t + 1.5)
+    g.gain.linearRampToValueAtTime(0.0001, t + 4.5)
+    o.connect(g).connect(this.master!)
+    o.start(t)
+    lfo.start(t)
+    o.stop(t + 4.6)
+    lfo.stop(t + 4.6)
+  }
+
   /** 一层防线倒了 */
   crash(): void {
     const ctx = this.ready

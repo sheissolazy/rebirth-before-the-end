@@ -8,7 +8,7 @@ import {
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
-import { loadPerson } from './people'
+import { PoseDriver as PoseDriverFor, loadPerson } from './people'
 import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
@@ -151,6 +151,8 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private hadGuest = false
+  /** 街尽头那个脸色苍白的人（阿寂的伏笔） */
+  private cameo: { obj: THREE.Object3D; until: number } | null = null
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
   private readonly torch = new THREE.SpotLight('#fff1cf', 0, 20, 0.5, 0.45, 1.4)
   private readonly bubbles = new Bubbles()
@@ -877,6 +879,38 @@ export class World {
     this.torch.target.position.set(hp.x + fwd.x * 6, hp.y, hp.z + fwd.z * 6)
     const wantTorch = this.mode === 'outside' && this.nightness > 0.5 && !this.heroine.away ? 60 : 0
     this.torch.intensity += (wantTorch - this.torch.intensity) * Math.min(1, dt * 4)
+    // 第一个尸潮危机夜 22:20 以后：街尽头站着一个脸色苍白的人，过一会儿就不见了
+    const sg = this.life.siege
+    if (!this.life.cameoSeen && sg && !sg.done && !sg.ambush && Household.crisisKind(this.life.clock) === 'horde' && this.life.clock.hour >= 22.3) {
+      this.life.cameoSeen = true
+      const model = this.siegeView.npc('stranger')
+      const fig = new THREE.Group()
+      if (model) {
+        model.traverse((o) => {
+          const m = o as THREE.Mesh
+          if (!m.isMesh) return
+          const fix = (mat: THREE.Material) => {
+            const c = mat.clone() as THREE.MeshStandardMaterial
+            c.color.set(c.name.endsWith('.body') ? '#e4e2de' : /short|hair|eyebrow/.test(c.name) ? '#111111' : '#1c1c20')
+            return c
+          }
+          m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material)
+        })
+        fig.add(model)
+        new PoseDriverFor(model).update(0.5, 'idle')
+      } else fig.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.2, 4, 8), new THREE.MeshStandardMaterial({ color: '#1c1c20' })))
+      // 铁门正对面的街边（打丧尸时镜头对着铁门，正好看得见）
+      fig.position.set(1.5, 0, 20.8)
+      fig.rotation.y = Math.PI
+      this.scene.add(fig)
+      this.cameo = { obj: fig, until: this.life.absHour + 0.7 }
+      this.life.logNote('world.log.aji')
+      this.sound.eerie()
+    }
+    if (this.cameo && this.life.absHour > this.cameo.until) {
+      this.cameo.obj.removeFromParent()
+      this.cameo = null
+    }
     // 江野来帮忙守夜：提示一下
     if (!!this.life.guest !== this.hadGuest) {
       this.hadGuest = !!this.life.guest

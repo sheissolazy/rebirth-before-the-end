@@ -53,6 +53,7 @@ export interface WorldSave {
   helmet?: boolean
   xielinNotes?: number
   garden?: { built: boolean; growth: number; watered: number }
+  cameoSeen?: boolean
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -88,6 +89,7 @@ export function snapshot(life: Household): WorldSave {
     helmet: life.helmet,
     xielinNotes: life.xielinNotes,
     garden: { ...life.garden },
+    cameoSeen: life.cameoSeen,
   }
 }
 
@@ -113,6 +115,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, ...(s.affection ?? {}) }
   life.xielinNotes = s.xielinNotes ?? 0
   if (s.garden) life.garden = { ...s.garden }
+  life.cameoSeen = !!s.cameoSeen
   life.guchenMet = !!s.guchenMet
   life.helmet = !!s.helmet
   if (life.helmet && life.actors[0]) life.actors[0].helmet = true
