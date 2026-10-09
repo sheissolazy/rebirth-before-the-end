@@ -108,6 +108,6 @@ fuser -k 4173/tcp                   # 关预览；别用 pkill -f，会把自己
 - 3D 里的台词和数据尽量直接读文字版 `src/content/`（memories、locations、npcs、events），没在 3D 里另写一套世界观。
 - 测试：`npx vitest run src/world`（110 个，含不渲染跑 10 天 / 30 天的长跑测试）。改了逻辑先跑这个。
 - 人物：`tools/blender/make_people.py` 用 MakeHuman 生成（`blender --background --factory-startup --python tools/blender/make_people.py -- x.zip <out> 名字...`；资源包已经装进 MPFB，zip 路径随便填）。现在有 13 个：女主、爸妈、王阿姨、陌生人、两个幸存者、江野、沈砚、顾沉、谢临、两种丧尸。
-- 面板藏着时看画面：见 `~/Documents/MyGames/KNOWLEDGE.md` 里"面板藏着也能看画面"（离屏渲染 + POST 回本地）。
+- 面板藏着时看画面：`tools/preview/devserve.py`（静态文件 + 收截图）+ `tools/preview/shot.js`（页面里的 `__ff` 快进、`__shot` 离屏截图），详见 `~/Documents/MyGames/KNOWLEDGE.md`"面板藏着也能看画面"。
 - 预览面板读不了 `~/Documents`：用 `VITE_SAVE_PREFIX=rbte-proto npx vite build --outDir <scratchpad>/proto-dist` 再用 python http.server 看；页面带 `?debug` 时可以在控制台用 `window.__world`。
 - 还没做、等用户拍板的见 `docs/DEVLOG.md` 文末"下一步"。
