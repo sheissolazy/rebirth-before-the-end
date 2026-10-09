@@ -8,6 +8,8 @@ import type { Clock, Needs, Stock } from './life'
 
 const PREFIX = (import.meta.env.VITE_SAVE_PREFIX as string | undefined) ?? 'rbte'
 const KEY = `${PREFIX}-world-v1`
+/** 每天早上存的一份"今早"的档，"重过今天"读它 */
+const DAY_KEY = `${PREFIX}-world-daystart`
 
 interface ActorSave {
   name: string
@@ -254,9 +256,40 @@ export function loadWorld(life: Household): boolean {
   }
 }
 
+/** 存一份"今早"的档（打丧尸的时候不存） */
+export function saveDayStart(life: Household): void {
+  if (life.siege && !life.siege.done) return
+  try {
+    localStorage.setItem(DAY_KEY, JSON.stringify(snapshot(life)))
+  } catch { /* 没关系 */ }
+}
+
+/** "今早"那份档是几点存的；没有就是 null */
+export function dayStartClock(): Clock | null {
+  try {
+    const raw = localStorage.getItem(DAY_KEY)
+    return raw ? (JSON.parse(raw) as WorldSave).clock : null
+  } catch {
+    return null
+  }
+}
+
+/** 重过今天：把"今早"的档拷成当前存档，刷新后就从今早开始 */
+export function rewindToDayStart(): boolean {
+  try {
+    const raw = localStorage.getItem(DAY_KEY)
+    if (!raw) return false
+    localStorage.setItem(KEY, raw)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function clearWorld(): void {
   try {
     localStorage.removeItem(KEY)
+    localStorage.removeItem(DAY_KEY)
     // 清档重来 / 进入下一世：这一局死了还能再拿重生点
     localStorage.removeItem(`${PREFIX}-awarded`)
   } catch { /* 没关系 */ }

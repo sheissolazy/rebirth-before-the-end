@@ -9,7 +9,6 @@ import {
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
-import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { clothesline, decorateHouse, parchmentMap } from './decor'
 import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
@@ -21,14 +20,14 @@ import {
   toon, toonify, tree, villaRoof,
 } from './meshes'
 import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
-import { PROLOGUE_DAYS, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
+import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
 import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
-import { applyPerks, awardRebirthPoints, clearWorld, currentLife, hardPref, loadWorld, nextLife, recordDeath, saveWorld, setHardPref } from './save'
+import { applyPerks, awardRebirthPoints, clearWorld, currentLife, dayStartClock, hardPref, loadWorld, nextLife, recordDeath, rewindToDayStart, saveDayStart, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -425,6 +424,7 @@ export class World {
       const m = this.siegeView.npc(model) ?? this.siegeView.npc(def.model)
       if (m && model === 'xielin') darkCoat(m)
       const v = new Visitor(def, at, m, isFemaleModel(model))
+      v.modelId = model || def.model
       this.scene.add(v.root)
       return v
     }
@@ -1763,6 +1763,12 @@ export class World {
       this.saveTimer = 10
       saveWorld(this.life)
     }
+    // 每天早上存一份"今早"的档（刚开局、或者老存档还没有这一份时，马上存一份）
+    const dc = this.life.clock
+    if (!this.hud.loading && dc.day !== this.dayStartSaved && dc.hour >= SUNRISE && dc.hour < 21 && !(this.life.siege && !this.life.siege.done) && !this.life.over) {
+      this.dayStartSaved = dc.day
+      saveDayStart(this.life)
+    }
     if (this.marker.visible) {
       const m = this.marker.material as THREE.MeshBasicMaterial
       m.opacity -= dt * 1.5
@@ -2384,85 +2390,27 @@ export class World {
     return this.life.speed
   }
 
-  /** 头像缓存：每个人拍一次 */
-  private portraitCache = new Map<Actor, string>()
-
-  /** 给人物卡拍头像：把这个人的模型复制一份放进小摄影棚（暖色侧光、深色背景），摆站姿，拍胸像 */
-  private portraitOf(a: Actor): string | null {
-    return a.driver ? this.shootPortrait(a.mesh) : null
-  }
-
-  /** 来客头像：每个来客的模型拍一次 */
-  private visitorFaces = new WeakMap<THREE.Object3D, string>()
-  private visitorFace(): string | null {
-    const m = this.life.visitor?.model3d
-    if (!m) return null
-    let p = this.visitorFaces.get(m)
-    if (!p) {
-      try { p = this.shootPortrait(m) } catch (e) { console.warn('portrait', e) }
-      if (p) this.visitorFaces.set(m, p)
-    }
-    return p ?? null
-  }
-
-  private shootPortrait(src: THREE.Object3D): string {
-    const model = cloneSkinned(src)
-    model.position.set(0, 0, 0)
-    model.rotation.set(0, -0.3, 0)
-    model.scale.copy(src.scale)
-    const studio = new THREE.Scene()
-    studio.background = new THREE.Color('#3a332c')
-    const key = new THREE.DirectionalLight('#ffe4c4', 2.6)
-    key.position.set(-1.4, 2.4, 2.2)
-    const rim = new THREE.DirectionalLight('#a9c4e0', 1.2)
-    rim.position.set(1.8, 1.6, -1.5)
-    studio.add(key, rim, new THREE.HemisphereLight('#b8c4cc', '#2a221a', 0.9), model)
-    new PoseDriverFor(model).update(0, 'idle')
-    model.updateMatrixWorld(true)
-    const head = new THREE.Vector3(0, 1.45, 0)
-    model.traverse((o) => { if ((o as THREE.Bone).isBone && /Head$/.test(o.name.replace(/[^A-Za-z]/g, ''))) o.getWorldPosition(head) })
-    const cam = new THREE.PerspectiveCamera(26, 0.75, 0.05, 30)
-    cam.position.set(head.x + 0.25, head.y + 0.02, head.z + 1.75)
-    cam.lookAt(head.x, head.y - 0.2, head.z)
-    const W = 240
-    const H = 320
-    const rt = new THREE.WebGLRenderTarget(W, H)
-    rt.texture.colorSpace = THREE.SRGBColorSpace
-    const prev = this.renderer.getRenderTarget()
-    this.renderer.setRenderTarget(rt)
-    this.renderer.render(studio, cam)
-    this.renderer.setRenderTarget(prev)
-    const px = new Uint8Array(W * H * 4)
-    this.renderer.readRenderTargetPixels(rt, 0, 0, W, H, px)
-    rt.dispose()
-    const c = document.createElement('canvas')
-    c.width = W
-    c.height = H
-    const g = c.getContext('2d')!
-    const img = g.createImageData(W, H)
-    for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4)
-    g.putImageData(img, 0, 0)
-    return c.toDataURL('image/jpeg', 0.86)
+  /** 人物卡的图：public/portraits/<模型>.jpg（现在是 Blender 拍的 Q 版占位图，以后换成画好的立绘，文件名不变） */
+  private portraitUrl(model: string): string {
+    return `${import.meta.env.BASE_URL}portraits/${model}.jpg`
   }
 
   private portraits(): Record<string, string> {
     const out: Record<string, string> = {}
-    for (const a of this.actors) {
-      let p = this.portraitCache.get(a)
-      if (!p) {
-        try { p = this.portraitOf(a) ?? undefined } catch (e) { console.warn('portrait', e) }
-        if (p) this.portraitCache.set(a, p)
-      }
-      if (p) out[a.name] = p
-    }
+    for (const a of this.actors) if (a.model) out[a.name] = this.portraitUrl(a.model)
     return out
+  }
+
+  /** 敲门的人的图 */
+  private visitorFace(): string | null {
+    const id = this.life.visitor?.modelId
+    return id ? this.portraitUrl(id) : null
   }
 
   private pushLifeHud(): void {
     const c = this.life.clock
-    // 新来的人（住进来的、换了模型的）补拍头像；只在有人还没头像时才更新这一项
-    const needShot = this.actors.some((a) => a.driver && !this.portraitCache.has(a))
-    if (needShot && !this.hud.loading) this.setHud({ portraits: this.portraits() })
+    // 新住进来的人也要有卡片图
+    if (this.actors.some((a) => a.model && !this.hud.portraits[a.name])) this.setHud({ portraits: this.portraits() })
     this.setHud({
       time: calendarLabel(c),
       life: currentLife(),
@@ -2526,7 +2474,23 @@ export class World {
     this.onHud(this.hud)
   }
 
-  /** 原型调试：清掉存档从头来 */
+  /** "今早"的档已经存到哪一天了 */
+  private dayStartSaved = dayStartClock()?.day ?? -1
+
+  /** "重过今天"会回到几点（菜单上显示）；还没有就是 null */
+  dayStartLabel(): string | null {
+    const c = dayStartClock()
+    return c ? calendarLabel(c) : null
+  }
+
+  /** 重过今天：回到今早存的那一刻 */
+  rewindDay(): void {
+    if (!rewindToDayStart()) return
+    this.disposed = true
+    location.reload()
+  }
+
+  /** 清掉存档从头来 */
   restart(): void {
     this.disposed = true
     clearWorld()

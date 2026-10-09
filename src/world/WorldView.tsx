@@ -53,11 +53,11 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
     <button onClick={onClick}
       className={`relative h-[12.5rem] w-[9.25rem] shrink-0 overflow-hidden rounded-md text-left shadow-[0_8px_22px_rgba(0,0,0,0.5)] transition duration-200
         ${selected ? '-translate-y-1.5 ring-2 ring-[#e8c98a]' : 'ring-1 ring-black/50 hover:-translate-y-0.5'} ${p.gone ? 'grayscale' : ''}`}>
-      {/* 头像：去色、偏旧照片的暖灰，加颗粒和暗角 */}
+      {/* 卡片图（public/portraits/<模型>.jpg），略微压一点饱和度，加颗粒和暗角 */}
       <div className="absolute inset-0 bg-[#2e2924]" />
-      {portrait && <img src={portrait} alt="" className="absolute inset-0 h-full w-full object-cover"
-        style={{ filter: `grayscale(${p.gone ? 1 : 0.72}) sepia(0.28) contrast(1.18) brightness(${p.gone ? 0.6 : 0.95})` }} />}
-      <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.5 }} />
+      {portrait && <img src={portrait} alt="" className="absolute inset-0 h-full w-full object-cover object-top"
+        style={{ filter: `saturate(${p.gone ? 0 : 0.9}) sepia(0.12) contrast(1.05) brightness(${p.gone ? 0.6 : 1})` }} />}
+      <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.3 }} />
       <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(130% 95% at 50% 28%, transparent 38%, rgba(10,8,6,0.7))' }} />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-[#0e0b09] via-[#0e0b09]/80 to-transparent" />
       {/* 左上：特质、楼上 */}
@@ -130,6 +130,9 @@ export default function WorldView() {
   const [diary, setDiaryState] = useState(false)
   const [map, setMapState] = useState(false)
   const [spaceOpen, setSpaceOpen] = useState(false)
+  /** 右上角菜单：打开 / 正在确认哪一项；dayStart = "重过今天"回到几点 */
+  const [menu, setMenu] = useState<null | 'open' | 'rewind' | 'restart'>(null)
+  const [dayStart, setDayStart] = useState<string | null>(null)
   const [furn, setFurn] = useState<FurnitureMenu | null>(null)
   const [welcome, setWelcome] = useState(() => {
     try { return localStorage.getItem(WELCOME_KEY) !== '1' } catch { return true }
@@ -379,6 +382,8 @@ export default function WorldView() {
         </button>
         <button onClick={() => world.current?.snapshot()} title={t('world.photo')}
           className={`${CHIP} px-2 py-1 text-xs`}>📷</button>
+        <button onClick={() => { setDayStart(world.current?.dayStartLabel() ?? null); setMenu((m) => (m ? null : 'open')) }}
+          className={`${CHIP} px-2.5 py-1 text-xs ${menu ? 'ring-[#e8c98a]/70' : ''}`}>{t('world.menu')}</button>
         <button onClick={() => setWelcome(true)} title={t('world.helpAgain')}
           className={`${CHIP} px-2 py-1 text-xs`}>❓</button>
         <button onClick={() => world.current?.toggleMusic()} title={t('world.music')}
@@ -398,6 +403,42 @@ export default function WorldView() {
           {t('world.textVersion')}
         </a>
       </div>
+
+      {menu && (
+        <div className="absolute right-3 top-12 z-30 w-64">
+        <div className={`p-1.5 ${PANEL} bg-[#1d1915]/95`}>
+          <Grain />
+          {menu === 'open' ? (
+            <div className="relative flex flex-col">
+              <button disabled={!dayStart} onClick={() => setMenu('rewind')}
+                className="rounded-sm px-2.5 py-2 text-left transition hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent">
+                <div className="text-sm font-bold text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{t('world.menu.rewind')}</div>
+                <div className="mt-0.5 text-[11px] text-[#a99d88]">{dayStart ? t('world.menu.rewindSub', { when: dayStart }) : t('world.menu.rewindNone')}</div>
+              </button>
+              <button onClick={() => setMenu('restart')} className="rounded-sm px-2.5 py-2 text-left transition hover:bg-white/10">
+                <div className="text-sm font-bold text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{t('world.menu.restart')}</div>
+                <div className="mt-0.5 text-[11px] text-[#a99d88]">{t('world.menu.restartSub')}</div>
+              </button>
+              <div className="mx-2 my-1 h-px bg-[#e8c98a]/15" />
+              <button onClick={() => { setMenu(null); setWelcome(true) }} className="rounded-sm px-2.5 py-1.5 text-left text-xs text-[#cbbfa8] transition hover:bg-white/10">
+                {t('world.menu.help')}
+              </button>
+            </div>
+          ) : (
+            <div className="relative p-2">
+              <p className="text-[13px] leading-relaxed text-[#e6dac4]" style={{ fontFamily: SERIF }}>
+                {menu === 'rewind' ? t('world.menu.rewindAsk', { when: dayStart ?? '' }) : t('world.menu.restartAsk')}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => (menu === 'rewind' ? world.current?.rewindDay() : world.current?.restart())}
+                  className={`flex-1 py-1.5 text-sm ${BTN_RED}`}>{t('world.menu.sure')}</button>
+                <button onClick={() => setMenu('open')} className={`flex-1 py-1.5 text-sm ${CHIP}`}>{t('world.menu.cancel')}</button>
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
+      )}
 
       <div className="absolute bottom-3 left-3 flex gap-2">
         {hud.people.map((p) => (
@@ -508,7 +549,7 @@ export default function WorldView() {
             <div className="relative flex h-28 w-24 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-gradient-to-b from-[#3a3128] to-[#15110e] text-5xl ring-1 ring-[#e8c98a]/30">
               {hud.visit.face ? (
                 <>
-                  <div className="absolute inset-0 bg-cover bg-top" style={{ backgroundImage: `url(${hud.visit.face})`, filter: 'grayscale(0.55) sepia(0.3) contrast(1.12) brightness(0.95)' }} />
+                  <div className="absolute inset-0 bg-cover bg-top" style={{ backgroundImage: `url(${hud.visit.face})`, filter: 'saturate(0.9) sepia(0.12) contrast(1.05)' }} />
                   <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.5 }} />
                   <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_18px_rgba(0,0,0,0.7)]" />
                   <span className="absolute bottom-0.5 right-1 text-base drop-shadow">{hud.visit.icon}</span>
@@ -623,7 +664,7 @@ export default function WorldView() {
             <div className={`w-[min(640px,94vw)] max-h-[92vh] overflow-y-auto ${PANEL} bg-[#1d1915]/95`}>
               {face && (
                 <div className="pointer-events-none absolute right-0 top-0 h-56 w-48 bg-cover bg-top opacity-55"
-                  style={{ backgroundImage: `url(${face})`, filter: 'grayscale(0.85) sepia(0.35) contrast(1.15)',
+                  style={{ backgroundImage: `url(${face})`, filter: 'saturate(0.75) sepia(0.2)',
                     maskImage: FACE_MASK, WebkitMaskImage: FACE_MASK }} />
               )}
               <Grain opacity={0.4} />

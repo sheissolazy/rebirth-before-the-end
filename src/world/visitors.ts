@@ -162,6 +162,8 @@ export class Visitor extends StreetWalker {
   readonly def: VisitorDef
   phase: 'walk' | 'knock' | 'talk' | 'leave' = 'walk'
   knockT = 0
+  /** 用的哪个人物模型（卡片图按它找） */
+  modelId = ''
 
   constructor(def: VisitorDef, at: Pt, model?: THREE.Object3D, female = def.model === 'neighbor') {
     super(at, model, female)

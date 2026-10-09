@@ -28,7 +28,7 @@ export default defineConfig({
         // injectRegister: false 时插件不会自动打开这两个，新版本会一直"等待中"，要强制刷新才换：手动打开
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,glb}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,woff2,glb}'],
         // Poly Haven 的模型和贴图很大，不预先缓存；第一次用到时再存下来
         // Q 版人物（*_toon.glb）也一样：只有切到 Q 版的人才下载
         globIgnores: ['models/ph/**', 'textures/**', 'models/people/*_toon.glb'],
