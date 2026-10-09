@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 立绘原图（太大，不进 git）
+art/*
+!art/README.md
