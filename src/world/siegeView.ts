@@ -126,11 +126,12 @@ export class SiegeView {
     const loader = new GLTFLoader()
     const [gl, npcs] = await Promise.all([
       Promise.all(['zombie_m', 'zombie_f'].map((n) => loader.loadAsync(`${import.meta.env.BASE_URL}models/people/${n}.glb`))),
-      Promise.all(['neighbor', 'stranger', 'jiangye'].map(loadPerson)),
+      Promise.all(['neighbor', 'stranger', 'jiangye', 'shenyan'].map(loadPerson)),
     ])
     this.npcs.set('neighbor', npcs[0])
     this.npcs.set('stranger', npcs[1])
     this.npcs.set('jiangye', npcs[2])
+    this.npcs.set('shenyan', npcs[3])
     // 丧尸：两个专门捏的，再加上老太太、年轻男人的丧尸版（复制一份材质，不影响正常来访的人）
     const zombify = (root: THREE.Object3D, copy: boolean) => {
       root.traverse((o) => {

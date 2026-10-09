@@ -6,8 +6,8 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care'
-export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye'
+export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet'
+export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan'
 
 export interface VisitorCtx {
   day: number
@@ -26,6 +26,9 @@ export interface VisitorCtx {
   affection: Record<string, number>
   /** 跟江野说过末日的事 */
   warnedJiangye: boolean
+  /** 家里最重的伤（最低的健康） */
+  worstHealth: number
+  medkits: number
 }
 
 export interface VisitorDef {
@@ -67,6 +70,13 @@ export const VISITORS: VisitorDef[] = [
     when: (c) => !c.prologue && daytime(c) && (c.warnedJiangye || (c.affection.jiangye ?? 0) >= 55)
       && (c.seen.jiangye_care === undefined || c.day - c.seen.jiangye_care >= 3),
     choices: [{ id: 'thanks' }],
+  },
+  // 男主：沈砚（天才医生）。末日后家里有人伤得重，他会闻着血腥味找上门
+  {
+    id: 'shenyan_meet', model: 'shenyan', icon: '🩺', chance: 0.4,
+    when: (c) => !c.prologue && daytime(c) && c.worstHealth < 55
+      && (c.seen.shenyan_meet === undefined || c.day - c.seen.shenyan_meet >= 4),
+    choices: [{ id: 'treat' }, { id: 'medkit', need: (c) => c.medkits >= 1 }, { id: 'refuse' }],
   },
   {
     id: 'crow_tax', model: 'stranger', icon: '🐦‍⬛', chance: 0.25,

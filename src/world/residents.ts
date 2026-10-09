@@ -246,7 +246,9 @@ export class Household {
   seen: Record<string, number> = {}
   helpedNeighbor = false
   /** 男主好感（江野是青梅竹马，一开始就有 40） */
-  affection: Record<string, number> = { jiangye: 40, guchen: 0 }
+  affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0 }
+  /** 谢临塞进来的第几张纸条 */
+  xielinNotes = 0
   /** 末日前去军区门口见过顾沉 */
   guchenMet = false
   /** 顾沉送的头盔：女主被咬伤害减半 */
@@ -341,6 +343,7 @@ export class Household {
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
       affection: this.affection, warnedJiangye: this.warnedJiangye,
+      worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
   }
 
@@ -505,6 +508,10 @@ export class Household {
         this.gateBonus = Math.min(120, this.gateBonus + 40)
         this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 40)
       } else { love(10); all(8) }
+    } else if (def.id === 'shenyan_meet') {
+      const love = (n: number) => { this.affection.shenyan = Math.min(100, (this.affection.shenyan ?? 0) + n) }
+      if (choice === 'treat') { love(10); for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35) }
+      else if (choice === 'medkit') { love(18); this.medkits -= 1; all(5) }
     } else if (def.id === 'jiangye_care') {
       this.affection.jiangye = Math.min(100, (this.affection.jiangye ?? 0) + 5)
       if (this.careVariant === 0) this.stock = { ...this.stock, food: this.stock.food + 4 }
@@ -698,20 +705,45 @@ export class Household {
     this.note(this.guchenMet ? 'world.army.tradeFriend' : 'world.army.trade', { who, ammo, cores: Household.ARMY_PRICE })
   }
 
-  /** 见过顾沉的话，末日后他偶尔派人送东西到门口（台词用文字版的"关心"） */
+  /** 末日后的早上：男主们偶尔送东西到门口（台词用文字版 content/npcs.ts 里的"关心"）。一天最多一件 */
   private careTick(): void {
     const c = this.clock
-    if (!this.guchenMet || c.day < PROLOGUE_DAYS || c.hour < 8 || this.careDay === c.day) return
+    if (c.day < PROLOGUE_DAYS || c.hour < 8 || this.careDay === c.day) return
     this.careDay = c.day
-    if (this.rand() > 0.35) return
-    const npc = npcs.find((n) => n.id === 'guchen')
-    const k = Math.floor(this.rand() * 3)
-    const text = npc?.care?.[k] ? lt(npc.care[k].text) : ''
-    if (k === 0) this.stock = { ...this.stock, food: this.stock.food + 3 }
-    else if (k === 1) this.fewerTonight = true
-    else { this.helmet = true; this.actors[0].helmet = true }
-    this.affection.guchen = Math.min(100, (this.affection.guchen ?? 0) + 3)
-    this.note(`world.army.care${k}`, { text })
+    const careText = (id: string, k: number) => {
+      const npc = npcs.find((n) => n.id === id)
+      return npc?.care?.[k] ? lt(npc.care[k].text) : ''
+    }
+    const love = (id: string, n: number) => { this.affection[id] = Math.min(100, (this.affection[id] ?? 0) + n) }
+    // 谢临：同为重生者。第一张纸条一定是"下个月比你记得的更糟"
+    if (this.xielinNotes === 0 || this.rand() < 0.15) {
+      const k = this.xielinNotes === 0 ? 0 : 1 + Math.floor(this.rand() * 2)
+      this.xielinNotes++
+      if (k === 1) this.molotovs += 2
+      else if (k === 2) this.cores += 1
+      love('xielin', 4)
+      this.note(`world.xielin.note${k}`, { text: careText('xielin', k) })
+      return
+    }
+    // 顾沉：末日前去军区门口见过他的话
+    if (this.guchenMet && this.rand() < 0.35) {
+      const k = Math.floor(this.rand() * 3)
+      if (k === 0) this.stock = { ...this.stock, food: this.stock.food + 3 }
+      else if (k === 1) this.fewerTonight = true
+      else { this.helmet = true; this.actors[0].helmet = true }
+      love('guchen', 3)
+      this.note(`world.army.care${k}`, { text: careText('guchen', k) })
+      return
+    }
+    // 沈砚：让他治过伤或送过他急救包的话
+    if ((this.affection.shenyan ?? 0) >= 10 && this.rand() < 0.3) {
+      const k = Math.floor(this.rand() * 3)
+      if (k === 0) this.medkits += 2
+      else if (k === 1) for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 15)
+      else this.stock = { ...this.stock, water: this.stock.water + 4 }
+      love('shenyan', 3)
+      this.note(`world.shenyan.care${k}`, { text: careText('shenyan', k) })
+    }
   }
 
   /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
@@ -791,7 +823,7 @@ export class Household {
   static nightCount(c: Clock): { count: number; crisis: boolean } {
     if (c.day < PROLOGUE_DAYS) return { count: 0, crisis: false }
     const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
-    if (isCrisisNight({ ...c, hour: 21 })) return { count: 10 + month * 3, crisis: true }
+    if (isCrisisNight({ ...c, hour: 21 })) return { count: 10 + month * 3 + (month >= 1 ? 2 : 0), crisis: true }
     return { count: 2 + month + (c.day % 2), crisis: false }
   }
 

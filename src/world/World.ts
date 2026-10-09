@@ -1147,7 +1147,8 @@ export class World {
     if (!def) return null
     const ctx = this.life.visitorCtx()
     // 男主用文字版的名字和身份
-    const npc = def.id.startsWith('jiangye') ? npcs.find((n) => n.id === 'jiangye') : null
+    const lead = ['jiangye', 'shenyan'].find((id) => def.id.startsWith(id))
+    const npc = lead ? npcs.find((n) => n.id === lead) : null
     return {
       id: def.id, icon: def.icon,
       name: npc ? `${lt(npc.name)} · ${lt(npc.title)}` : t(`world.visit.${def.id}.name` as UiKey),
@@ -1160,7 +1161,7 @@ export class World {
   diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean }[] {
     return Object.entries(this.life.affection).map(([id, v]) => {
       const n = npcs.find((x) => x.id === id)
-      const met = id === 'guchen' ? this.life.guchenMet : this.life.seen[`${id}_meet`] !== undefined
+      const met = id === 'guchen' ? this.life.guchenMet : id === 'xielin' ? this.life.xielinNotes > 0 : this.life.seen[`${id}_meet`] !== undefined
       return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met }
     })
   }

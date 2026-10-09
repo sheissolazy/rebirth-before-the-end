@@ -290,6 +290,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugNight(false)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.night')}</button>
           <button onClick={() => world.current?.debugNight(true)} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crisis')}</button>
           <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.jiangye')}</button>
+          <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.shenyan')}</button>
           <button onClick={() => world.current?.debugVisitor('neighbor_rice')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.visitor')}</button>
           <button onClick={() => world.current?.debugVisitor('beggar')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.beggar')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className="rounded-lg bg-white/90 px-3 py-1.5 text-left shadow">{t('world.debug.crow')}</button>

@@ -513,3 +513,25 @@ describe('顾沉 / 军区', () => {
     expect(life.ammo.n).toBe(ammo + 18)
   })
 })
+
+describe('沈砚和谢临', () => {
+  it('家里有人重伤时沈砚会来；请他治伤全家健康 +35；末日后第一个早上门缝里有谢临的纸条', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 7.9 }
+    life.tick(0.05, () => false)
+    for (let i = 0; i < 40; i++) life.tick(0.05, () => false)
+    expect(life.log.some((l) => l.key === 'world.xielin.note0')).toBe(true)
+    expect(life.xielinNotes).toBe(1)
+    const def = VISITORS.find((v) => v.id === 'shenyan_meet')!
+    life.clock = { day: PROLOGUE_DAYS, hour: 11 }
+    expect(def.when(life.visitorCtx())).toBe(false)
+    life.actors[1].health = 30
+    expect(def.when(life.visitorCtx())).toBe(true)
+    life.startVisit(def)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.answerVisitor('treat')
+    expect(life.actors[1].health).toBeGreaterThanOrEqual(65)
+    expect(life.affection.shenyan).toBe(10)
+  })
+})

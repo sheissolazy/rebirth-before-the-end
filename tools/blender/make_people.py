@@ -60,6 +60,12 @@ PEOPLE = {
         skin='young_asian_male', hair='short03', eyebrows='eyebrow007', eyelashes='eyelashes03',
         clothes=['male_casualsuit06', 'shoes01'],
     ),
+    # 沈砚：天才医生，清瘦，西装（像白大褂外面套的外套）
+    'shenyan': dict(
+        macro=dict(gender=1.0, age=0.52, muscle=0.42, weight=0.38, height=0.62, proportions=0.6, cupsize=0.5, firmness=0.5),
+        skin='young_asian_male', hair='short02', eyebrows='eyebrow002', eyelashes='eyelashes01',
+        clothes=['male_elegantsuit01', 'shoes03'],
+    ),
 }
 
 
