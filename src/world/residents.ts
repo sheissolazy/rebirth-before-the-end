@@ -390,7 +390,7 @@ export class Household {
       day: c.day, hour: c.hour, prologue: c.day < PROLOGUE_DAYS,
       month: c.day < PROLOGUE_DAYS ? 0 : Math.floor((c.day - PROLOGUE_DAYS) / 4) + 1,
       food: this.stock.food, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
-      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes, jiangyeHome: this.jiangyeHome,
+      affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes, jiangyeHome: this.jiangyeHome, shenyanHome: this.shenyanHome,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
     }
   }
@@ -439,6 +439,8 @@ export class Household {
 
   /** 江野住进来了（不再来访、危机夜也不用"来帮忙"了） */
   jiangyeHome = false
+  /** 沈砚住进来了（不再上门、也不再送药，他就在家里） */
+  shenyanHome = false
 
   /** 这一局已经因为困难模式减过一次子弹（来回切换不会一直减） */
   hardHalved = false
@@ -746,6 +748,23 @@ export class Household {
       const love = (n: number) => { this.affection.shenyan = Math.min(100, (this.affection.shenyan ?? 0) + n) }
       if (choice === 'treat') { love(10); for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35) }
       else if (choice === 'medkit') { love(18); this.medkits -= 1; all(5) }
+      else if (choice === 'stay') {
+        // 留下来当家里的医生：先给大家治伤，再走进院子（护士特质：在家时大家伤好得快一倍）
+        for (const a of this.actors) if (!a.away) a.health = Math.min(100, a.health + 35)
+        const a = this.addResident('沈砚', 'shenyan', { x: v.pos.x, z: v.pos.z }, 'trait_nurse')
+        if (a) {
+          a.weapon = 'pin'
+          a.needs = { hunger: 60, thirst: 60, energy: 50, mood: 80 }
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+          this.shenyanHome = true
+          love(10)
+          this.note('world.visit.shenyan_meet.log.stay')
+          this.talking = null
+          v.root.removeFromParent()
+          this.visitor = null
+          return
+        }
+      }
     } else if (def.id === 'xielin_meet') {
       const love = (n: number) => { this.affection.xielin = Math.max(0, Math.min(100, (this.affection.xielin ?? 0) + n)) }
       if (choice === 'ask') { love(8); this.cores += 2 }
@@ -1073,7 +1092,7 @@ export class Household {
     // 顾沉：末日前去军区门口见过他的话
     else if (this.guchenMet && this.rand() < 0.35) this.giveCare('guchen')
     // 沈砚：让他治过伤或送过他急救包的话
-    else if ((this.affection.shenyan ?? 0) >= 10 && this.rand() < 0.3) this.giveCare('shenyan')
+    else if ((this.affection.shenyan ?? 0) >= 10 && !this.shenyanHome && this.rand() < 0.3) this.giveCare('shenyan')
   }
 
   /** 男主送来的东西（东西马上到账；有 3D 的话人会走到铁门外放下） */
@@ -1262,7 +1281,7 @@ export class Household {
           if (this.medkits > 0) this.medkits -= 1
           this.note('world.log.plague', { who: who.name })
           // 跟沈砚有交情的话，他第二天一早会送药来
-          if ((this.affection.shenyan ?? 0) >= 10) this.medicTomorrow = c.day + 1
+          if ((this.affection.shenyan ?? 0) >= 10 && !this.shenyanHome) this.medicTomorrow = c.day + 1
         }
         this.startSiege(3, false)
       } else if (count > 0) {

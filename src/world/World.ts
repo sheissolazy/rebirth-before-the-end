@@ -1729,11 +1729,12 @@ export class World {
   }
 
   /** 日记里"认识的人"：男主和好感 */
-  diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean }[] {
+  diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean; home: boolean }[] {
     return Object.entries(this.life.affection).map(([id, v]) => {
       const n = npcs.find((x) => x.id === id)
       const met = id === 'guchen' ? this.life.guchenMet : id === 'xielin' ? this.life.xielinNotes > 0 : this.life.seen[`${id}_meet`] !== undefined
-      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met }
+      const home = (id === 'jiangye' && this.life.jiangyeHome) || (id === 'shenyan' && this.life.shenyanHome)
+      return { icon: n?.icon ?? '❤', name: n ? lt(n.name) : id, title: n ? lt(n.title) : '', affection: v, met, home }
     })
   }
 

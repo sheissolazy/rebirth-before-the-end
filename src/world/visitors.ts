@@ -37,6 +37,8 @@ export interface VisitorCtx {
   xielinNotes: number
   /** 江野已经住进来了 */
   jiangyeHome: boolean
+  /** 沈砚已经住进来了 */
+  shenyanHome: boolean
 }
 
 export interface VisitorDef {
@@ -83,9 +85,10 @@ export const VISITORS: VisitorDef[] = [
   // 男主：沈砚（天才医生）。末日后家里有人伤得重，他会闻着血腥味找上门
   {
     id: 'shenyan_meet', model: 'shenyan', icon: '🩺', chance: 0.4,
-    when: (c) => !c.prologue && daytime(c) && c.worstHealth < 55
+    when: (c) => !c.prologue && daytime(c) && c.worstHealth < 55 && !c.shenyanHome
       && (c.seen.shenyan_meet === undefined || c.day - c.seen.shenyan_meet >= 4),
-    choices: [{ id: 'treat' }, { id: 'medkit', need: (c) => c.medkits >= 1 }, { id: 'refuse' }],
+    // 好感够高、家里有位置：请他留下来当家里的医生
+    choices: [{ id: 'treat' }, { id: 'medkit', need: (c) => c.medkits >= 1 }, { id: 'stay', need: (c) => (c.affection.shenyan ?? 0) >= 70 && c.residents < 5 }, { id: 'refuse' }],
   },
   // 男主：顾沉（军区基地长）。末日前去军区门口见过他，末日后他会亲自上门借人守防线
   {

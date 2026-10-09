@@ -1137,3 +1137,26 @@ describe('江野住下来', () => {
     expect(life.actors.filter((a) => a.name === '江野').length).toBe(1)
   })
 })
+
+describe('沈砚留下来', () => {
+  it('好感 70 以上：可以请他留下来当家里的医生（护士特质），以后不再上门、也不再送药', () => {
+    const { life } = simulate('paradise', 0)
+    life.makeActor = (name, _model, at) => new Actor(name, '#888', '#222', 1, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
+    life.spawnVisitor = (def, at) => new Visitor(def, at)
+    const def = VISITORS.find((v) => v.id === 'shenyan_meet')!
+    life.clock = { day: PROLOGUE_DAYS + 2, hour: 10 }
+    life.actors[1].health = 40
+    life.affection.shenyan = 72
+    life.startVisit(def)
+    for (let i = 0; i < 4000 && !life.talking; i++) { life.tick(0.05, () => false); life.visitor?.follow(0.05, 1.7) }
+    life.answerVisitor('stay')
+    const s = life.actors.find((a) => a.name === '沈砚')!
+    expect(s.trait).toBe('trait_nurse')
+    expect(s.model).toBe('shenyan')
+    expect(life.shenyanHome).toBe(true)
+    expect(life.hasTrait('trait_nurse')).toBe(true)
+    expect(life.actors[1].health).toBeGreaterThanOrEqual(75)
+    life.actors[1].health = 30
+    expect(def.when({ ...life.visitorCtx(), day: life.clock.day + 10 })).toBe(false)
+  })
+})
