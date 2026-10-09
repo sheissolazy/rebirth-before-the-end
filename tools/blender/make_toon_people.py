@@ -503,7 +503,7 @@ def main():
     head_parts.append(hair_mesh)
     if st.get('clip'):
         # 女主：右边刘海上一个小星星发夹
-        c = on_head_pt = hc + face_axis(0.55, 0.58) * (R * 1.06)
+        c = hc + face_axis(0.5, 0.52) * (R * 1.17)
         star = mat('clip', st['clip'], 0.4)
         for k in range(5):
             a = math.radians(90 + k * 72)
