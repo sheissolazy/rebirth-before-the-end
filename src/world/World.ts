@@ -23,6 +23,7 @@ import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
+import { Bubbles } from './bubbles'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -130,6 +131,7 @@ export class World {
   private readonly glass: THREE.Material[] = []
   private fogBase = 0.013
   private saveTimer = 10
+  private readonly bubbles = new Bubbles()
   private frontDoor: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
@@ -745,6 +747,7 @@ export class World {
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
     for (const w of this.weapons) w.visible = fighting
+    this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed)
     // 丧尸隔几秒低吼一声；环境声跟着昼夜走
     for (const z of this.life.siege?.zombies ?? []) {
       if (!z.alive) continue
