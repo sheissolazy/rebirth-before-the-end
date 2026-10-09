@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
-import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN } from './layout'
+import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN, COURT } from './layout'
 
 export type ArtStyle = 'toon' | 'paradise'
 
@@ -40,6 +40,8 @@ const SURFACES: Record<string, { slug: string; tile: number; rough: number; tint
   grassDark: { slug: 'aerial_grass_rock', tile: 9, rough: 0.95, tint: '#b9d98f' },
   wallTinted: { slug: 'white_plaster_02', tile: 2.5, rough: 0.95 },
   road: { slug: 'asphalt_02', tile: 4, rough: 0.9 },
+  // 院坝：浅色的水泥地（用沥青贴图提亮）
+  concrete: { slug: 'asphalt_02', tile: 3, rough: 0.95, tint: '#e2dccf', normal: 0.35 },
   sidewalk: { slug: 'stone_tiles_02', tile: 2, rough: 0.9 },
   stone: { slug: 'cobblestone_floor_04', tile: 1, rough: 0.9 },
   bark: { slug: 'bark_brown_02', tile: 1, rough: 0.95 },
@@ -301,7 +303,7 @@ export function scatter(kit: ParadiseKit, slug: string, total: number, sample: (
 /** 不长草的地方：房子、石板路、街道、邻居家、围栏线 */
 function blocked(x: number, z: number): boolean {
   if (x > HOUSE.x0 - 0.3 && x < HOUSE.x1 + 0.3 && z > HOUSE.z0 - 0.3 && z < HOUSE.z1 + 0.3) return true
-  if (Math.abs(x - (3.5 + (GATE.x - 3.5) * Math.min(1, Math.max(0, (z - HOUSE.z1) / (GATE.z - HOUSE.z1))))) < 0.7 && z > HOUSE.z1 && z < GATE.z + 0.5) return true
+  if (x > COURT.x0 - 0.2 && x < COURT.x1 + 0.2 && z > HOUSE.z1 - 0.3 && z < COURT.z1 + 0.6) return true
   if (z > STREET.z0 - 1.4 && z < STREET.z1 + 1.4) return true
   for (const p of PROPS) if (p.kind !== 'tree' && Math.abs(x - p.x) < p.w / 2 + 0.6 && Math.abs(z - p.z) < p.d / 2 + 0.6) return true
   if (Math.abs(z - YARD.z0) < 0.25 || Math.abs(z - YARD.z1) < 0.25 || Math.abs(x - YARD.x0) < 0.25 || Math.abs(x - YARD.x1) < 0.25) return true

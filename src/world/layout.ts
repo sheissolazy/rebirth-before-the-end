@@ -44,6 +44,10 @@ export const WORLD: Rect = { x0: -24, z0: -12, x1: 32, z1: 30 }
 /** 街边路灯（人行道上，铁门这一侧） */
 export const STREET_LAMPS = [-18, -6, 6, 18, 30].map((x) => ({ x, z: STREET.z0 - 0.7 }))
 export const HOUSE_CENTER = { x: 6, z: 1.5 }
+/** 门前的水泥院坝（晒谷子、停车，夜里打丧尸的主战场） */
+export const COURT: Rect = { x0: -2.2, z0: 8, x1: 10, z1: 12.8 }
+/** 储藏室里码东西的地方（囤得越多堆得越满） */
+export const STORE_ROOM: Rect = { x0: 8.5, z0: -2.6, x1: 11.7, z1: 5.7 }
 /** 堂屋的双开大门（门洞中心） */
 export const FRONT_DOOR = { x: 6, z: 6 }
 

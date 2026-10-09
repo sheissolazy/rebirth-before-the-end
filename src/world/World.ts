@@ -4,12 +4,12 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import {
-  COOP, FLOOR_H, FRONT_DOOR, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
+  COOP, COURT, FLOOR_H, FRONT_DOOR, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
-import { clothesline, decorateHouse, parchmentMap } from './decor'
+import { clothesline, decorateHouse, parchmentMap, couplets, StockView } from './decor'
 import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
 import {
@@ -358,6 +358,10 @@ export class World {
     return m
   })
   private frontDoor: THREE.Object3D | null = null
+  /** 只在屋外视角显示的东西（贴在前墙上的对联：家里视角前墙压低了） */
+  private outsideOnly: THREE.Object3D[] = []
+  /** 储藏室里按存货堆的米袋、水、罐头 */
+  private stockView: StockView | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
   private hemiBase = 1.5
@@ -570,13 +574,12 @@ export class World {
     yard.position.set((YARD.x0 + YARD.x1) / 2, -0.01, (YARD.z0 + YARD.z1) / 2)
     yard.receiveShadow = true
     this.scene.add(ground, yard)
-    // 大门到铁门的石板路
-    for (let z = HOUSE.z1 + 0.6; z < GATE.z - 0.3; z += 0.85) {
-      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.05, 8), toon(COLORS.stone))
-      s.position.set(GATE.x + (Math.round(z * 3) % 2 ? 0.12 : -0.12), 0, z)
-      s.receiveShadow = true
-      this.scene.add(s)
-    }
+    // 门前的水泥院坝：从檐廊一直铺到铁门里
+    const court = new THREE.Mesh(new THREE.PlaneGeometry(COURT.x1 - COURT.x0, COURT.z1 - COURT.z0), toon('#c4beb2', { name: 'concrete' }))
+    court.rotation.x = -Math.PI / 2
+    court.position.set((COURT.x0 + COURT.x1) / 2, 0.006, (COURT.z0 + COURT.z1) / 2)
+    court.receiveShadow = true
+    this.scene.add(court)
   }
 
   private buildStreet(): void {
@@ -626,6 +629,11 @@ export class World {
         this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && !(o as THREE.InstancedMesh).isInstancedMesh) meshes.push(o) })
         const hit = ray.intersectObjects(meshes, false).find((h) => h.point.y > 0.4 && h.point.y < 1.2)
         decorateHouse(this.scene, this.floor2, hit ? hit.point.y : 0.76)
+        // 堂屋门口的对联和横批（只在屋外看得见：家里视角下前墙压低了）
+        const cp = couplets(FRONT_DOOR.x, FRONT_DOOR.z + 0.13)
+        this.scene.add(cp)
+        this.outsideOnly.push(cp)
+        this.stockView = new StockView(this.scene, STORE_ROOM)
       } catch (e) {
         // 装饰出问题也不能挡住后面加载人物
         console.warn('decor', e)
@@ -1467,6 +1475,7 @@ export class World {
   /** 屋顶淡出、近墙压低、二楼显隐，都跟着镜头过渡走 */
   private updateCutaway(): void {
     const h = this.homeness
+    for (const o of this.outsideOnly) o.visible = h < 0.5
     if (this.roof) {
       this.roof.visible = h < 0.98
       for (const m of this.roofMats) {
@@ -1888,6 +1897,7 @@ export class World {
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25
       this.pushLifeHud()
+      this.stockView?.sync(this.life.stock.food, this.life.stock.water)
     }
     if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) this.setHud({ toast: '' })
     if ((this.saveTimer -= dt) <= 0) {

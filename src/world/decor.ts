@@ -327,3 +327,128 @@ export function clothesline(): Clothesline {
     },
   }
 }
+
+/** 一张竖条红纸，金字从上往下写 */
+function redPaper(text: string, w: number, h: number, vertical: boolean): THREE.Mesh {
+  const px = 64
+  const c = document.createElement('canvas')
+  c.width = Math.round(w * px * 4)
+  c.height = Math.round(h * px * 4)
+  const g = c.getContext('2d')!
+  g.fillStyle = '#b3241f'
+  g.fillRect(0, 0, c.width, c.height)
+  // 纸边一点点发暗，像贴了一阵子
+  const grad = g.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.2, c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.7)
+  grad.addColorStop(0, 'rgba(0,0,0,0)')
+  grad.addColorStop(1, 'rgba(60,0,0,0.35)')
+  g.fillStyle = grad
+  g.fillRect(0, 0, c.width, c.height)
+  g.fillStyle = '#f2c45a'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  const chars = [...text]
+  if (vertical) {
+    const step = c.height / chars.length
+    g.font = `bold ${Math.floor(Math.min(c.width * 0.78, step * 0.82))}px "Kaiti SC","STKaiti","KaiTi","Songti SC",serif`
+    chars.forEach((ch, i) => g.fillText(ch, c.width / 2, step * (i + 0.5)))
+  } else {
+    const step = c.width / chars.length
+    g.font = `bold ${Math.floor(Math.min(c.height * 0.78, step * 0.82))}px "Kaiti SC","STKaiti","KaiTi","Songti SC",serif`
+    chars.forEach((ch, i) => g.fillText(ch, step * (i + 0.5), c.height / 2))
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }))
+  return m
+}
+
+/** 堂屋门口：上联、下联、横批（x 是门洞中心，z 是外墙面） */
+export function couplets(x: number, z: number): THREE.Group {
+  const g = new THREE.Group()
+  const left = redPaper('风雨同舟一家人', 0.3, 1.75, true)
+  left.position.set(x - 1.28, 1.15, z)
+  const right = redPaper('平安二字值千金', 0.3, 1.75, true)
+  right.position.set(x + 1.28, 1.15, z)
+  const top = redPaper('家和万事兴', 1.5, 0.3, false)
+  top.position.set(x, 2.25, z)
+  g.add(left, right, top)
+  return g
+}
+
+/** 储藏室：米袋、一提提的矿泉水、一箱箱罐头。囤得越多码得越满（最多几十件，实例化很便宜） */
+export class StockView {
+  private readonly sacks: THREE.InstancedMesh
+  private readonly packs: THREE.InstancedMesh
+  private readonly boxes: THREE.InstancedMesh
+  private readonly slots: { x: number; z: number; y: number; r: number }[] = []
+  private shown = ''
+
+  constructor(scene: THREE.Object3D, room: { x0: number; z0: number; x1: number; z1: number }) {
+    const MAX = 48
+    const sack = new THREE.SphereGeometry(0.22, 10, 7)
+    sack.scale(1.25, 0.62, 0.9)
+    sack.translate(0, 0.13, 0)
+    const pack = new THREE.BoxGeometry(0.38, 0.3, 0.26)
+    pack.translate(0, 0.15, 0)
+    const crate = new THREE.BoxGeometry(0.4, 0.28, 0.32)
+    crate.translate(0, 0.14, 0)
+    this.sacks = new THREE.InstancedMesh(sack, new THREE.MeshStandardMaterial({ color: '#d9c9a4', roughness: 0.95 }), MAX)
+    this.packs = new THREE.InstancedMesh(pack, new THREE.MeshStandardMaterial({ color: '#8fc3dc', roughness: 0.25, metalness: 0, transparent: true, opacity: 0.85 }), MAX)
+    this.boxes = new THREE.InstancedMesh(crate, new THREE.MeshStandardMaterial({ color: '#b58a5a', roughness: 0.9 }), MAX)
+    for (const m of [this.sacks, this.packs, this.boxes]) {
+      m.count = 0
+      // 实例化网格的包围球按原点那一个算，会被当成"不在镜头里"裁掉（只剩影子）
+      m.frustumCulled = false
+      m.castShadow = true
+      m.receiveShadow = true
+      scene.add(m)
+    }
+    // 沿着储藏室西墙（挨着堂屋那面）码两排、两层高；进门那一段留出过道（东墙那边已经有箱子和货架）
+    for (let layer = 0; layer < 2; layer++) {
+      for (let row = 0; row < 2; row++) {
+        for (let z = room.z0 + 0.3; z < room.z1 - 0.2; z += 0.48) {
+          if (z > 1.4 && z < 3.6) continue
+          this.slots.push({ x: room.x0 + 0.25 + row * 0.5, z, y: layer * 0.3, r: ((z * 13) % 1) * 0.4 - 0.2 })
+        }
+      }
+    }
+  }
+
+  /** 按家里的存货决定摆几袋米、几提水、几箱罐头 */
+  sync(food: number, water: number): void {
+    const sacks = Math.min(32, Math.round(food / 3))
+    const cans = Math.min(16, Math.round(food / 6))
+    const packs = Math.min(32, Math.round(water / 2))
+    const key = `${sacks}|${cans}|${packs}`
+    if (key === this.shown) return
+    this.shown = key
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const up = new THREE.Vector3(0, 1, 0)
+    // 一个格子放一件，按 米、水、米、罐头 轮着放，看起来是混着码的
+    const want: ('s' | 'p' | 'c')[] = []
+    let s = sacks
+    let p = packs
+    let c = cans
+    while (s + p + c > 0 && want.length < this.slots.length) {
+      if (s > 0) { want.push('s'); s-- }
+      if (p > 0) { want.push('p'); p-- }
+      if (c > 0 && want.length % 3 === 0) { want.push('c'); c-- }
+      else if (c > 0 && s === 0 && p === 0) { want.push('c'); c-- }
+    }
+    const n = { s: 0, p: 0, c: 0 }
+    want.forEach((kind, i) => {
+      const slot = this.slots[i]
+      q.setFromAxisAngle(up, slot.r)
+      m.compose(new THREE.Vector3(slot.x, slot.y, slot.z), q, new THREE.Vector3(1, 1, 1))
+      const mesh = kind === 's' ? this.sacks : kind === 'p' ? this.packs : this.boxes
+      mesh.setMatrixAt(n[kind]++, m)
+    })
+    this.sacks.count = n.s
+    this.packs.count = n.p
+    this.boxes.count = n.c
+    for (const mesh of [this.sacks, this.packs, this.boxes]) mesh.instanceMatrix.needsUpdate = true
+  }
+}
+
