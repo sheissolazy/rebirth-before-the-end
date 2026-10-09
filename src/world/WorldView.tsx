@@ -261,6 +261,30 @@ export default function WorldView() {
         </div>
       )}
 
+      {hud.report && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/35">
+          <div className={`w-[min(420px,90vw)] rounded-2xl p-5 shadow-2xl ${hud.report.won ? 'bg-[#f6efdc] text-zinc-800' : 'bg-zinc-900 text-zinc-100'}`}>
+            <div className="text-lg font-bold">{t(hud.report.won ? 'world.report.won' : 'world.report.lost')}</div>
+            <div className="mt-0.5 text-xs opacity-70">{t(hud.report.crisis ? 'world.report.crisis' : 'world.report.normal')}</div>
+            <ul className="mt-3 space-y-1 text-sm">
+              <li>🧟 {t('world.report.kills', { n: hud.report.kills })}</li>
+              <li>🔫 {t('world.report.ammo', { n: hud.report.ammo })}</li>
+              {hud.report.cores > 0 && <li>💎 {t('world.report.cores', { n: hud.report.cores })}</li>}
+              {hud.report.layers.map((l) => (
+                <li key={l.id}>🚪 {t(l.broken ? 'world.report.broken' : 'world.report.damaged', { what: t(`world.layer.${l.id}` as UiKey), n: Math.round(l.lost) })}</li>
+              ))}
+              {hud.report.hurt.map((h) => <li key={h.name}>🩹 {t('world.report.hurt', { who: h.name, n: h.lost })}</li>)}
+              {(hud.report.food > 0.05 || hud.report.water > 0.05) && (
+                <li>📦 {t('world.report.loss', { food: hud.report.food.toFixed(1), water: hud.report.water.toFixed(1) })}</li>
+              )}
+            </ul>
+            {hud.report.layers.some((l) => l.id === 'gate') && <div className="mt-3 text-xs opacity-70">{t('world.report.repairHint')}</div>}
+            <button onClick={() => world.current?.clearReport()}
+              className="mt-4 w-full rounded-lg bg-red-800 py-2 text-sm font-semibold text-amber-50">{t('world.report.ok')}</button>
+          </div>
+        </div>
+      )}
+
       {welcome && !hud.loading && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
           <div className="w-[min(560px,92vw)] rounded-2xl bg-[#f6efdc] p-6 font-serif text-zinc-800 shadow-2xl">

@@ -16,7 +16,7 @@ import {
   COLORS, barrel, box, car, counter, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
-import { Actor, Household, type LogEntry, type PersonHud } from './residents'
+import { Actor, Household, type LogEntry, type NightReport, type PersonHud } from './residents'
 import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
@@ -55,6 +55,7 @@ export interface Hud {
   money: number
   medkits: number
   prologue: boolean
+  report: NightReport | null
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -77,7 +78,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null,
 }
 
 export class World {
@@ -1053,6 +1054,11 @@ export class World {
     this.setHud({ selected: actor.name })
   }
 
+  clearReport(): void {
+    this.life.report = null
+    this.pushLifeHud()
+  }
+
   toggleMute(): void {
     this.sound.unlock()
     this.sound.setMuted(!this.sound.muted)
@@ -1085,6 +1091,7 @@ export class World {
       money: this.life.money,
       medkits: this.life.medkits,
       prologue: c.day < PROLOGUE_DAYS,
+      report: this.life.report,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

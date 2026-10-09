@@ -243,3 +243,13 @@ describe('调整守位', () => {
     expect(s.post(hero)).toBe(momPost)
   })
 })
+
+describe('战报', () => {
+  it('打完一晚有战报：打倒几只、用了几发子弹', () => {
+    const { life, events } = siegeNight(3, false)
+    expect(events).toContain('end')
+    expect(life.report?.won).toBe(true)
+    expect(life.report?.kills).toBe(3)
+    expect(life.report?.ammo).toBeGreaterThan(0)
+  })
+})

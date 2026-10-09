@@ -138,6 +138,20 @@ export class Actor extends Walker {
 
 // --- 一家人 -------------------------------------------------------------------
 
+/** 一晚打完的战报 */
+export interface NightReport {
+  won: boolean
+  crisis: boolean
+  kills: number
+  ammo: number
+  cores: number
+  /** 每一层防线掉了多少耐久、有没有被破 */
+  layers: { id: LayerId; lost: number; broken: boolean }[]
+  hurt: { name: string; lost: number }[]
+  food: number
+  water: number
+}
+
 /** 日记里的一条（界面用 i18n key 显示） */
 export interface LogEntry {
   day: number
@@ -194,6 +208,9 @@ export class Household {
   onSiege: ((e: SiegeEvent) => void) | null = null
   /** 哪一天的晚上已经来过丧尸了 */
   nightDone = -1
+  /** 最近一晚的战报（界面看完就清掉） */
+  report: NightReport | null = null
+  private before: { ammo: number; cores: number; barriers: Barriers; health: number[]; food: number; water: number; crisis: boolean } | null = null
   /** 序章存款（元）、急救包、加固铁门多出来的耐久 */
   money = 18000
   medkits = 0
@@ -444,6 +461,10 @@ export class Household {
       a.hold = 0
     }
     if (this.speed > 1) this.speed = 1
+    this.before = {
+      ammo: this.ammo.n, cores: this.cores, barriers: { ...this.barriers }, health: this.actors.map((a) => a.health),
+      food: this.stock.food, water: this.stock.water, crisis,
+    }
     this.siege = new Siege({
       count, crisis, navs: this.navs, defenders: this.actors.filter((a) => !a.away && !a.lost && !a.runaway), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id),
@@ -484,6 +505,17 @@ export class Household {
         this.note('world.log.lost', { food: food.toFixed(1), water: water.toFixed(1) })
         for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, a.needs.mood - 20) }
       }
+    }
+    if (e.kind === 'end' && this.before) {
+      const b = this.before
+      this.report = {
+        won: e.won, crisis: b.crisis, kills: e.kills, ammo: b.ammo - this.ammo.n, cores: this.cores - b.cores,
+        layers: LAYERS.map((l) => ({ id: l.id, lost: Math.max(0, b.barriers[l.id] - this.barriers[l.id]), broken: e.broken.includes(l.id) }))
+          .filter((l) => l.lost > 0),
+        hurt: this.actors.map((a, k) => ({ name: a.name, lost: Math.round(b.health[k] - a.health) })).filter((h) => h.lost > 0),
+        food: Math.max(0, b.food - this.stock.food), water: Math.max(0, b.water - this.stock.water),
+      }
+      this.before = null
     }
     this.onSiege?.(e)
   }
