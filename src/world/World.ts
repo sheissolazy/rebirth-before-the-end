@@ -1720,7 +1720,13 @@ export class World {
   debugNight(crisis: boolean): void {
     if (this.life.siege) return
     // 只往后跳，不倒回去（倒回去的话出门、访客、菜地这些按时间算的东西都会乱）
+    const wasPrologue = this.life.clock.day < PROLOGUE_DAYS
     this.life.clock = { day: Household.nextNightDay(this.life.clock, crisis), hour: 20.85 }
+    // 从序章直接跳过去：末日降临的警报和字幕也补上
+    if (wasPrologue && this.life.clock.day >= PROLOGUE_DAYS) {
+      this.life.logNote('world.log.doomday')
+      this.life.onDoomsday?.()
+    }
     this.life.resetNight()
     this.pushLifeHud()
   }
