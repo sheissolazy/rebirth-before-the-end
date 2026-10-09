@@ -358,7 +358,7 @@ describe('出门', () => {
     let said = ''
     let back = ''
     const dt = 0.1
-    for (let i = 0; i < (3.5 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+    for (let i = 0; i < (4.2 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
       // 女主在家闲着（不是在吃饭睡觉）
       if (!life.trip || life.trip.phase === 'out') hero.needs = { hunger: 90, thirst: 90, energy: 90, mood: 80 }
       life.tick(dt, (a) => life.isHomeBody(a))

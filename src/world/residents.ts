@@ -42,6 +42,8 @@ interface Task {
   with?: Actor
   /** 迎接：还要挥手多久（游戏小时）；0 = 挥过了 */
   wave?: number
+  /** 迎接：看见人以后再等一会儿才喊（几个人错开，话泡不叠在一起） */
+  waitT?: number
 }
 
 
@@ -1779,7 +1781,13 @@ export class Household {
   private greetTick(a: Actor, t: Task, hours: number): void {
     const trip = this.trip
     const near = trip?.phase === 'back' ? trip.members.find((m) => !m.away && Math.hypot(m.pos.x - a.pos.x, m.pos.z - a.pos.z) < 7) : undefined
-    if (near && t.wave === undefined) {
+    if (near && t.wave === undefined && t.waitT === undefined) {
+      // 回来的人先说"我们回来啦"，迎的人一个接一个地喊
+      const order = this.actors.filter((o) => o.task?.kind === 'greet').indexOf(a)
+      t.waitT = 0.07 + Math.max(0, order) * 0.09
+    }
+    if (t.waitT !== undefined && t.waitT > 0) t.waitT -= hours
+    if (near && t.wave === undefined && t.waitT !== undefined && t.waitT <= 0) {
       t.wave = 0.2
       const prologue = this.clock.day < PROLOGUE_DAYS
       const n = Math.floor(this.rand() * 3)
