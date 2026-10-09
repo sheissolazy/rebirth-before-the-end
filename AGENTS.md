@@ -3,7 +3,7 @@
 这是一个卡牌叙事策略游戏《重生末日之前》：女主重生到丧尸末日前 4 周，囤货、建基地、打丧尸、种田、谈恋爱。机制文档 `docs/DESIGN.md`，计划与分工 `docs/PLAN.md`，任务在 `docs/tasks/`。
 
 ## 技术栈
-React 19 + Vite + TypeScript + Tailwind v4 + Vitest。纯静态，部署 GitHub Pages，必须在手机（~400px 宽）上可玩。
+React 19 + Vite + TypeScript + Tailwind v4 + Vitest。纯静态，部署 GitHub Pages，文字版必须在手机（~400px 宽）竖屏上可玩；2.5D 版（`proto-2.5d` 分支，`src/world/`）横屏优先。
 
 ## 命令
 ```bash
@@ -25,7 +25,7 @@ node scripts/e2e.mjs   # 无头浏览器走一周（先 npm run build && npx vit
 3. **所有玩家可见文字**：内容文案用 `LocalizedText { zh, en? }`，UI 字符串用 `src/i18n/zh.ts` + `t('key')`。不要在 JSX 里写死中文。
 4. **内容文件是纯数据**，不含逻辑；id 命名：事件 `ev_<地点>_<slug>`（男主线 `ev_<npc>_<序号>`），物资 `supply_<slug>`，装备 `equip_<slug>`，晶核 `core_<rarity>`，技能 `skill_<owner>_<slug>`，危机 `crisis_<kind>_<rarity>`，模块 `<baseType缩写>_<slug>`。
 5. **稀有度四档**统一叫 普通(common,白) / 优良(fine,绿) / 稀有(rare,蓝) / 传说(legendary,金)。**不要**出现"石/铜/银/金"。
-6. **没有心态值。** 人物只有 三属性(体力/头脑/魅力) + 健康/忠诚/好感。别加新数值，需要就开任务讨论。
+6. **人物数值**：三属性(体力/头脑/魅力) + 健康/忠诚/好感。2.5D 版另有四条需求：饥饿/口渴/困倦/心情（2026-10-08 用户拍板；心情过低会抑郁、离家出走）。别再加新数值，需要就开任务讨论。
 7. `tsconfig` 开了 `erasableSyntaxOnly`：不要用 `enum`、参数属性（`constructor(public x)`）、namespace。
 8. 提交前 `npm run build && npm test` 必须通过。一个任务一个分支 `codex/T-xxx-slug`，PR 到 `main`。
 9. 完成任务后把 `docs/tasks/T-xxx.md` 顶部状态改成 `done`，并在 `docs/PLAN.md` 任务表里勾掉。
