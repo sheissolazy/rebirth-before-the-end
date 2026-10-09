@@ -208,7 +208,7 @@ export class Household {
   static nightCount(c: Clock): { count: number; crisis: boolean } {
     if (c.day < PROLOGUE_DAYS) return { count: 0, crisis: false }
     const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
-    if (isCrisisNight({ ...c, hour: 21 })) return { count: 9 + month * 3, crisis: true }
+    if (isCrisisNight({ ...c, hour: 21 })) return { count: 10 + month * 3, crisis: true }
     return { count: 2 + month + (c.day % 2), crisis: false }
   }
 

@@ -296,3 +296,44 @@ export function person(shirt: string, hair: string, height = 1): THREE.Group {
   g.userData.body = body
   return g
 }
+
+// --- 武器（挂在右手骨骼上，沿手指方向 = 骨骼局部 +y） -----------------------------
+
+function rod(r: number, len: number, color: string, y0: number, axis: 'x' | 'y' | 'z' = 'y'): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.3 }))
+  m.castShadow = true
+  if (axis === 'y') m.position.y = y0 + len / 2
+  else if (axis === 'x') { m.rotation.z = Math.PI / 2; m.position.x = y0 + len / 2 }
+  else { m.rotation.x = Math.PI / 2; m.position.z = y0 + len / 2 }
+  return m
+}
+
+/** 霰弹枪：双管 + 木枪托 */
+export function shotgun(): THREE.Group {
+  const g = new THREE.Group()
+  const a = rod(0.017, 0.62, '#2c2c2e', 0.02)
+  const b = rod(0.017, 0.62, '#2c2c2e', 0.02)
+  a.position.x = -0.018
+  b.position.x = 0.018
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.32, 0.09), new THREE.MeshStandardMaterial({ color: '#6b4428', roughness: 0.7 }))
+  stock.position.set(0, -0.12, -0.02)
+  g.add(a, b, stock)
+  return g
+}
+
+/** 撬棍：握在拳头里，横着伸出去 */
+export function crowbar(): THREE.Group {
+  const g = new THREE.Group()
+  g.add(rod(0.013, 0.72, '#7a2020', -0.12, 'z'))
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.09, 0.026), new THREE.MeshStandardMaterial({ color: '#7a2020' }))
+  hook.position.set(0, 0.04, 0.6)
+  g.add(hook)
+  return g
+}
+
+/** 擀面杖 */
+export function rollingPin(): THREE.Group {
+  const g = new THREE.Group()
+  g.add(rod(0.028, 0.42, '#d9b98c', -0.08, 'z'))
+  return g
+}

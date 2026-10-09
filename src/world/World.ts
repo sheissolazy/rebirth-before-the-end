@@ -13,13 +13,14 @@ import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import {
-  COLORS, barrel, box, car, counter, desk, fridge, neighborHouse, shelf, sofa, stairs,
+  COLORS, barrel, box, car, counter, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   toon, toonify, tree, villaRoof, wallMap,
 } from './meshes'
 import { Actor, Household, type LogEntry, type PersonHud } from './residents'
 import { PROLOGUE_DAYS, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
+import { Sound } from './sound'
 import { skyAt, type StyleDay } from './daylight'
 
 export type ViewMode = 'home' | 'outside'
@@ -44,6 +45,7 @@ export interface Hud {
   /** 正在打丧尸：还剩几只、守的是哪一层、这一层的耐久 */
   siege: { left: number; layer: LayerId | null; hp: number; max: number } | null
   log: LogEntry[]
+  muted: boolean
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -65,7 +67,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [],
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false,
 }
 
 export class World {
@@ -110,6 +112,10 @@ export class World {
   private readonly sunDir = new THREE.Vector3(0.4, 0.9, 0.2)
   private dayBase: StyleDay = { sky: SKY, fog: SKY, sun: '#fff1d6' }
   private readonly siegeView: SiegeView
+  readonly sound = new Sound()
+  private readonly weapons: THREE.Object3D[] = []
+  private readonly groanT = new WeakMap<object, number>()
+  private nightness = 0
   private frontDoor: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
@@ -164,6 +170,12 @@ export class World {
     this.life.spawnZombie = (at) => this.siegeView.spawn(at)
     this.life.onSiege = (e) => {
       this.siegeView.onEvent(e)
+      const vol = (at: { x: number; z: number }) => THREE.MathUtils.clamp(1.25 - Math.hypot(at.x - this.pose.target.x, at.z - this.pose.target.z) / 22, 0.15, 1)
+      if (e.kind === 'shot') this.sound.shot(vol(e.at))
+      else if (e.kind === 'bash') this.sound.bash(e.layer === 'gate', vol(e.at))
+      else if (e.kind === 'broken') this.sound.crash()
+      else if (e.kind === 'kill') this.sound.squelch()
+      else if (e.kind === 'hit') this.sound.hurt()
       if (e.kind === 'start') {
         this.toast(e.crisis ? 'world.toast.crisis' : 'world.toast.siege', 4)
         if (this.mode === 'home') this.setViewFloor(0)
@@ -243,7 +255,15 @@ export class World {
       }
       this.assembleVilla(kit)
       if (paradise) this.applyParadise(paradise)
-      if (people) people.forEach((m, k) => this.actors[k].setModel(m))
+      if (people) {
+        people.forEach((m, k) => this.actors[k].setModel(m))
+        // 女主霰弹枪、妈妈擀面杖、爸爸撬棍：只在打丧尸时拿出来
+        const kit = [shotgun(), rollingPin(), crowbar()]
+        kit.forEach((w, k) => {
+          w.visible = false
+          if (this.actors[k].driver?.attach(w, 'RightHand')) this.weapons.push(w)
+        })
+      }
       this.addLamps()
       this.collectClickables()
       const gates: THREE.Object3D[] = []
@@ -532,6 +552,7 @@ export class World {
   /** 按游戏时间调太阳、天色、雾和灯 */
   private applySky(): void {
     const s = skyAt(this.life.clock.hour, this.dayBase)
+    this.nightness = s.night
     this.sunDir.copy(s.dir)
     this.sun.color.copy(s.color)
     this.sun.intensity = this.sunBase * s.light
@@ -675,6 +696,18 @@ export class World {
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
     this.siegeView.update(Math.min(sim, 0.1), this.life, this.actors)
+    for (const w of this.weapons) w.visible = fighting
+    // 丧尸隔几秒低吼一声；环境声跟着昼夜走
+    for (const z of this.life.siege?.zombies ?? []) {
+      if (!z.alive) continue
+      const left = (this.groanT.get(z) ?? 1 + Math.random() * 4) - sim
+      if (left <= 0) {
+        const d = Math.hypot(z.pos.x - this.pose.target.x, z.pos.z - this.pose.target.z)
+        this.sound.groan(THREE.MathUtils.clamp(1.2 - d / 20, 0.1, 1))
+        this.groanT.set(z, 4 + Math.random() * 6)
+      } else this.groanT.set(z, left)
+    }
+    this.sound.ambience(this.nightness, !fighting)
     for (const a of this.actors) {
       let walking = a === this.heroine && this.keysMoving
       let gliding = false
@@ -768,6 +801,7 @@ export class World {
   private bindInput(): void {
     const el = this.renderer.domElement
     this.on(el, 'pointerdown', ((e: PointerEvent) => {
+      this.sound.unlock()
       el.setPointerCapture(e.pointerId)
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (this.pointers.size === 1) this.press = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false }
@@ -794,7 +828,7 @@ export class World {
     this.on(el, 'pointerup', up)
     this.on(el, 'pointercancel', ((e: PointerEvent) => { this.pointers.delete(e.pointerId); this.press = null }) as EventListener)
     this.on(el, 'wheel', ((e: WheelEvent) => { e.preventDefault(); this.zoomBy(1 + e.deltaY * 0.0012) }) as EventListener)
-    this.on(window, 'keydown', ((e: KeyboardEvent) => { this.keys.add(e.key.toLowerCase()) }) as EventListener)
+    this.on(window, 'keydown', ((e: KeyboardEvent) => { this.sound.unlock(); this.keys.add(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'blur', (() => this.keys.clear()) as EventListener)
   }
@@ -903,6 +937,12 @@ export class World {
     this.setHud({ selected: actor.name })
   }
 
+  toggleMute(): void {
+    this.sound.unlock()
+    this.sound.setMuted(!this.sound.muted)
+    this.setHud({ muted: this.sound.muted })
+  }
+
   setSpeed(n: number): void {
     this.life.speed = n
     this.pushLifeHud()
@@ -922,6 +962,7 @@ export class World {
       food: this.life.stock.food,
       water: this.life.stock.water,
       people: this.life.hud(),
+      muted: this.sound.muted,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

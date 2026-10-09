@@ -105,6 +105,7 @@ export type SiegeEvent =
   | { kind: 'kill'; at: Pt; by: string }
   | { kind: 'shot'; from: Actor; at: Pt }
   | { kind: 'hit'; at: Pt }
+  | { kind: 'bash'; layer: LayerId; at: Pt }
   | { kind: 'down'; who: string }
   | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[] }
 
@@ -132,6 +133,12 @@ export class Siege {
   private readonly broken: LayerId[] = []
   private readonly downed = new Set<Actor>()
   private nextId = 0
+  private seed = 7
+
+  private rand(): number {
+    this.seed = (this.seed * 1664525 + 1013904223) >>> 0
+    return this.seed / 4294967296
+  }
 
   constructor(o: SiegeOpts) {
     this.o = o
@@ -271,8 +278,18 @@ export class Siege {
       z.face(look.x - z.pos.x, look.z - z.pos.z, dt)
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
+        // 贴在门边打的人，偶尔会被从栏杆/门缝里伸出来的手抓伤
+        const close = this.o.defenders.find((a) => !this.downed.has(a) && this.roleOf(a) !== 'ranged'
+          && Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) < 1.7)
+        if (close && this.rand() < 0.3) {
+          close.health = Math.max(0, close.health - 5)
+          this.o.emit({ kind: 'hit', at: close.pos })
+          if (close.health <= 0) this.knockDown(close)
+          return
+        }
         const id = layer.id
         this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg)
+        this.o.emit({ kind: 'bash', layer: id, at: z.pos })
         if (this.o.barriers[id] <= 0) this.breakLayer()
       }
       return

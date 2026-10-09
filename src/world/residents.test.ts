@@ -102,12 +102,13 @@ describe('丧尸夜', () => {
     expect(c.count).toBeGreaterThan(8)
   })
 
-  it('三只丧尸：一家人在铁门守住，铁门掉点血，用了几发子弹，捡到晶核', () => {
+  it('三只丧尸：一家人在铁门守住，用了几发子弹，捡到晶核', () => {
     const { life, events } = siegeNight(3, false)
     expect(events).toContain('end')
     expect(events.filter((e) => e === 'kill').length).toBe(3)
     expect(events.some((e) => e.startsWith('broken'))).toBe(false)
-    expect(life.barriers.gate).toBeLessThan(180)
+    // 铁门挨了砸，或者守门的人被抓伤
+    expect(life.barriers.gate < 180 || life.actors.some((a) => a.health < 100)).toBe(true)
     expect(life.ammo.n).toBeLessThan(24)
     expect(life.cores).toBe(3)
     expect(life.log.some((l) => l.key === 'world.log.won')).toBe(true)

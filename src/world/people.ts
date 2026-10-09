@@ -78,6 +78,18 @@ export class PoseDriver {
     this.height = box.max.y - box.min.y
   }
 
+  /** 把武器之类的东西挂到骨骼上（抵消骨骼链上的缩放） */
+  attach(obj: THREE.Object3D, boneSuffix: string): boolean {
+    const bone = findBone(this.model, boneSuffix)
+    if (!bone) return false
+    this.model.updateMatrixWorld(true)
+    const s = bone.getWorldScale(new THREE.Vector3())
+    const root = this.model.getWorldScale(new THREE.Vector3())
+    obj.scale.set(root.x / s.x, root.y / s.y, root.z / s.z)
+    bone.add(obj)
+    return true
+  }
+
   /** 把人物空间里的旋转换算到骨骼自己的局部空间 */
   private toLocal(j: Joint, world: THREE.Quaternion): THREE.Quaternion {
     return j.worldRest.clone().invert().multiply(world).multiply(j.worldRest)
@@ -165,12 +177,13 @@ export class PoseDriver {
       this.model.position.y = attack ? 0 : Math.abs(Math.cos(this.t)) * 0.015
     } else if (state === 'shoot') {
       // 端着霰弹枪瞄准，开枪时往后一顿
+      // 右手大臂稍微往前、小臂端平；左手往前托着枪管
       const k = this.kick > 0 ? this.kick / 0.18 : 0
-      this.rot('LeftArm', SIDE, -1.35 - k * 0.25, leftDown)
-      this.rot('RightArm', SIDE, -1.1 - k * 0.25, rightDown)
-      this.rot('LeftForeArm', SIDE, -0.25)
-      this.rot('RightForeArm', SIDE, -0.9)
-      this.rot('Spine', SIDE, -0.05 - k * 0.12)
+      this.rot('LeftArm', SIDE, -1.2 - k * 0.2, leftDown)
+      this.rot('RightArm', SIDE, -0.55 - k * 0.15, rightDown)
+      this.rot('LeftForeArm', SIDE, -0.35)
+      this.rot('RightForeArm', SIDE, -1.05 - k * 0.2)
+      this.rot('Spine', SIDE, 0.04 - k * 0.12)
     } else if (state === 'melee') {
       // 抡撬棍/擀面杖
       const swing = Math.max(0, Math.sin(this.t))

@@ -140,6 +140,10 @@ export default function WorldView() {
       )}
 
       <div className="absolute right-3 top-3 flex items-center gap-2">
+        <button onClick={() => world.current?.toggleMute()} title={t('world.sound')}
+          className="rounded-full bg-white/90 px-2.5 py-1 text-xs shadow">
+          {hud.muted ? '🔇' : '🔊'}
+        </button>
         <button onClick={toggleStyle} className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium shadow">
           {t('world.style', { name: t(style === 'toon' ? 'world.style.toon' : 'world.style.paradise') })}
         </button>
