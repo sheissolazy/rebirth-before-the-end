@@ -227,3 +227,100 @@ export function decorateHouse(scene: THREE.Object3D, upper: THREE.Object3D, tabl
   upper.add(g1)
   return [g, g1]
 }
+
+/** 晾衣绳在院子西边（房子左手、镜头看得见、平时没人走）：两根杆子、一根绳 */
+export const CLOTHESLINE = { x: -3.2, z0: 2.2, z1: 6.8 }
+
+/** 一件晾着的衣服 / 毛巾：纯色画布 + 一道花边，挂在绳上可以随风摆 */
+function cloth(kind: 'shirt' | 'towel' | 'pants' | 'dress', color: string, trim: string): THREE.Object3D {
+  const pivot = new THREE.Group()
+  let geo: THREE.BufferGeometry
+  if (kind === 'shirt') {
+    // T 恤：身子 + 两只袖子，用一个形状画出来
+    const s = new THREE.Shape()
+    s.moveTo(-0.2, 0); s.lineTo(0.2, 0); s.lineTo(0.32, -0.12); s.lineTo(0.24, -0.2); s.lineTo(0.17, -0.14)
+    s.lineTo(0.17, -0.55); s.lineTo(-0.17, -0.55); s.lineTo(-0.17, -0.14); s.lineTo(-0.24, -0.2); s.lineTo(-0.32, -0.12); s.closePath()
+    geo = new THREE.ShapeGeometry(s)
+  } else if (kind === 'pants') {
+    const s = new THREE.Shape()
+    s.moveTo(-0.17, 0); s.lineTo(0.17, 0); s.lineTo(0.19, -0.62); s.lineTo(0.04, -0.62); s.lineTo(0, -0.2)
+    s.lineTo(-0.04, -0.62); s.lineTo(-0.19, -0.62); s.closePath()
+    geo = new THREE.ShapeGeometry(s)
+  } else if (kind === 'dress') {
+    const s = new THREE.Shape()
+    s.moveTo(-0.12, 0); s.lineTo(0.12, 0); s.lineTo(0.14, -0.22); s.lineTo(0.27, -0.7); s.lineTo(-0.27, -0.7); s.lineTo(-0.14, -0.22); s.closePath()
+    geo = new THREE.ShapeGeometry(s)
+  } else {
+    geo = new THREE.PlaneGeometry(0.42, 0.62)
+    geo.translate(0, -0.31, 0)
+  }
+  // 竖条花边贴图（uv 是形状坐标，横着一道道）
+  const tex = canvasTex(64, 64, (g) => {
+    g.fillStyle = color
+    g.fillRect(0, 0, 64, 64)
+    g.fillStyle = trim
+    for (const y of kind === 'towel' ? [6, 52] : [50]) g.fillRect(0, y, 64, 6)
+  })
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(1.5, 1.5)
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, side: THREE.DoubleSide }))
+  m.castShadow = true
+  m.rotation.y = Math.PI / 2 // 绳子沿 z 方向，衣服面朝东西
+  pivot.add(m)
+  // 两个小夹子
+  for (const z of [-0.12, 0.12]) {
+    const peg = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.015), new THREE.MeshStandardMaterial({ color: '#c99a5b', roughness: 0.8 }))
+    peg.position.set(0, -0.01, z)
+    pivot.add(peg)
+  }
+  return pivot
+}
+
+export interface Clothesline {
+  group: THREE.Group
+  /** 晾着的衣服（不晾的时候藏起来） */
+  clothes: THREE.Group
+  update(t: number, wind: number): void
+}
+
+/** 院子西边的晾衣绳和一排衣服：每件衣服绕着绳子轻轻摆（风大就摆得厉害） */
+export function clothesline(): Clothesline {
+  const group = new THREE.Group()
+  const { x, z0, z1 } = CLOTHESLINE
+  const wood = new THREE.MeshStandardMaterial({ color: '#8a6a48', roughness: 0.85 })
+  for (const z of [z0, z1]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.95, 8), wood)
+    pole.position.set(x, 0.975, z)
+    pole.castShadow = true
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.04), wood)
+    bar.position.set(x, 1.86, z)
+    group.add(pole, bar)
+  }
+  const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, z1 - z0, 6), new THREE.MeshStandardMaterial({ color: '#efe9da', roughness: 0.9 }))
+  rope.rotation.x = Math.PI / 2
+  rope.position.set(x, 1.84, (z0 + z1) / 2)
+  group.add(rope)
+  const clothes = new THREE.Group()
+  const items: [Parameters<typeof cloth>[0], string, string][] = [
+    ['shirt', '#5b9be0', '#ffffff'], ['towel', '#f6d36b', '#ffffff'], ['dress', '#a8404f', '#f2c4cb'],
+    ['pants', '#40639a', '#2f4b78'], ['towel', '#f2f0ea', '#e07a7a'], ['shirt', '#5f7350', '#e9e3cf'],
+  ]
+  items.forEach(([kind, c, trim], i) => {
+    const o = cloth(kind, c, trim)
+    o.position.set(x, 1.84, z0 + 0.45 + i * ((z1 - z0 - 0.9) / (items.length - 1)))
+    o.userData.phase = i * 1.3
+    clothes.add(o)
+  })
+  clothes.visible = false
+  group.add(clothes)
+  return {
+    group, clothes,
+    update(t, wind) {
+      if (!clothes.visible) return
+      for (const o of clothes.children) {
+        const p = o.userData.phase as number
+        o.rotation.z = (Math.sin(t * 1.7 + p) * 0.12 + Math.sin(t * 3.1 + p * 2) * 0.04) * wind + 0.05 * wind
+      }
+    },
+  }
+}

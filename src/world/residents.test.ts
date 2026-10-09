@@ -124,6 +124,47 @@ describe('家里人会说话', () => {
   })
 })
 
+describe('晾衣服', () => {
+  function run(life: Household, hours: number, each?: () => void) {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      each?.()
+    }
+  }
+  it('晴天上午有人去院子里晾衣服，傍晚收回来', () => {
+    const { life } = simulate('paradise', 0)
+    // 找一个不下雨的白天
+    let day = 0
+    while ([8, 10, 12, 14, 16, 18].some((h) => rainAt(day, h) > 0.05)) day++
+    life.clock = { day, hour: 7.6 }
+    life.speed = 3
+    let hung = false
+    run(life, 13, () => { if (life.laundryOut) hung = true })
+    expect(hung).toBe(true)
+    expect(life.laundryOut).toBe(false)
+  })
+
+  it('衣服晾在外面突然下雨：有人冒雨跑去收，喊一声', () => {
+    const { life } = simulate('paradise', 0)
+    let start = -1
+    for (let h = 7 * 4; h < 24 * 30 * 4 && start < 0; h++) {
+      const day = Math.floor(h / 96)
+      const hour = (h % 96) / 4
+      if (hour > 9 && hour < 16 && rainAt(day, hour) > 0.1 && rainAt(day, hour - 0.25) <= 0.1) start = day * 24 + hour
+    }
+    life.clock = { day: Math.floor(start / 24), hour: (start % 24) - 0.3 }
+    life.laundryOut = true
+    life.laundryDay = life.clock.day
+    life.speed = 3
+    let said = ''
+    run(life, 1.5, () => { for (const a of life.actors) if (a.line?.text.includes('收衣服')) said = a.line.text })
+    expect(said).toBe('下雨啦，快收衣服！')
+    expect(life.laundryOut).toBe(false)
+  })
+})
+
 describe('陪聊', () => {
   it('妈妈坐在沙发上歇着：爸爸能找到她身边一块空地过去陪她说话（不会站进墙里、桌子里）', () => {
     for (const style of ['paradise', 'toon'] as const) {

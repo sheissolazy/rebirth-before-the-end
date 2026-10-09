@@ -9,7 +9,7 @@ import {
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
-import { decorateHouse, parchmentMap } from './decor'
+import { clothesline, decorateHouse, parchmentMap } from './decor'
 import { VanView, buildVan, vanPose } from './van'
 import { Cat } from './cat'
 import {
@@ -214,6 +214,8 @@ export class World {
   private nightness = 0
   /** 家里的旧面包车 */
   private van = new VanView(buildVan())
+  /** 院子西边的晾衣绳 */
+  private line = clothesline()
   /** 外婆家的橘猫大橘（模型加载好以后才有） */
   private cat: Cat | null = null
   private catLove = bubbleMaterial('💕')
@@ -372,7 +374,7 @@ export class World {
 
     this.buildGround()
     this.buildStreet()
-    this.scene.add(this.van.parts.root)
+    this.scene.add(this.van.parts.root, this.line.group)
     this.spawnActors()
     this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts, this.birds.g)
     // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
@@ -1684,6 +1686,9 @@ export class World {
         }
       }
     }
+    // 晾着的衣服随风摆（下雨风大）
+    this.line.clothes.visible = this.life.laundryOut
+    this.line.update(this.elapsed, this.life.rain > 0.1 ? 2 : 1)
     if (sim > 0) this.makeWay()
     const heroOut = this.life.onTrip(this.heroine)
     this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')

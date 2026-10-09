@@ -1,5 +1,6 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
+import { CLOTHESLINE } from './decor'
 import { BEDS, FLOOR_H, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
@@ -25,7 +26,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch'
 
 interface Task {
   kind: TaskKind
@@ -329,6 +330,10 @@ export class Household {
   vanArmor = false
   /** 末日后哪天开过车（发动机的动静会把丧尸引过来，当晚多来一只） */
   noiseDay = -1
+  /** 院子西边晾着衣服 */
+  laundryOut = false
+  /** 哪天晾过了（一天晾一次） */
+  laundryDay = -1
   /** 女主正在街上搜东西 */
   search: { spot: ScavengeSpot; left: number } | null = null
   /** 每个地方哪天搜过 */
@@ -977,6 +982,20 @@ export class Household {
       const p = this.routeFor(a, { x: 3.5 + (shouted ? 0.6 : 0), z: 5.2, floor: 0 })
       if (p) a.setPath(p)
       if (!shouted) { a.line = { text: t_('world.say.rain'), hours: 0.2 }; shouted = true }
+    }
+    // 衣服还晾在外面：离得最近的闲人冒雨去收
+    if (this.laundryOut && !this.actors.some((o) => o.task?.kind === 'fetch')) {
+      const free = ['idle', 'stroll', 'relax', 'tidy', 'company', 'pet', 'wash', 'hang']
+      const cand = this.actors
+        .filter((o) => o !== this.actors[0] && !this.isOut(o) && !o.dead && !o.settling && this.isHomeBody(o) && (!o.task || (!o.task.manual && free.includes(o.task.kind))))
+        .sort((p, q) => Math.hypot(p.pos.x - CLOTHESLINE.x, p.pos.z - 4.5) - Math.hypot(q.pos.x - CLOTHESLINE.x, q.pos.z - 4.5))[0]
+      const task = cand && this.laundryTask('fetch')
+      if (cand && task) {
+        this.release(cand)
+        cand.task = null
+        this.assign(cand, task)
+        cand.line = { text: t_('world.say.laundry'), hours: 0.22 }
+      }
     }
   }
 
@@ -1628,7 +1647,7 @@ export class Household {
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
-    if (t.kind === 'help') return 'idle'
+    if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
     if (t.kind === 'modvan') return 'cook'
     return t.kind
   }
@@ -1665,6 +1684,12 @@ export class Household {
     // 闲着的时候找点事：凑到家人身边说说话，或者收拾收拾屋子（不再一个人原地发呆）
     // （晚上 9 点以后、累了就不折腾了，该准备睡觉）
     const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
+    // 晴天上午有空的人去院子西边晾衣服；傍晚收回来
+    const freeish = want === 'idle' || want === 'stroll' || want === 'relax'
+    if (!task && freeish && a !== this.actors[0] && this.rain < 0.05 && !this.laundryOut && this.laundryDay !== this.clock.day
+      && this.clock.hour >= 8 && this.clock.hour < 11) task = this.laundryTask('hang')
+    // 收衣服是轻活：傍晚到睡前，还有点力气就去
+    if (!task && freeish && a !== this.actors[0] && this.laundryOut && this.clock.hour >= 17 && this.clock.hour < 22 && a.needs.energy > 15) task = this.laundryTask('fetch')
     // 改装面包车的材料带回来了：会修东西的人（爸爸）一有空就去改装，比歇着、溜达优先
     if (!task && !late && !night && fixer && this.vanKit && !this.vanArmor && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.modVanTask()
     if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
@@ -1793,6 +1818,13 @@ export class Household {
       return (a.task as Task | null)?.kind === 'pet'
     }
     return false
+  }
+
+  /** 晾衣服 / 收衣服：站到晾衣绳东边，面朝绳子（同一时间只派一个人） */
+  private laundryTask(kind: 'hang' | 'fetch'): Task | null {
+    if (this.actors.some((o) => o.task?.kind === 'hang' || o.task?.kind === 'fetch')) return null
+    const spot: Spot = { kind: 'stroll', x: CLOTHESLINE.x + 0.62, z: (CLOTHESLINE.z0 + CLOTHESLINE.z1) / 2, floor: 0, face: -90, pose: 'work' }
+    return { kind, spot, phase: 'go', hours: kind === 'hang' ? 0.35 : 0.2, manual: false }
   }
 
   /** 改装面包车：蹲在车边焊钢板、装铁栏，干一个多小时 */
@@ -1965,6 +1997,9 @@ export class Household {
     if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
+    // 晾的时候下起雨来就不晾了（抱回屋）
+    if (t.kind === 'hang' && t.hours <= 0 && this.rain < 0.1) { this.laundryOut = true; this.laundryDay = this.clock.day }
+    if (t.kind === 'fetch' && t.hours <= 0) this.laundryOut = false
     if (t.kind === 'modvan' && t.hours <= 0 && !this.vanArmor) {
       this.vanArmor = true
       this.vanKit = false
