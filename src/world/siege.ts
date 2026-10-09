@@ -434,7 +434,8 @@ export class Siege {
     const c = (this.cool.get(a) ?? this.rand() * 0.5) - dt
     if (c > 0) { this.cool.set(a, c); return }
     this.cool.set(a, w.cool)
-    let dmg = w.dmg
+    // 壮实的人打得更狠，胆小的人手软
+    let dmg = w.dmg + (a.trait === 'trait_strong' ? 4 : a.trait === 'trait_coward' ? -4 : 0)
     if (weapon === 'shotgun') {
       this.o.ammo.n -= 1
       dmg = bd < 3.5 ? w.dmg * 1.3 : w.dmg

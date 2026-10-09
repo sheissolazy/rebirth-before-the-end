@@ -362,7 +362,8 @@ describe('住进来的人', () => {
     life.answerVisitor('invite')
     expect(life.residents).toBe(4)
     const newcomer = life.actors[3]
-    expect(newcomer.name).toBe('阿杰')
+    expect(newcomer.name.length).toBeGreaterThan(0)
+    expect(newcomer.trait).toMatch(/^trait_/)
     expect(newcomer.weapon).toBe('machete')
     // 守夜：第四个人站 3 号位（贴门）
     life.spawnZombie = (at) => new Zombie(at)
@@ -374,8 +375,9 @@ describe('住进来的人', () => {
     const b = simulate('paradise', 0).life
     b.makeActor = life.makeActor
     restore(b, s)
-    expect(b.actors.map((a) => a.name)).toContain('阿杰')
-    expect(b.actors.find((a) => a.name === '阿杰')?.weapon).toBe('machete')
+    expect(b.actors.map((a) => a.name)).toContain(newcomer.name)
+    expect(b.actors.find((a) => a.name === newcomer.name)?.weapon).toBe('machete')
+    expect(b.actors.find((a) => a.name === newcomer.name)?.trait).toBe(newcomer.trait)
   })
 })
 

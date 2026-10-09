@@ -174,7 +174,7 @@ export const zh = {
   'world.visit.beggar.choice.give': '给他 1 份吃的',
   'world.visit.beggar.choice.refuse': '隔着铁门让他走',
   'world.visit.beggar.choice.invite': '让他住进来（家里最多 5 人）',
-  'world.visit.beggar.log.invite': '让门外的陌生人住了进来。他说他叫{who}，会用砍刀',
+  'world.visit.beggar.log.invite': '让门外的陌生人住了进来。他说他叫{who}（{trait}），会用砍刀',
   'world.visit.beggar.log.give': '给了陌生人 1 份吃的。他说超市废墟的地下室还有存货（下次去翻倍）',
   'world.visit.beggar.log.refuse': '让陌生人走了。他的背影在街角停了很久',
   'world.diary.people': '这一世 · 认识的人',

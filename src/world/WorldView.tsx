@@ -31,6 +31,7 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
       className={`w-36 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'} ${p.gone ? 'grayscale opacity-60' : ''}`}>
       <div className="flex items-baseline justify-between gap-1">
         <span className="whitespace-nowrap text-sm font-semibold">{p.name}</span>
+        {p.trait && <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-800">{p.trait}</span>}
         {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
       </div>
       <div className="truncate text-[11px] text-zinc-500" title={doing}>{doing}</div>

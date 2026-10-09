@@ -14,6 +14,7 @@ import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
 import { npcs } from '../content/npcs'
 import { events as textEvents } from '../content/events'
+import { survivorNames, survivorTraits } from '../content/survivors'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
@@ -75,6 +76,8 @@ export class Actor extends Walker {
   model = ''
   /** 来做客/帮忙的人，不算家里人（不存档、不分床） */
   guest = false
+  /** 住进来的人的特质（文字版 content/survivors.ts 里的 id） */
+  trait = ''
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
   runaway: { back: number } | null = null
   lost = false
@@ -200,6 +203,8 @@ const HOME_IN: Where = { x: 4, z: 11, floor: 0 }
 
 export interface PersonHud {
   name: string
+  /** 住进来的人的特质名（比如"修车工"） */
+  trait?: string
   /** 离家出走 / 不在了 */
   gone?: 'runaway' | 'lost'
   /** 出门在外：去哪了、还有几小时回来 */
@@ -322,6 +327,7 @@ export class Household {
     const hours = (dt * this.speed * 24) / DAY_SECONDS
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done
+    const nurse = this.hasTrait('trait_nurse')
     this.tripTick()
     this.careTick()
     this.runawayTick()
@@ -335,7 +341,7 @@ export class Household {
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
-      a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6))
+      a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6) * (nurse ? 2 : 1))
       if (!fighting && !a.away && a.health < 45 && this.medkits > 0) {
         this.medkits -= 1
         a.health = Math.min(100, a.health + 40)
@@ -551,14 +557,21 @@ export class Household {
     return true
   }
 
-  /** 有人住进来 */
-  addResident(name: string, model: string, at: Pt): Actor | null {
+  /** 有人住进来（trait 不给就随机一个） */
+  addResident(name: string, model: string, at: Pt, trait?: string): Actor | null {
     if (!this.makeActor || this.residents >= Household.MAX_RESIDENTS) return null
     const a = this.makeActor(name, model, at)
     a.model = model
     a.weapon = 'machete'
+    a.trait = trait ?? survivorTraits[Math.floor(this.rand() * survivorTraits.length)].id
+    if (a.trait === 'trait_mechanic') a.handy = true
     this.actors.push(a)
     return a
+  }
+
+  /** 家里（在家的人里）有没有这个特质 */
+  hasTrait(id: string): boolean {
+    return this.actors.some((a) => a.trait === id && !a.away && !a.lost && !a.runaway)
   }
 
   /** 玩家在对话框里选了 */
@@ -580,14 +593,16 @@ export class Household {
       else if (choice === 'invite') {
         // 让他住进来：门口的人直接变成家里人，走进院子
         const taken = (n: string) => this.actors.some((a) => a.name === n)
-        let name = NEWCOMERS.find((n) => !taken(n)) ?? '新来的人'
+        const pool = survivorNames.map((n) => lt(n)).filter((n) => !taken(n))
+        let name = pool[Math.floor(this.rand() * pool.length)] ?? NEWCOMERS.find((n) => !taken(n)) ?? '新来的人'
         for (let k = 2; taken(name); k++) name = `新来的人${k}`
         const a = this.addResident(name, 'stranger', { x: v.pos.x, z: v.pos.z })
         if (a) {
           a.health = 70
           a.needs = { hunger: 25, thirst: 40, energy: 50, mood: 70 }
           a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
-          this.note('world.visit.beggar.log.invite', { who: name })
+          const tr = survivorTraits.find((x) => x.id === a.trait)
+          this.note('world.visit.beggar.log.invite', { who: name, trait: tr ? `${lt(tr.name)}——${lt(tr.desc)}` : '' })
           this.talking = null
           v.root.removeFromParent()
           this.visitor = null
@@ -919,6 +934,8 @@ export class Household {
       const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
       const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand())
       const g = r.gain
+      // 拾荒老手跟着去：多带回一份吃的一份水
+      if (t.members.some((m) => m.trait === 'trait_scavenger')) { g.food = (g.food ?? 0) + 1; g.water = (g.water ?? 0) + 1 }
       // 陌生人说的地下室：吃的喝的翻倍
       if (this.tip === t.def.id) {
         g.food = (g.food ?? 0) * 2 + 2
@@ -1184,7 +1201,7 @@ export class Household {
     const g = this.garden
     if (!g.built || g.growth >= 1) return
     if (this.rain > 0.2) g.watered = this.clock.day
-    const rate = g.watered === this.clock.day ? 0.5 : 0.12 // 每天
+    const rate = (g.watered === this.clock.day ? 0.5 : 0.12) * (this.hasTrait('trait_farmer') ? 1.6 : 1) // 每天
     g.growth = Math.min(1, g.growth + (rate * hours) / 24)
   }
 
@@ -1429,6 +1446,7 @@ export class Household {
     return this.actors.map((a) => ({
       name: a.name,
       health: a.health,
+      trait: a.trait ? lt(survivorTraits.find((x) => x.id === a.trait)?.name ?? { zh: '' }) : undefined,
       gone: a.lost ? 'lost' : a.runaway ? 'runaway' : undefined,
       trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
       needs: { ...a.needs },
