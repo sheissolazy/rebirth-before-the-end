@@ -188,7 +188,9 @@ export default function WorldView() {
           </div>
         </div>
         {hud.crisis && (
-          <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">{t('world.crisis')}</div>
+          <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">
+            {t('world.crisis')}{hud.crisisKind ? ` · ${t(`crisisKind.${hud.crisisKind}` as UiKey)}` : ''}
+          </div>
         )}
         <div className="pointer-events-none w-fit rounded-full bg-white/70 px-3 py-1 text-xs shadow">
           {t(home ? 'world.mode.home' : 'world.mode.outside')}

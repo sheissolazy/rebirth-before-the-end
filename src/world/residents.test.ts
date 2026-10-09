@@ -303,3 +303,39 @@ describe('来敲门的人', () => {
     expect(life.ammo.n).toBeGreaterThan(ammo0 - 20)
   })
 })
+
+describe('月底危机夜跟着前世记忆走', () => {
+  it('1 月尸潮、2 月匮乏', () => {
+    expect(Household.crisisKind({ day: PROLOGUE_DAYS + 3, hour: 21 })).toBe('horde')
+    expect(Household.crisisKind({ day: PROLOGUE_DAYS + 7, hour: 21 })).toBe('scarcity')
+    expect(Household.crisisKind({ day: PROLOGUE_DAYS + 5, hour: 21 })).toBeNull()
+  })
+
+  it('2 月底（匮乏）来的是抢粮的人，不是丧尸', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    const starts: boolean[] = []
+    life.onSiege = (e) => { if (e.kind === 'start') starts.push(e.raid) }
+    life.clock = { day: PROLOGUE_DAYS + 7, hour: 20.99 }
+    const dt = 0.05
+    for (let i = 0; i < 40 && !starts.length; i++) life.tick(dt, () => false)
+    expect(starts).toEqual([true])
+    expect(life.log.some((l) => l.key === 'world.log.looters')).toBe(true)
+  })
+
+  it('5 月底（气候）是暴雨夜，第二天一楼进水泡坏吃的', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS + 19, hour: 20.99 }
+    const dt = 0.05
+    for (let i = 0; i < 40; i++) life.tick(dt, () => false)
+    expect(life.storm).toBe(PROLOGUE_DAYS + 19)
+    expect(life.rain).toBe(1)
+    const food = life.stock.food
+    life.siege = null
+    life.clock = { day: PROLOGUE_DAYS + 20, hour: 7.2 }
+    life.tick(dt, () => false)
+    expect(life.stock.food).toBeLessThan(food)
+    expect(life.log.some((l) => l.key === 'world.log.flood')).toBe(true)
+  })
+})

@@ -40,6 +40,7 @@ export interface WorldSave {
   helpedNeighbor?: boolean
   raidTonight?: boolean
   tip?: string | null
+  storm?: number
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -64,6 +65,7 @@ export function snapshot(life: Household): WorldSave {
     helpedNeighbor: life.helpedNeighbor,
     raidTonight: life.raidTonight,
     tip: life.tip,
+    storm: life.storm,
   }
 }
 
@@ -82,6 +84,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.helpedNeighbor = !!s.helpedNeighbor
   life.raidTonight = !!s.raidTonight
   life.tip = s.tip ?? null
+  life.storm = s.storm ?? -1
   for (const as of s.actors) {
     const a = life.actors.find((x) => x.name === as.name)
     if (!a) continue

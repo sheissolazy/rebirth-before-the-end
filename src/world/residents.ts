@@ -12,6 +12,8 @@ import {
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
 import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
 import { locations } from '../content/locations'
+import { memoriesYear1 } from '../content/memories'
+import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { VISITORS, Visitor, type VisitorCtx, type VisitorDef } from './visitors'
 import { lt } from '../i18n'
@@ -232,6 +234,9 @@ export class Household {
   raidTonight = false
   /** 陌生人透露的线索：下次去那里搜刮翻倍 */
   tip: string | null = null
+  /** 哪一天晚上是气候危机的暴雨夜 */
+  storm = -1
+  private flooded = -1
   spawnVisitor: ((def: VisitorDef, at: Pt) => Visitor) | null = null
   onKnock: (() => void) | null = null
   private visitCheck = -1
@@ -373,7 +378,10 @@ export class Household {
   // --- 天气 -----------------------------------------------------------------
 
   get rain(): number {
-    return rainAt(this.clock.day, this.clock.hour)
+    // 气候危机夜：从傍晚下到天亮的暴雨
+    const c = this.clock
+    if ((this.storm === c.day && c.hour >= 17) || (this.storm === c.day - 1 && c.hour < 7)) return 1
+    return rainAt(c.day, c.hour)
   }
 
   /** 院子里的木桶接雨水；雨停了在日记里记一笔 */
@@ -535,6 +543,13 @@ export class Household {
   // --- 丧尸夜 ---------------------------------------------------------------
 
   /** 今晚来几只：末日前没有；平时两三只、越往后越多；月底危机夜一大群 */
+  /** 月底危机夜是哪一种（跟重生日记里的前世记忆一致） */
+  static crisisKind(c: Clock): CrisisKind | null {
+    if (!isCrisisNight({ ...c, hour: 21 })) return null
+    const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
+    return memoriesYear1[month % 12].crisisKind
+  }
+
   static nightCount(c: Clock): { count: number; crisis: boolean } {
     if (c.day < PROLOGUE_DAYS) return { count: 0, crisis: false }
     const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
@@ -548,11 +563,38 @@ export class Household {
       const { count, crisis } = Household.nightCount(c)
       this.nightDone = c.day
       // 白天拒绝了黑鸦，今晚是他们来抢（丧尸被他们的动静引开了）
+      const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
+      const kind = Household.crisisKind(c)
       if (this.raidTonight) {
         this.raidTonight = false
-        const month = Math.floor((c.day - PROLOGUE_DAYS) / 4)
         this.startSiege(4 + month, false, true)
+      } else if (kind === 'scarcity' || kind === 'human') {
+        // 匮乏：饿疯了的人成群来抢粮；人祸：黑鸦带人来扫荡
+        this.note(kind === 'scarcity' ? 'world.log.looters' : 'world.log.crowRaid')
+        this.startSiege(6 + month * 2, true, true)
+      } else if (kind === 'climate') {
+        // 气候：暴雨夜，丧尸少，但天亮时一楼会进水
+        this.storm = c.day
+        this.note('world.log.storm')
+        this.startSiege(2, false)
+      } else if (kind === 'plague') {
+        // 疫病：有人病倒（急救包能顶一下），丧尸也来了几只
+        const sick = this.actors.filter((a) => !a.away && !a.lost)
+        const who = sick[Math.floor(this.rand() * sick.length)]
+        if (who) {
+          who.health = Math.max(5, who.health - (this.medkits > 0 ? 15 : 40))
+          if (this.medkits > 0) this.medkits -= 1
+          this.note('world.log.plague', { who: who.name })
+        }
+        this.startSiege(3, false)
       } else if (count > 0) this.startSiege(count, crisis)
+    }
+    // 暴雨夜过后：一楼进水，泡坏一部分囤货
+    if (this.storm === c.day - 1 && c.hour >= 7 && this.flooded !== this.storm) {
+      this.flooded = this.storm
+      const food = this.stock.food * 0.2
+      this.stock = { ...this.stock, food: this.stock.food - food }
+      this.note('world.log.flood', { food: food.toFixed(1) })
     }
     const s = this.siege
     if (!s) return

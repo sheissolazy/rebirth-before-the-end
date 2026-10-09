@@ -39,6 +39,8 @@ export interface Hud {
   night: boolean
   rain: number
   crisis: boolean
+  /** 月底危机夜的类型（尸潮、匮乏…） */
+  crisisKind: string | null
   speed: number
   food: number
   water: number
@@ -80,7 +82,7 @@ type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.siege
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
-  loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, speed: 1,
+  loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
   food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null,
 }
 
@@ -1121,6 +1123,7 @@ export class World {
       night: isNight(c.hour),
       rain: this.life.rain,
       crisis: isCrisisNight(c),
+      crisisKind: Household.crisisKind(c),
       speed: this.life.speed,
       food: this.life.stock.food,
       water: this.life.stock.water,
