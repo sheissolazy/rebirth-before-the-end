@@ -155,7 +155,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.cat' | 'world.toast.parked' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -457,6 +457,12 @@ export class World {
       // 上一世用重生点买的开局加成
       const perks = applyPerks(this.life)
       if (perks.length) this.life.logNote('world.log.perks', { list: perks.map((p) => t(`world.perk.${p}` as UiKey)).join('、') })
+    }
+    // 开着车的时候存的档：女主的位置就在车里，读档后让她站到车门边
+    const va = this.life.vanAt
+    if (va && Math.hypot(this.heroine.pos.x - va.x, this.heroine.pos.z - va.z) < 2) {
+      const c = this.navs[0].nearestFree(va.x + Math.cos(va.rot) * 1.3, va.z - Math.sin(va.rot) * 1.3)
+      if (c) { const p = this.navs[0].centerOf(c[0], c[1]); this.heroine.root.position.set(p.x, 0, p.z) }
     }
     this.life.onDoomsday = () => {
       this.sound.siren()
@@ -1400,11 +1406,17 @@ export class World {
     // 游戏时间：暂停时人和钟都停，镜头照常能动
     // 时钟按真实时间走（掉帧时也不变慢），走路按小步算
     const sim = raw * this.life.speed
-    this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && this.keysMoving))
+    // 天黑前（末日后 20:45，丧尸要来了）还在开车：先下车回家守着
+    if (this.driving && this.life.clock.day >= PROLOGUE_DAYS && this.life.clock.hour >= 20.75 && this.life.clock.hour < 21.5) {
+      this.exitVan(true)
+      this.toast('world.toast.nightExit', 3)
+    }
+    this.life.heroDriving = !!this.driving
+    this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && (this.keysMoving || !!this.driving)))
     const fighting = !!this.life.siege && !this.life.siege.done
     const busy = fighting || this.life.onTrip(this.heroine)
     // 打起来了还在车上：先下车
-    if (this.driving && fighting) this.exitVan(true)
+    if (this.driving && (fighting || this.life.onTrip(this.heroine))) this.exitVan(true)
     if (this.driving) this.updateDriving(Math.min(sim, dt * 1.5))
     else if (!busy) this.updateHeroineKeys(sim)
     else this.keysMoving = false
@@ -1869,7 +1881,14 @@ export class World {
     this.life.cancel(this.heroine)
     this.life.cancelSearch()
     this.life.stopFishing()
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    // 停的地方在这个画风里被东西压住了（换过画风）：先挪回院子车位
+    if (this.life.vanAt && this.vanStuck(this.life.vanAt)) {
+      this.life.vanAt = null
+      vp.x = VAN_PARK.x; vp.z = VAN_PARK.z; vp.rot = VAN_PARK.rot
+    }
     this.driving = { x: vp.x, z: vp.z, rot: vp.rot, speed: 0 }
+    this.life.heroDriving = true
     this.life.vanAt = { x: vp.x, z: vp.z, rot: vp.rot }
     this.selected = this.heroine
     this.toast('world.toast.drive', 4)
@@ -1883,11 +1902,27 @@ export class World {
     const fx = Math.sin(d.rot)
     const fz = Math.cos(d.rot)
     const nav = this.navs[0]
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    const wall = this.carBlocked
+    const home = isHome(d.x, d.z, false)
+    // 车门边一个走得到的点：不隔着围栏、墙（中间连线上没有挡的），跟车在院子同一边
+    const reach = (p: { x: number; z: number }) => {
+      if (nav.isBlockedAt(p.x, p.z) || isHome(p.x, p.z, false) !== home) return false
+      for (let k = 1; k <= 8; k++) if (wall(d.x + (p.x - d.x) * k / 8, d.z + (p.z - d.z) * k / 8)) return false
+      return true
+    }
     const spots = [[fz * 1.25, -fx * 1.25], [-fz * 1.25, fx * 1.25], [-fx * 2.6, -fz * 2.6], [fx * 2.6, fz * 2.6]]
-    const at = spots.map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find((p) => !nav.isBlockedAt(p.x, p.z)) ?? { x: d.x + fz * 1.25, z: d.z - fx * 1.25 }
-    this.heroine.root.position.set(at.x, 0, at.z)
+    const at = spots.map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find(reach)
+    if (!at && !force) { this.toast('world.toast.noExit', 1.5); return }
+    if (!at) {
+      // 硬下车（天黑、打丧尸）：找最近的空格子
+      const c = nav.nearestFree(d.x + fz * 1.25, d.z - fx * 1.25)
+      const p = c ? nav.centerOf(c[0], c[1]) : { x: d.x, z: d.z }
+      this.heroine.root.position.set(p.x, 0, p.z)
+    } else this.heroine.root.position.set(at.x, 0, at.z)
     this.heroine.floor = 0
     this.driving = null
+    this.life.heroDriving = false
     this.keysMoving = false
     // 停回自家车位附近（两米多以内、车头大致朝东或朝西）：自动摆正停好，可以再派车出门
     const dr = Math.atan2(Math.sin(d.rot - VAN_PARK.rot), Math.cos(d.rot - VAN_PARK.rot))
@@ -1899,13 +1934,22 @@ export class World {
     else this.life.vanAt = { x: d.x, z: d.z, rot: d.rot }
   }
 
+  /** 车停的地方压着东西（换了画风以后可能）：一点都挪不动 */
+  private vanStuck(at: { x: number; z: number; rot: number }): boolean {
+    const blocked = this.carBlocked!
+    return [[1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]].every(([t, st]) => {
+      const n = driveStep({ ...at, speed: 0 }, t, st, 0.25, blocked)
+      return Math.hypot(n.x - at.x, n.z - at.z) < 0.01 && Math.abs(n.rot - at.rot) < 0.001
+    })
+  }
+
   /** 开车：W/S 油门刹车（倒车），A/D 转向；撞墙就停；女主跟着车走（镜头、家里/屋外的切换都照常） */
   private updateDriving(dt: number): void {
     const d = this.driving!
     const k = this.keys
     const throttle = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0)
     const steer = (k.has('a') || k.has('arrowleft') ? 1 : 0) - (k.has('d') || k.has('arrowright') ? 1 : 0)
-    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [])
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
     const next = driveStep(d, throttle, steer, dt, this.carBlocked)
     this.driving = next
     this.life.vanAt = { x: next.x, z: next.z, rot: next.rot }
@@ -1938,6 +1982,8 @@ export class World {
   }
 
   private tap(cx: number, cy: number): void {
+    // 开车时点地面不让女主下车走过去（F 下车）
+    if (this.driving) return
     const rect = this.renderer.domElement.getBoundingClientRect()
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, this.camera)
@@ -2215,6 +2261,7 @@ export class World {
 
   /** 屋外按 E 或点按钮：江边就钓鱼，别处搜身边这个地方 */
   searchHere(): void {
+    if (this.driving) return
     if (this.mode === 'outside' && nearFishing(this.heroine.pos)) {
       if (this.life.fishing) this.life.stopFishing()
       else if (this.life.startFishing()) {

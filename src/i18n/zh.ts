@@ -91,6 +91,8 @@ export const zh = {
   'world.go.relax': '找地方歇会儿',
   'world.go.sit': '去坐一会儿',
   'world.go.stroll': '去院子里走走',
+  'world.toast.nightExit': '天快黑了，丧尸要来了：先下车回家守着',
+  'world.toast.noExit': '这边下不了车（挨着墙或者围栏），换个地方停',
   'world.toast.parked': '面包车停回车位了，可以派人开车出门了',
   'world.toast.drive': '🚐 开车：W 油门、S 刹车 / 倒车、A D 转向，停稳了按 F 下车',
   'world.toast.driveHint': '按 F 上车，开面包车出去兜一圈',

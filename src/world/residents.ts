@@ -521,7 +521,11 @@ export class Household {
   /** 不在家（出门、出走、死了、借给顾沉——包括还在往外走的路上） */
   isOut(a: Actor): boolean {
     return a.away || a.lost || a.dead || !!a.runaway || this.onTrip(a) || this.lent?.name === a.name
+      || (this.heroDriving && a === this.actors[0])
   }
+
+  /** 女主正坐在面包车里自己开（这段时间不派活、不能派出门、别人不来找她） */
+  heroDriving = false
 
   /** 能借出去的家人：不算女主、来帮忙的客人、不在家的；已经借出去一个就不能再借 */
   lendable(): Actor[] {
@@ -1727,7 +1731,7 @@ export class Household {
   /** 凑到一个正在歇着 / 吃饭 / 干活的家人身边，面对面说说话 */
   private companyTask(a: Actor): Task | null {
     const busy = (b: Actor) => !!b.task && b.task.phase === 'use' && ['relax', 'sit', 'eat', 'cook', 'garden', 'repair', 'tidy', 'wash'].includes(b.task.kind)
-    const pool = this.actors.filter((b) => b !== a && !b.away && !b.lost && !b.dead && !b.runaway && !this.onTrip(b)
+    const pool = this.actors.filter((b) => b !== a && !this.isOut(b)
       && (busy(b) || (b === this.actors[0] && !b.path.length && this.isHomeBody(b))))
     const b = pool[Math.floor(this.rand() * pool.length)]
     if (!b) return null

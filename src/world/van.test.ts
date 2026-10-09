@@ -62,6 +62,18 @@ describe('自己开面包车', () => {
     expect(gate.z).toBeGreaterThan(15)
   })
 
+  it('掉帧时（一帧很长）也穿不过 16 厘米的细围栏；侧面蹭过细杆子也挡得住', () => {
+    const fence = (_x: number, z: number) => z > 3 && z < 3.16
+    let s: DriveState = { x: 0, z: 0, rot: 0, speed: DRIVE.maxF }
+    for (let i = 0; i < 40; i++) s = driveStep(s, 1, 0, 0.15, fence)
+    expect(s.z).toBeLessThan(3)
+    // 一根细杆子在车身侧面（不在四个角上）：车平移过去会被挡住
+    const pole = (x: number, z: number) => Math.hypot(x - 0.62, z - 0) < 0.08
+    let t: DriveState = { x: 0, z: -3, rot: 0, speed: 3 }
+    for (let i = 0; i < 40; i++) t = driveStep(t, 1, 0, 0.05, pole)
+    expect(t.z).toBeLessThan(-1.2)
+  })
+
   it('停在别处时，车就画在停的地方', () => {
     const p = vanPose(null, false, 0, { x: 10, z: 18, rot: 1 })
     expect([p.x, p.z, p.rot, p.visible]).toEqual([10, 18, 1, true])

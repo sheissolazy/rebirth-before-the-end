@@ -442,7 +442,7 @@ export function vanPose(move: VanMove | null, away: boolean, absHour: number, at
 
 /** 开车用的碰撞：比走路的格子图（半米一格）细，按真实的围栏、房子、树、车、木桶、长椅算；
  *  铁门那两米是空的，自家车位不算挡 */
-export function vehicleBlocker(extra: Placement[] = []): (x: number, z: number) => boolean {
+export function vehicleBlocker(extra: Placement[] = [], gardenBuilt: () => boolean = () => true): (x: number, z: number) => boolean {
   const rects: Rect[] = []
   const add = (x0: number, z0: number, x1: number, z1: number) => rects.push({ x0, z0, x1, z1 })
   for (const s of fenceSegments()) {
@@ -451,7 +451,6 @@ export function vehicleBlocker(extra: Placement[] = []): (x: number, z: number) 
     else add(s.x - 0.08, s.z - 0.5, s.x + 0.08, s.z + 0.5)
   }
   add(HOUSE.x0 - 0.1, HOUSE.z0 - 0.1, HOUSE.x1 + 0.1, HOUSE.z1 + 0.1)
-  add(GARDEN.x0, GARDEN.z0, GARDEN.x1, GARDEN.z1)
   for (const p of PROPS) {
     if (p.kind === 'tree') { add(p.x - 0.35, p.z - 0.35, p.x + 0.35, p.z + 0.35); continue }
     const swap = Math.abs(p.rot) % 180 >= 45 && Math.abs(p.rot) % 180 <= 135
@@ -466,20 +465,34 @@ export function vehicleBlocker(extra: Placement[] = []): (x: number, z: number) 
   }
   for (const z of [CLOTHESLINE.z0, CLOTHESLINE.z1]) add(CLOTHESLINE.x - 0.12, z - 0.12, CLOTHESLINE.x + 0.12, z + 0.12)
   for (const l of STREET_LAMPS) add(l.x - 0.15, l.z - 0.15, l.x + 0.15, l.z + 0.15)
+  // 菜地开了才挡（没开的时候那里就是草地）
+  const inGarden = (x: number, z: number) => x > GARDEN.x0 && x < GARDEN.x1 && z > GARDEN.z0 && z < GARDEN.z1
   return (x, z) => x < WORLD.x0 + 0.5 || x > WORLD.x1 - 0.5 || z < WORLD.z0 + 0.5 || z > WORLD.z1 - 0.5
-    || rects.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1)
+    || rects.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) || (inGarden(x, z) && gardenBuilt())
 }
 
 export interface DriveState { x: number; z: number; rot: number; speed: number }
 /** 油门加速度、刹车、最高速（米/秒）、倒车最高速、松油门的阻力、方向盘最大角度、轴距（转弯半径约 2 米，比真车灵活，好在院子里掉头） */
 export const DRIVE = { accel: 4, brake: 8, maxF: 7, maxR: 2.8, drag: 3, steer: 0.75, wheelbase: 1.9 }
 
-/** 车身四个角（左右各 0.6 米、前后各 1.85 米）：撞墙判定用（左右比车身窄一点，过两米宽的铁门不用太准） */
-const CORNERS: [number, number][] = [[0.6, 1.85], [-0.6, 1.85], [0.6, -1.85], [-0.6, -1.85], [0, 1.95], [0, -1.95]]
+/** 车身一圈的判定点（左右各 0.6 米、前后各 1.85 米，每隔半米一个）：左右比车身窄一点，过两米宽的铁门不用太准；
+ *  两边也有点，路灯杆、晾衣杆这种细东西从侧面蹭过来也挡得住 */
+const CORNERS: [number, number][] = [
+  ...[-1.85, -1.3, -0.65, 0, 0.65, 1.3, 1.85].flatMap((lz) => [[0.6, lz], [-0.6, lz]] as [number, number][]),
+  [0, 1.95], [0.3, 1.92], [-0.3, 1.92], [0, -1.95], [0.3, -1.92], [-0.3, -1.92],
+]
 
 /** 开一帧：throttle 1 = 油门（W）、-1 = 刹车 / 倒车（S）；steer 1 = 往左（A）、-1 = 往右（D）。
  *  blocked(x, z) 说这个点能不能进；撞上了就停在原地（速度清零） */
 export function driveStep(s: DriveState, throttle: number, steer: number, dt: number, blocked: (x: number, z: number) => boolean): DriveState {
+  // 掉帧、快进时一步走很远会穿过细围栏：拆成每步不超过 0.1 米
+  const n = Math.max(1, Math.ceil((Math.abs(s.speed) + DRIVE.accel * dt) * dt / 0.1))
+  let out = s
+  for (let i = 0; i < n; i++) out = driveTick(out, throttle, steer, dt / n, blocked)
+  return out
+}
+
+function driveTick(s: DriveState, throttle: number, steer: number, dt: number, blocked: (x: number, z: number) => boolean): DriveState {
   let v = s.speed
   if (throttle > 0) v += (v < 0 ? DRIVE.brake : DRIVE.accel) * dt
   else if (throttle < 0) v -= (v > 0 ? DRIVE.brake : DRIVE.accel * 0.6) * dt
