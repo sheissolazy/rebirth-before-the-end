@@ -95,3 +95,14 @@ describe('两层楼和"能干什么"的位置', () => {
     expect(up.isBlockedAt(2, 3)).toBe(false)
   })
 })
+
+describe('街上能搜的地方', () => {
+  it('每个都站得上去，从家里走得到', async () => {
+    const { SCAVENGE } = await import('./scavenge')
+    const navs = navFloors('paradise')
+    for (const s of SCAVENGE) {
+      expect(navs[0].isBlockedAt(s.at.x, s.at.z), s.id).toBe(false)
+      expect(route(navs, { x: 4, z: 10, floor: 0 }, { ...s.at, floor: 0 }), s.id).not.toBeNull()
+    }
+  })
+})

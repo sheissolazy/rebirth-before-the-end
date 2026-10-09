@@ -4,7 +4,7 @@ import type { Actor } from './residents'
 
 const cache = new Map<string, THREE.SpriteMaterial>()
 
-function bubbleMaterial(emoji: string): THREE.SpriteMaterial {
+export function bubbleMaterial(emoji: string): THREE.SpriteMaterial {
   const hit = cache.get(emoji)
   if (hit) return hit
   const c = document.createElement('canvas')

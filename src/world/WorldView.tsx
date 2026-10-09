@@ -253,7 +253,7 @@ export default function WorldView() {
       {hud.siege && (
         <div className="absolute left-1/2 top-14 w-72 -translate-x-1/2 rounded-xl bg-red-950/85 px-4 py-2 text-white shadow-lg">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold">🧟 {t('world.siege', { n: hud.siege.left })}</div>
+            <div className="text-sm font-semibold">🧟 {t(hud.siege.ambush ? 'world.ambush' : 'world.siege', { n: hud.siege.left })}</div>
             <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
               className="rounded-md bg-orange-600 px-2 py-0.5 text-xs font-semibold shadow disabled:opacity-40">
               {t('world.molotov', { n: hud.molotovs })}
@@ -294,6 +294,25 @@ export default function WorldView() {
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className="rounded-lg bg-white/90 px-3 py-1.5 text-left text-red-700 shadow">{t('world.debug.restart')}</button>
         </div>
       </details>
+
+      {hud.search && !hud.siege && (
+        <div className="absolute bottom-44 left-1/2 -translate-x-1/2">
+          {hud.search.state === 'doing' ? (
+            <div className="w-56 rounded-full bg-zinc-900/80 px-4 py-2 text-center text-sm text-white shadow">
+              {t('world.search.doing', { p: hud.search.progress ?? 0 })}
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/20">
+                <div className="h-full rounded-full bg-amber-400" style={{ width: `${hud.search.progress ?? 0}%` }} />
+              </div>
+            </div>
+          ) : hud.search.state === 'ok' ? (
+            <button onClick={() => world.current?.searchHere()} className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-900 shadow-lg">
+              {t('world.search.go', { where: t(`world.spot.${hud.search.kind}` as UiKey) })}
+            </button>
+          ) : (
+            <div className="rounded-full bg-zinc-900/70 px-4 py-2 text-sm text-white shadow">{t(`world.search.${hud.search.state}` as UiKey)}</div>
+          )}
+        </div>
+      )}
 
       {hud.toast && (
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">

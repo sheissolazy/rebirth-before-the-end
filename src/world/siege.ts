@@ -109,7 +109,7 @@ export class Zombie extends Walker {
 export type Role = 'ranged' | 'melee1' | 'melee2'
 
 export type SiegeEvent =
-  | { kind: 'start'; count: number; crisis: boolean; raid: boolean }
+  | { kind: 'start'; count: number; crisis: boolean; raid: boolean; ambush: boolean }
   | { kind: 'broken'; layer: LayerId }
   | { kind: 'kill'; at: Pt; by: string; raider: boolean }
   | { kind: 'shot'; from: Actor; at: Pt }
@@ -117,13 +117,15 @@ export type SiegeEvent =
   | { kind: 'bash'; layer: LayerId; at: Pt }
   | { kind: 'fire'; at: Pt }
   | { kind: 'down'; who: string }
-  | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[] }
+  | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[]; ambush: boolean }
 
 export interface SiegeOpts {
   count: number
   crisis: boolean
   /** 黑鸦来抢（不是丧尸） */
   raid?: boolean
+  /** 在街上搜东西时遇到的：不分防线，从这些位置冒出来直接扑人 */
+  ambushAt?: Pt[]
   navs: Record<Floor, NavGrid>
   defenders: Actor[]
   barriers: Barriers
@@ -160,11 +162,19 @@ export class Siege {
     while (this.layer < LAYERS.length && o.barriers[LAYERS[this.layer].id] <= 0) this.layer++
     // 分两三波从街两头过来；危机夜来得又多又急
     const spread = o.crisis ? 14 : 22
-    for (let k = 0; k < o.count; k++) {
+    if (o.ambushAt) {
+      this.layer = LAYERS.length
+      o.ambushAt.forEach((at, k) => this.queue.push({ t: k * 1.2, at }))
+    } else for (let k = 0; k < o.count; k++) {
       const west = k % 2 === 0
       this.queue.push({ t: (k * spread) / Math.max(1, o.count) + (o.crisis && k >= o.count / 2 ? 6 : 0), at: { x: west ? -13 - (k % 3) : 21 + (k % 3), z: 17 + (k % 4) * 0.8 } })
     }
-    o.emit({ kind: 'start', count: o.count, crisis: o.crisis, raid: !!o.raid })
+    o.emit({ kind: 'start', count: o.count, crisis: o.crisis, raid: !!o.raid, ambush: !!o.ambushAt })
+  }
+
+  /** 街上遇袭（不是晚上守家） */
+  get ambush(): boolean {
+    return !!this.o.ambushAt
   }
 
   get alive(): number {
@@ -250,7 +260,7 @@ export class Siege {
     if (this.done) return
     this.done = true
     this.scatter()
-    this.o.emit({ kind: 'end', won, kills: this.kills, broken: [...this.broken], downed: [...this.downed].map((a) => a.name) })
+    this.o.emit({ kind: 'end', won, kills: this.kills, broken: [...this.broken], downed: [...this.downed].map((a) => a.name), ambush: !!this.o.ambushAt })
   }
 
   // --- 丧尸 -----------------------------------------------------------------

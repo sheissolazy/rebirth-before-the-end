@@ -23,7 +23,8 @@ import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { Rain } from './weather'
 import { clearWorld, loadWorld, saveWorld } from './save'
-import { Bubbles } from './bubbles'
+import { Bubbles, bubbleMaterial } from './bubbles'
+import { SCAVENGE, nearestSpot } from './scavenge'
 import { VISITORS, Visitor } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
 
@@ -50,7 +51,7 @@ export interface Hud {
   ammo: number
   cores: number
   /** 正在打丧尸：还剩几只、守的是哪一层、这一层的耐久 */
-  siege: { left: number; layer: LayerId | null; hp: number; max: number } | null
+  siege: { left: number; layer: LayerId | null; hp: number; max: number; ambush: boolean } | null
   log: LogEntry[]
   muted: boolean
   day: number
@@ -62,6 +63,8 @@ export interface Hud {
   /** 空间异能里放了多少、最多放多少 */
   space: { food: number; water: number; cap: number }
   molotovs: number
+  /** 屋外：女主身边能搜的地方 */
+  search: { kind: string; state: string; progress: number | null } | null
   /** 有人在门口等回话 */
   visit: { id: string; icon: string; choices: { id: string; ok: boolean }[] } | null
 }
@@ -86,7 +89,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null,
 }
 
 export class World {
@@ -141,6 +144,14 @@ export class World {
   private fogBase = 0.013
   private saveTimer = 10
   private readonly bubbles = new Bubbles()
+  /** 街上能搜的地方头顶的放大镜 */
+  private readonly spotMarks: THREE.Sprite[] = SCAVENGE.map((sp) => {
+    const m = new THREE.Sprite(bubbleMaterial('🔍'))
+    m.position.set(sp.at.x, 1.9, sp.at.z)
+    m.scale.setScalar(0.6)
+    m.visible = false
+    return m
+  })
   private frontDoor: THREE.Object3D | null = null
   private barricade: THREE.Object3D | null = null
   private sunBase = 2.4
@@ -191,7 +202,7 @@ export class World {
     this.buildGround()
     this.buildStreet()
     this.spawnActors()
-    this.scene.add(this.rain.lines)
+    this.scene.add(this.rain.lines, ...this.spotMarks)
     this.siegeView = new SiegeView(this.scene)
     this.life.spawnZombie = (at, raider) => this.siegeView.spawn(at, raider)
     this.life.spawnVisitor = (def, at) => {
@@ -806,6 +817,11 @@ export class World {
     }
     for (const w of this.weapons) w.visible = fighting
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed)
+    SCAVENGE.forEach((sp, k) => {
+      const m = this.spotMarks[k]
+      m.visible = this.mode === 'outside' && this.life.canSearch(sp) === 'ok'
+      m.position.y = 1.9 + Math.sin(this.elapsed * 2 + k) * 0.06
+    })
     // 丧尸隔几秒低吼一声；环境声跟着昼夜走
     for (const z of this.life.siege?.zombies ?? []) {
       if (!z.alive) continue
@@ -882,6 +898,7 @@ export class World {
     const dir = fwd.multiplyScalar(-fz).add(right.multiplyScalar(fx)).normalize()
     const step = WALK_SPEED * 1.15 * dt
     const a = this.heroine
+    this.life.cancelSearch()
     // 坐着/躺着/正在干活时按方向键：先站起来
     if (a.task || a.anchor || a.path.length) this.life.cancel(a)
     a.hold = 0.6
@@ -949,7 +966,12 @@ export class World {
     this.on(el, 'pointerup', up)
     this.on(el, 'pointercancel', ((e: PointerEvent) => { this.pointers.delete(e.pointerId); this.press = null }) as EventListener)
     this.on(el, 'wheel', ((e: WheelEvent) => { e.preventDefault(); this.zoomBy(1 + e.deltaY * 0.0012) }) as EventListener)
-    this.on(window, 'keydown', ((e: KeyboardEvent) => { this.sound.unlock(); this.keys.add(e.key.toLowerCase()) }) as EventListener)
+    this.on(window, 'keydown', ((e: KeyboardEvent) => {
+      this.sound.unlock()
+      const k = e.key.toLowerCase()
+      if (k === 'e' && !e.repeat) this.searchHere()
+      this.keys.add(k)
+    }) as EventListener)
     this.on(window, 'keyup', ((e: KeyboardEvent) => { this.keys.delete(e.key.toLowerCase()) }) as EventListener)
     this.on(window, 'blur', (() => this.keys.clear()) as EventListener)
     this.on(window, 'pagehide', (() => saveWorld(this.life)) as EventListener)
@@ -1009,6 +1031,7 @@ export class World {
     const p = new THREE.Vector3()
     if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -floor * FLOOR_H), p)) return
     const who = this.mode === 'home' ? this.selected : this.heroine
+    if (who === this.heroine) this.life.cancelSearch()
     const path = this.life.commandWalk(who, { x: p.x, z: p.z, floor })
     if (!path) return
     const end = path[path.length - 1] ?? { ...who.pos, y: who.root.position.y }
@@ -1129,6 +1152,21 @@ export class World {
     if (def) this.life.startVisit(def)
   }
 
+  private searchHud(): Hud['search'] {
+    const s = this.life.search
+    if (s) return { kind: s.spot.kind, state: 'doing', progress: Math.round((1 - s.left / s.spot.hours) * 100) }
+    if (this.mode !== 'outside' || this.life.onTrip(this.heroine)) return null
+    const spot = nearestSpot(this.heroine.pos)
+    return spot ? { kind: spot.kind, state: this.life.canSearch(spot), progress: null } : null
+  }
+
+  /** 屋外按 E 或点按钮：搜身边这个地方 */
+  searchHere(): void {
+    const spot = nearestSpot(this.heroine.pos)
+    if (spot && this.mode === 'outside') this.life.startSearch(spot)
+    this.pushLifeHud()
+  }
+
   throwMolotov(): void {
     this.life.throwMolotov()
     this.pushLifeHud()
@@ -1186,6 +1224,7 @@ export class World {
       visit: this.visitHud(),
       space: { ...this.life.space, cap: this.life.spaceCap },
       molotovs: this.life.molotovs,
+      search: this.searchHud(),
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),
@@ -1197,7 +1236,10 @@ export class World {
     const s = this.life.siege
     if (!s || s.done) return null
     const layer = s.current
-    return { left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0, max: layer ? this.life.maxOf(layer.id) : LAYERS[0].max }
+    return {
+      left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0,
+      max: layer ? this.life.maxOf(layer.id) : LAYERS[0].max, ambush: s.ambush,
+    }
   }
 
   // --- 杂项 -------------------------------------------------------------------

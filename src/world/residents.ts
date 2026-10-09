@@ -16,7 +16,8 @@ import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { VISITORS, Visitor, type VisitorCtx, type VisitorDef } from './visitors'
-import { lt } from '../i18n'
+import { SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
+import { lt, t, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
@@ -247,6 +248,10 @@ export class Household {
   space: Stock = { food: 0, water: 0 }
   /** 燃烧瓶（酒精 + 布条），打丧尸时可以扔 */
   molotovs = 2
+  /** 女主正在街上搜东西 */
+  search: { spot: ScavengeSpot; left: number } | null = null
+  /** 每个地方哪天搜过 */
+  searched: Record<string, number> = {}
   spaceCap = 6
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
@@ -287,6 +292,7 @@ export class Household {
     this.tripTick()
     this.runawayTick()
     this.rainTick(hours)
+    this.searchTick(hours)
     this.chatTick(hours)
     this.visitorTick()
     for (const a of this.actors) {
@@ -359,6 +365,64 @@ export class Household {
 
   get residents(): number {
     return this.actors.filter((a) => !a.lost).length
+  }
+
+  // --- 上街搜东西 -------------------------------------------------------------
+
+  /** 这个地方现在能不能搜：'ok' / 'prologue'（末日前邻居还住着）/ 'empty'（刚搜过）/ 'busy' */
+  canSearch(spot: ScavengeSpot): 'ok' | 'prologue' | 'empty' | 'busy' {
+    if (this.clock.day < PROLOGUE_DAYS) return 'prologue'
+    if ((this.siege && !this.siege.done) || this.search) return 'busy'
+    const last = this.searched[spot.id]
+    if (last !== undefined && this.clock.day - last < SCAVENGE_COOLDOWN_DAYS) return 'empty'
+    return 'ok'
+  }
+
+  startSearch(spot: ScavengeSpot): boolean {
+    if (this.canSearch(spot) !== 'ok') return false
+    const hero = this.actors[0]
+    hero.path = []
+    hero.pose = 'work'
+    this.search = { spot, left: spot.hours }
+    return true
+  }
+
+  cancelSearch(): void {
+    if (!this.search) return
+    this.search = null
+    this.actors[0].pose = 'idle'
+  }
+
+  private searchTick(hours: number): void {
+    const s = this.search
+    if (!s) return
+    s.left -= hours
+    if (s.left > 0) return
+    this.search = null
+    this.actors[0].pose = 'idle'
+    this.searched[s.spot.id] = this.clock.day
+    const loot = rollLoot(s.spot.kind, () => this.rand())
+    this.stock = { food: this.stock.food + loot.food, water: this.stock.water + loot.water }
+    this.ammo.n += loot.ammo
+    this.medkits += loot.medkits
+    const parts = (Object.entries(loot) as [string, number][]).filter(([, v]) => v > 0).map(([k, v]) => t(`world.unit.${k}` as UiKey, { n: v }))
+    this.note('world.log.scavenged', { what: parts.join('、') || t('world.unit.nothing'), where: t(`world.spot.${s.spot.kind}` as UiKey) })
+    // 末日后搜东西动静大，可能把附近的丧尸引过来（夜里更危险）
+    const night = isNight(this.clock.hour)
+    if (this.rand() < s.spot.danger * (night ? 2 : 1)) this.ambush(s.spot)
+  }
+
+  /** 街上遇袭：一两只丧尸从附近冒出来扑向女主和跟着的人 */
+  private ambush(spot: ScavengeSpot): void {
+    if (!this.spawnZombie || (this.siege && !this.siege.done)) return
+    const n = this.rand() < 0.4 ? 2 : 1
+    const at = Array.from({ length: n }, (_, k) => ({ x: spot.at.x + (k ? -5 : 6), z: spot.at.z + (k ? 1.5 : 2) }))
+    const party = this.actors.filter((a) => !a.away && !a.lost && !a.runaway && !this.isHomeBody(a))
+    this.siege = new Siege({
+      count: n, crisis: false, navs: this.navs, defenders: party.length ? party : [this.actors[0]],
+      barriers: { gate: 0, door: 0, stairs: 0 }, ammo: this.ammo, ambushAt: at,
+      spawn: this.spawnZombie, emit: (e) => this.onSiegeEvent(e),
+    })
   }
 
   /** 打丧尸时扔一个燃烧瓶 */
@@ -729,7 +793,7 @@ export class Household {
   }
 
   private onSiegeEvent(e: SiegeEvent): void {
-    if (e.kind === 'start') this.note(e.raid ? 'world.log.raid' : e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
+    if (e.kind === 'start') this.note(e.ambush ? 'world.log.ambush' : e.raid ? 'world.log.raid' : e.crisis ? 'world.log.crisis' : 'world.log.start', { n: e.count })
     else if (e.kind === 'broken') {
       this.note(`world.log.broken.${e.layer}`)
       // 大门一破，丧尸冲进一楼把囤货柜打翻了
@@ -746,6 +810,11 @@ export class Household {
       if (e.raider) this.ammo.n += 2
       else this.cores += 1
     }
+    else if (e.kind === 'end' && e.ambush) {
+      // 街上遇袭：打跑了就继续；被扑倒了，缓过来自己爬起来（没有拿家里的东西）
+      this.siege?.revive()
+      this.note(e.won ? 'world.log.ambushWon' : 'world.log.ambushLost', { kills: e.kills })
+    }
     else if (e.kind === 'end') {
       this.siege?.revive()
       if (e.won) {
@@ -760,6 +829,7 @@ export class Household {
         for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, a.needs.mood - 20) }
       }
     }
+    if (e.kind === 'end' && e.ambush) { this.before = null; this.onSiege?.(e); return }
     if (e.kind === 'end' && this.before) {
       const b = this.before
       this.report = {

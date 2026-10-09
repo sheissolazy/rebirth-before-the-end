@@ -5,6 +5,7 @@ import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
 import { Zombie } from './siege'
 import { restore, snapshot } from './save'
 import { VISITORS, Visitor } from './visitors'
+import { SCAVENGE } from './scavenge'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -417,5 +418,44 @@ describe('燃烧瓶', () => {
     expect(life.molotovs).toBe(1)
     const after = s.zombies.filter((z) => z.alive).reduce((v, z) => v + z.hp, 0)
     expect(after).toBeLessThan(hp - 80)
+  })
+})
+
+describe('上街搜东西', () => {
+  it('末日后站在车旁边搜一会儿：翻到东西、记日记；刚搜过的地方要等几天；末日前不让搜', () => {
+    const { life } = simulate('paradise', 0)
+    const car = SCAVENGE.find((s) => s.id === 'car_w')!
+    life.clock = { day: 1, hour: 10 }
+    expect(life.canSearch(car)).toBe('prologue')
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    life.actors[0].root.position.set(car.at.x, 0, car.at.z)
+    const safe = { ...car, danger: 0 }
+    const water = life.stock.water
+    expect(life.startSearch(safe)).toBe(true)
+    for (let i = 0; i < 400 && life.search; i++) life.tick(0.05, () => false)
+    expect(life.search).toBeNull()
+    expect(life.stock.water).toBeGreaterThan(water)
+    expect(life.log.at(-1)?.key).toBe('world.log.scavenged')
+    expect(life.canSearch(car)).toBe('empty')
+  })
+
+  it('动静太大引来丧尸：女主就地开枪把它打倒', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    const house = SCAVENGE.find((s) => s.id === 'house_m')!
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 11 }
+    const hero = life.actors[0]
+    hero.root.position.set(house.at.x, 0, house.at.z)
+    life.startSearch({ ...house, danger: 1 })
+    const dt = 0.05
+    for (let i = 0; i < 8000 && !life.log.some((l) => l.key.startsWith('world.log.ambush') && l.key !== 'world.log.ambush'); i++) {
+      life.tick(dt, () => false)
+      for (const z of life.siege?.zombies ?? []) z.follow(dt, z.speed)
+      for (const a of life.actors) a.follow(dt, 2.2)
+    }
+    const keys = life.log.map((l) => l.key)
+    expect(keys).toContain('world.log.ambush')
+    expect(keys).toContain('world.log.ambushWon')
+    expect(life.report).toBeNull()
   })
 })
