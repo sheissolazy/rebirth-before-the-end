@@ -52,6 +52,9 @@ function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean;
           </div>
         ))}
       </div>
+      {p.doing === 'down' && (
+        <div className="mt-1 text-[11px] font-semibold text-red-700">{t('world.rescueHint')}</div>
+      )}
       {p.needs.mood < DEPRESSED && (
         <div className="mt-1 text-[11px] font-medium text-red-600">{t('world.depressed')}</div>
       )}

@@ -685,3 +685,20 @@ describe('石头院墙', () => {
     expect(life.actors.every((a) => a.health === 100)).toBe(true)
   })
 })
+
+describe('打仗时救人', () => {
+  it('倒下的人用急救包能当场救起来', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.medkits = 1
+    life.startSiege(2, false)
+    const mom = life.actors[1]
+    mom.health = 0
+    ;(life.siege as unknown as { knockDown: (a: Actor) => void }).knockDown(mom)
+    expect(life.siege!.isDown(mom)).toBe(true)
+    expect(life.rescue(mom)).toBe(true)
+    expect(mom.health).toBe(40)
+    expect(life.medkits).toBe(0)
+    expect(life.siege!.isDown(mom)).toBe(false)
+  })
+})

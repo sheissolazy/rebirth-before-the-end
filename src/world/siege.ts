@@ -482,6 +482,19 @@ export class Siege {
     return at
   }
 
+  /** 打着打着有人倒下了：用急救包把 TA 救起来，接着守 */
+  isDown(a: Actor): boolean {
+    return this.downed.has(a)
+  }
+
+  rescue(a: Actor): boolean {
+    if (this.done || !this.downed.has(a)) return false
+    this.downed.delete(a)
+    a.health = Math.max(a.health, 40)
+    a.pose = 'idle'
+    return true
+  }
+
   /** 战斗结束后：倒下的人爬起来 */
   revive(): void {
     for (const a of this.downed) {

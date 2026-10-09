@@ -513,6 +513,15 @@ export class Household {
     })
   }
 
+  /** 打丧尸时用急救包把倒下的人救起来 */
+  rescue(a: Actor): boolean {
+    const s = this.siege
+    if (!s || this.medkits <= 0 || !s.rescue(a)) return false
+    this.medkits -= 1
+    this.note('world.log.rescue', { who: a.name })
+    return true
+  }
+
   /** 打丧尸时扔一个燃烧瓶 */
   throwMolotov(): boolean {
     const s = this.siege

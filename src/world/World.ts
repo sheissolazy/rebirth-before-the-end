@@ -95,7 +95,7 @@ const HEMI_DAY = new THREE.Color('#dcefff')
 const HEMI_NIGHT = new THREE.Color('#5d74b0')
 const RAIN_GREY = new THREE.Color('#9aa3a8')
 
-type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -1401,6 +1401,11 @@ export class World {
   select(a: Actor | string): void {
     const actor = typeof a === 'string' ? this.actors.find((x) => x.name === a) : a
     if (!actor) return
+    // 打丧尸时点了倒下的人：有急救包就当场救起来
+    if (this.life.siege?.isDown(actor)) {
+      if (this.life.rescue(actor)) { this.sound.squelch(); this.pushLifeHud() }
+      else this.toast('world.toast.noMedkit')
+    }
     if (this.mode === 'outside' && actor !== this.heroine) return
     this.selected = actor
     if (this.mode === 'home') this.setViewFloor(actor.root.position.y > FLOOR_H - 0.4 ? 1 : 0)
