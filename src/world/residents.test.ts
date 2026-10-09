@@ -136,3 +136,53 @@ describe('丧尸夜', () => {
     expect(life.barriers.gate).toBe(180)
   })
 })
+
+describe('出门', () => {
+  function run(life: Household, hours: number) {
+    const dt = 0.1
+    const steps = (hours * DAY_SECONDS) / 24 / (dt * life.speed)
+    let sawAway = false
+    for (let i = 0; i < steps; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      if (life.actors.some((a) => a.away)) sawAway = true
+    }
+    return sawAway
+  }
+
+  it('末日前派两个人去超市：真的走出去、消失、几个小时后扛着吃的回来，钱扣掉', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.speed = 3
+    const [hero, mom] = life.actors
+    expect(life.tripCheck('supermarket')).toBe('ok')
+    expect(life.startTrip('supermarket', [hero, mom])).toBe(true)
+    expect(life.money).toBe(18000 - 1200)
+    const food0 = life.stock.food
+    const sawAway = run(life, 4.5)
+    expect(sawAway).toBe(true)
+    expect(life.trip).toBeNull()
+    expect(life.stock.food).toBeGreaterThan(food0 + 5)
+    expect(hero.away || mom.away).toBe(false)
+    expect(life.log.some((l) => l.key === 'world.trip.supermarket')).toBe(true)
+  })
+
+  it('天黑前回不来就不让出门；末日后不能去超市买东西', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 17.5 }
+    expect(life.tripCheck('supermarket')).toBe('late')
+    life.clock = { day: PROLOGUE_DAYS, hour: 9 }
+    expect(life.tripCheck('supermarket')).toBe('phase')
+    expect(life.tripCheck('river')).toBe('ok')
+  })
+
+  it('五金店加固铁门：耐久上限变高', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 8 }
+    life.speed = 3
+    life.startTrip('hardware', [life.actors[2]])
+    run(life, 5)
+    expect(life.maxOf('gate')).toBe(240)
+    expect(life.barriers.gate).toBe(240)
+  })
+})

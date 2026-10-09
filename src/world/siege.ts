@@ -116,6 +116,8 @@ export interface SiegeOpts {
   defenders: Actor[]
   barriers: Barriers
   ammo: { n: number }
+  /** 防线耐久上限（铁门可能加固过） */
+  maxOf?: (id: LayerId) => number
   spawn: (at: Pt) => Zombie
   emit: (e: SiegeEvent) => void
 }

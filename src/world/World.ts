@@ -48,6 +48,9 @@ export interface Hud {
   muted: boolean
   day: number
   hour: number
+  money: number
+  medkits: number
+  prologue: boolean
 }
 
 interface Pose { target: THREE.Vector3; elev: number; dist: number; fov: number }
@@ -69,7 +72,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, crisis: false, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true,
 }
 
 export class World {
@@ -499,7 +502,16 @@ export class World {
     const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 1.8, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
     const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 3.8, z: 2.0 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
     this.actors.push(this.heroine, mom, dad)
-    for (const a of this.actors) this.scene.add(a.root)
+    for (const a of this.actors) {
+      // 出门回来抱着的纸箱
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.34), new THREE.MeshStandardMaterial({ color: '#b98d5a', roughness: 0.85 }))
+      crate.position.set(0, 1.0, 0.3)
+      crate.castShadow = true
+      crate.visible = false
+      a.root.userData.crate = crate
+      a.root.add(crate)
+      this.scene.add(a.root)
+    }
     this.selected = this.heroine
     this.life = new Household(this.actors, this.navs, this.style)
   }
@@ -693,9 +705,10 @@ export class World {
     const sim = raw * this.life.speed
     this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(this.mode === 'outside' && a !== this.heroine) && !(a === this.heroine && this.keysMoving))
     const fighting = !!this.life.siege && !this.life.siege.done
-    if (!fighting) this.updateHeroineKeys(sim)
+    const busy = fighting || this.life.onTrip(this.heroine)
+    if (!busy) this.updateHeroineKeys(sim)
     else this.keysMoving = false
-    if (!fighting) this.updateFollowers(dt)
+    if (!busy) this.updateFollowers(dt)
     const upstairsHidden = this.mode === 'home' && this.viewFloor === 0
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
@@ -725,14 +738,20 @@ export class World {
         gliding = a.updateSettle(step) || gliding
       }
       a.animate(Math.min(sim, 0.1), walking || gliding)
-      // 只看一楼时，二楼的人藏起来（楼板也藏起来了，不然像飘在空中）
-      a.root.visible = !(upstairsHidden && a.root.position.y > FLOOR_H - 0.4)
+      // 只看一楼时，二楼的人藏起来（楼板也藏起来了，不然像飘在空中）；出门在外的人也藏起来
+      a.root.visible = !a.away && !(upstairsHidden && a.root.position.y > FLOOR_H - 0.4)
+      ;(a.root.userData.crate as THREE.Object3D).visible = a.carrying
       if (a.floorChanged) {
         a.floorChanged = false
         if (a === this.selected && this.mode === 'home') this.setViewFloor(a.floor)
       }
     }
-    this.setMode(isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
+    const heroOut = this.life.onTrip(this.heroine)
+    this.setMode(heroOut || isHome(this.heroine.pos.x, this.heroine.pos.z, this.mode === 'home') ? 'home' : 'outside')
+    if (this.selected.away) {
+      const other = this.actors.find((a) => !a.away)
+      if (other) this.select(other)
+    }
     this.updateCamera(dt)
     this.updateCutaway()
     this.applySky()
@@ -878,6 +897,7 @@ export class World {
       // 书桌上的红本子：打开重生日记
       const hit = this.furnitureUnder(floor)
       if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
+      if (hit && hit.userData.piece === 'wall_map') { this.onMap?.(); return }
       // 点家具：让选中的人去用（坐沙发、做饭、睡觉…）
       const spot = hit && this.spotNear(hit, floor)
       if (spot) {
@@ -922,8 +942,25 @@ export class World {
     return best
   }
 
-  /** 界面设置：点了日记本 */
+  /** 界面设置：点了日记本 / 墙上的地图 */
   onDiary: (() => void) | null = null
+  onMap: (() => void) | null = null
+
+  tripCheck(id: string): ReturnType<Household['tripCheck']> {
+    return this.life.tripCheck(id)
+  }
+
+  /** 在家、能出门的人 */
+  homeMembers(): { name: string; health: number }[] {
+    return this.actors.filter((a) => !a.away && !this.life.onTrip(a)).map((a) => ({ name: a.name, health: a.health }))
+  }
+
+  startTrip(id: string, names: string[]): boolean {
+    const members = this.actors.filter((a) => names.includes(a.name))
+    const ok = this.life.startTrip(id, members)
+    if (ok) this.pushLifeHud()
+    return ok
+  }
 
   diaryLog(): LogEntry[] {
     return [...this.life.log]
@@ -988,6 +1025,9 @@ export class World {
       muted: this.sound.muted,
       day: c.day,
       hour: c.hour,
+      money: this.life.money,
+      medkits: this.life.medkits,
+      prologue: c.day < PROLOGUE_DAYS,
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),
@@ -999,7 +1039,7 @@ export class World {
     const s = this.life.siege
     if (!s || s.done) return null
     const layer = s.current
-    return { left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0, max: layer?.max ?? LAYERS[0].max }
+    return { left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0, max: layer ? this.life.maxOf(layer.id) : LAYERS[0].max }
   }
 
   // --- 杂项 -------------------------------------------------------------------

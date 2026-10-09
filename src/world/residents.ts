@@ -10,6 +10,9 @@ import {
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type Zombie } from './siege'
+import { TRIPS, canGo, settleTrip, type TripDef } from './expedition'
+import { locations } from '../content/locations'
+import { lt } from '../i18n'
 
 export type { Where } from './walker'
 
@@ -45,6 +48,10 @@ export class Actor extends Walker {
   task: Task | null = null
   /** 坐下/躺下之前站的位置，起身时回到这里 */
   anchor: StairPoint | null = null
+  /** 出门在外（人不在家，模型藏起来） */
+  away = false
+  /** 扛着箱子回来 */
+  carrying = false
   /** 玩家下过命令后，这么多游戏小时内不自己找事 */
   hold = 0
   private settle: { from: THREE.Vector3; to: THREE.Vector3; r0: number; r1: number; t: number } | null = null
@@ -106,7 +113,7 @@ export class Actor extends Walker {
   }
 
   animate(dt: number, walking: boolean): void {
-    const state: PoseState = walking ? 'walk' : this.pose
+    const state: PoseState = walking ? (this.carrying ? 'carry' : 'walk') : this.pose
     if (this.driver) {
       this.driver.update(dt, state)
       return
@@ -133,8 +140,25 @@ export interface LogEntry {
   vars?: Record<string, string | number>
 }
 
+/** 出门的一趟 */
+interface Trip {
+  def: TripDef
+  members: Actor[]
+  phase: 'out' | 'away' | 'back'
+  /** 什么时候回来（绝对游戏小时 = day*24+hour） */
+  back: number
+}
+
+const placeName = (id: string) => lt(locations.find((l) => l.id === id)?.name ?? { zh: id })
+
+/** 出门和回来都走街的东头 */
+const EXIT: Where = { x: 31, z: 18, floor: 0 }
+const HOME_IN: Where = { x: 4, z: 11, floor: 0 }
+
 export interface PersonHud {
   name: string
+  /** 出门在外：去哪了、还有几小时回来 */
+  trip?: { id: string; left: number }
   health: number
   needs: Needs
   doing: TaskKind | 'down'
@@ -161,6 +185,11 @@ export class Household {
   spawnZombie: ((at: Pt) => Zombie) | null = null
   onSiege: ((e: SiegeEvent) => void) | null = null
   private nightDone = -1
+  /** 序章存款（元）、急救包、加固铁门多出来的耐久 */
+  money = 18000
+  medkits = 0
+  gateBonus = 0
+  trip: Trip | null = null
   private readonly spots: Spot[]
   private readonly beds: Spot[]
   private readonly taken = new Map<Spot, Actor>()
@@ -189,16 +218,94 @@ export class Household {
     const hours = (dt * this.speed * 24) / DAY_SECONDS
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done
+    this.tripTick()
     for (const a of this.actors) {
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
-      // 伤慢慢好：睡觉时好得快
+      // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
       a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6))
-      if (fighting) continue
+      if (!fighting && !a.away && a.health < 45 && this.medkits > 0) {
+        this.medkits -= 1
+        a.health = Math.min(100, a.health + 40)
+        this.note('world.log.medkit', { who: a.name })
+      }
+      if (fighting || this.onTrip(a)) continue
       if (a.task) this.runTask(a, hours)
       else {
         a.hold = Math.max(0, a.hold - hours)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
       }
+    }
+  }
+
+  // --- 出门 -----------------------------------------------------------------
+
+  get absHour(): number {
+    return this.clock.day * 24 + this.clock.hour
+  }
+
+  onTrip(a: Actor): boolean {
+    return !!this.trip?.members.includes(a)
+  }
+
+  /** 这一层防线的耐久上限（铁门可以加固） */
+  maxOf(id: LayerId): number {
+    return LAYERS.find((l) => l.id === id)!.max + (id === 'gate' ? this.gateBonus : 0)
+  }
+
+  tripCheck(id: string): ReturnType<typeof canGo> | 'busy' {
+    if (this.trip || (this.siege && !this.siege.done)) return 'busy'
+    return canGo(TRIPS.find((t) => t.id === id)!, this.clock.day < PROLOGUE_DAYS, this.money, this.clock.hour)
+  }
+
+  /** 派人出门：先走出铁门，到街东头消失，过几个小时扛着东西回来 */
+  startTrip(id: string, members: Actor[]): boolean {
+    if (!members.length || this.tripCheck(id) !== 'ok') return false
+    const def = TRIPS.find((t) => t.id === id)!
+    this.money -= def.cost
+    for (const a of members) {
+      this.cancel(a)
+      a.setPath(route(this.navs, a.pos, EXIT) ?? [])
+    }
+    this.trip = { def, members, phase: 'out', back: this.absHour + def.hours }
+    this.note('world.log.tripOut', { who: members.map((m) => m.name).join('、'), where: placeName(id) })
+    return true
+  }
+
+  private tripTick(): void {
+    const t = this.trip
+    if (!t) return
+    if (t.phase === 'out' && t.members.every((a) => !a.path.length)) {
+      for (const a of t.members) a.away = true
+      t.phase = 'away'
+    } else if (t.phase === 'away' && this.absHour >= t.back) {
+      t.phase = 'back'
+      t.members.forEach((a, k) => {
+        a.away = false
+        a.carrying = true
+        a.root.position.set(EXIT.x + k * 0.8, 0, EXIT.z + k * 0.5)
+        a.floor = 0
+        a.setPath(route(this.navs, a.pos, { ...HOME_IN, x: HOME_IN.x + (k - 1) * 0.9 }) ?? [])
+      })
+    } else if (t.phase === 'back' && t.members.every((a) => !a.path.length)) {
+      const armed = t.members.includes(this.actors[0]) && this.ammo.n > 0
+      const r = settleTrip(t.def.id, t.members.length, armed, () => this.rand())
+      const g = r.gain
+      this.money += g.money ?? 0
+      this.stock = { food: this.stock.food + (g.food ?? 0), water: this.stock.water + (g.water ?? 0) }
+      this.ammo.n += g.ammo ?? 0
+      this.medkits += g.medkits ?? 0
+      this.cores += g.cores ?? 0
+      if (r.gateBonus) {
+        this.gateBonus = Math.min(120, this.gateBonus + r.gateBonus)
+        this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + r.gateBonus)
+      }
+      t.members.forEach((a, k) => {
+        a.carrying = false
+        a.health = Math.max(5, a.health - r.hurt[k])
+        a.hold = 0.3
+      })
+      this.note(r.key, { ...r.vars, who: t.members.map((m) => m.name).join('、'), where: placeName(t.def.id) })
+      this.trip = null
     }
   }
 
@@ -235,12 +342,14 @@ export class Household {
   startSiege(count: number, crisis: boolean): void {
     if (!this.spawnZombie || (this.siege && !this.siege.done)) return
     for (const a of this.actors) {
+      if (a.away) continue
       this.cancel(a)
       a.hold = 0
     }
     if (this.speed > 1) this.speed = 1
     this.siege = new Siege({
-      count, crisis, navs: this.navs, defenders: this.actors, barriers: this.barriers, ammo: this.ammo,
+      count, crisis, navs: this.navs, defenders: this.actors.filter((a) => !a.away), barriers: this.barriers, ammo: this.ammo,
+      maxOf: (id) => this.maxOf(id),
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
     })
@@ -284,7 +393,7 @@ export class Household {
 
   /** 最外面一层坏了的防线（白天爸爸会去修） */
   private damagedLayer(): (typeof LAYERS)[number] | null {
-    return LAYERS.find((l) => this.barriers[l.id] < l.max) ?? null
+    return LAYERS.find((l) => this.barriers[l.id] < this.maxOf(l.id)) ?? null
   }
 
   private repairTask(): Task | null {
@@ -416,7 +525,7 @@ export class Household {
     }
     t.hours -= hours
     if (t.kind === 'repair' && t.layer) {
-      const max = LAYERS.find((l) => l.id === t.layer)!.max
+      const max = this.maxOf(t.layer)
       this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
       if (this.barriers[t.layer] >= max) t.hours = 0
     }
@@ -500,6 +609,7 @@ export class Household {
     return this.actors.map((a) => ({
       name: a.name,
       health: a.health,
+      trip: this.onTrip(a) && this.trip ? { id: this.trip.def.id, left: Math.max(0, this.trip.back - this.absHour) } : undefined,
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
       going: !!a.task && a.task.phase === 'go' && a.task.kind !== 'walk',

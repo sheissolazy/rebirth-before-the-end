@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { t, type UiKey } from '../i18n'
+import { lt, t, type UiKey } from '../i18n'
+import { locations } from '../content/locations'
 import { EMPTY_HUD, World, type Hud } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel, type NeedKey } from './life'
 import type { PersonHud } from './residents'
 import { DiaryPanel } from './DiaryPanel'
+import { MapPanel } from './MapPanel'
 
 const NEEDS: NeedKey[] = ['hunger', 'thirst', 'energy', 'mood']
 const SPEEDS = [0, 1, 2, 3] as const
@@ -17,16 +19,17 @@ function barColor(v: number): string {
 }
 
 function PersonCard({ p, selected, onClick }: { p: PersonHud; selected: boolean; onClick: () => void }) {
-  const doing = t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
+  const doing = p.trip
+    ? t('world.away', { where: lt(locations.find((l) => l.id === p.trip!.id)?.name ?? { zh: '' }), h: p.trip.left.toFixed(1) })
+    : t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
   return (
     <button onClick={onClick}
       className={`w-44 rounded-xl bg-white/90 p-2 text-left shadow transition ${selected ? 'ring-2 ring-amber-400' : 'opacity-90 hover:opacity-100'}`}>
       <div className="flex items-baseline justify-between gap-1">
-        <span className="text-sm font-semibold">{p.name}</span>
-        <span className="truncate text-[11px] text-zinc-500">
-          {p.floor === 1 && `${t('world.upstairs')} · `}{doing}
-        </span>
+        <span className="whitespace-nowrap text-sm font-semibold">{p.name}</span>
+        {p.floor === 1 && !p.trip && <span className="text-[10px] text-zinc-400">{t('world.upstairs')}</span>}
       </div>
+      <div className="truncate text-[11px] text-zinc-500" title={doing}>{doing}</div>
       <div className="mt-1.5 grid grid-cols-[2.2rem_1fr] items-center gap-x-1.5 gap-y-1">
         {p.health < 100 && (
           <div className="contents">
@@ -58,6 +61,7 @@ export default function WorldView() {
   const [hud, setHud] = useState<Hud>(EMPTY_HUD)
   const [style, setStyle] = useState<ArtStyle>(loadStyle)
   const [diary, setDiaryState] = useState(false)
+  const [map, setMapState] = useState(false)
   // 翻日记时游戏暂停，合上再接着走
   const resume = useRef(1)
   const setDiary = (open: boolean) => {
@@ -66,12 +70,19 @@ export default function WorldView() {
     if (w && !open && w.speed === 0) w.setSpeed(resume.current)
     setDiaryState(open)
   }
+  const setMap = (open: boolean) => {
+    const w = world.current
+    if (w && open && w.speed > 0) { resume.current = w.speed; w.setSpeed(0) }
+    if (w && !open && w.speed === 0) w.setSpeed(resume.current)
+    setMapState(open)
+  }
 
   useEffect(() => {
     let w: World | null = null
     try {
       w = new World(host.current!, setHud, style)
       w.onDiary = () => setDiary(true)
+      w.onMap = () => setMap(true)
       world.current = w
     } catch (e) {
       // 不支持 WebGL 等情况：下一拍再显示错误
@@ -130,10 +141,19 @@ export default function WorldView() {
           <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
             🔫 {t('world.ammo', { n: hud.ammo })} · 💎 {t('world.cores', { n: hud.cores })}
           </div>
-          <button onClick={() => setDiary(true)}
-            className="mt-1.5 rounded-md bg-red-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-red-700">
-            {t('world.diary.open')}
-          </button>
+          <div className={`mt-0.5 text-xs ${hud.night ? 'text-zinc-300' : 'text-zinc-600'}`}>
+            💰 {t('world.money', { n: hud.money.toLocaleString() })} · 🩹 {t('world.medkits', { n: hud.medkits })}
+          </div>
+          <div className="mt-1.5 flex gap-1.5">
+            <button onClick={() => setDiary(true)}
+              className="rounded-md bg-red-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-red-700">
+              {t('world.diary.open')}
+            </button>
+            <button onClick={() => setMap(true)}
+              className="rounded-md bg-emerald-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-emerald-700">
+              {t('world.map.open')}
+            </button>
+          </div>
         </div>
         {hud.crisis && (
           <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">{t('world.crisis')}</div>
@@ -216,6 +236,13 @@ export default function WorldView() {
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-zinc-900/80 px-4 py-1.5 text-sm text-white shadow">
           {t(hud.toast as UiKey)}
         </div>
+      )}
+
+      {map && (
+        <MapPanel prologue={hud.prologue} check={(id) => world.current?.tripCheck(id) ?? 'busy'}
+          members={world.current?.homeMembers() ?? []}
+          onGo={(id, names) => { if (world.current?.startTrip(id, names)) setMap(false) }}
+          onClose={() => setMap(false)} />
       )}
 
       {diary && (

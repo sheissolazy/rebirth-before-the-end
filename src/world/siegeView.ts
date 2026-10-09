@@ -198,11 +198,11 @@ export class SiegeView {
       const b = this.bars.get(l.id)!
       const hp = life.barriers[l.id]
       b.sprite.visible = fighting && hp > 0 && s?.current?.id === l.id
-      b.set(hp / l.max)
+      b.set(hp / life.maxOf(l.id))
     }
     // 铁门：耐久归零就倒进院子里，修好一半以上才立起来
     if (life.barriers.gate <= 0) this.gateDown = true
-    else if (life.barriers.gate >= LAYERS[0].max * 0.4) this.gateDown = false
+    else if (life.barriers.gate >= life.maxOf('gate') * 0.4) this.gateDown = false
     for (const g of this.gates) {
       const gateDown = this.gateDown
       const want = gateDown ? g.rot.x - 1.45 : g.rot.x

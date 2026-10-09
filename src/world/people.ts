@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 export type PoseState = 'idle' | 'walk' | 'sit' | 'sleep' | 'work'
-  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead'
+  | 'shoot' | 'melee' | 'down' | 'zwalk' | 'zattack' | 'dead' | 'carry'
 
 const SIDE = new THREE.Vector3(1, 0, 0)
 const FWD = new THREE.Vector3(0, 0, 1)
@@ -115,7 +115,7 @@ export class PoseDriver {
   }
 
   update(dt: number, state: PoseState, speed = 1): void {
-    const rate = state === 'walk' ? 7.5 * speed : state === 'zwalk' ? 4.2 : state === 'zattack' ? 7 : state === 'melee' ? 6.5 : 1.6
+    const rate = state === 'walk' || state === 'carry' ? 7.5 * speed : state === 'zwalk' ? 4.2 : state === 'zattack' ? 7 : state === 'melee' ? 6.5 : 1.6
     this.t += dt * rate
     this.kick = Math.max(0, this.kick - dt)
     const s = Math.sin(this.t)
@@ -135,6 +135,18 @@ export class PoseDriver {
       this.rot('RightForeArm', SIDE, -0.25)
       this.rot('Spine', FWD, s * 0.04)
       this.model.position.y = Math.abs(Math.cos(this.t)) * 0.025
+    } else if (state === 'carry') {
+      // 抱着箱子走：腿照常迈，两只手往前抱住
+      this.rot('LeftUpLeg', SIDE, -s * 0.4)
+      this.rot('RightUpLeg', SIDE, s * 0.4)
+      this.rot('LeftLeg', SIDE, Math.max(0, s) * 0.6)
+      this.rot('RightLeg', SIDE, Math.max(0, -s) * 0.6)
+      this.rot('LeftArm', SIDE, -0.75, leftDown)
+      this.rot('RightArm', SIDE, -0.75, rightDown)
+      this.rot('LeftForeArm', SIDE, -0.8)
+      this.rot('RightForeArm', SIDE, -0.8)
+      this.rot('Spine', SIDE, -0.06)
+      this.model.position.y = Math.abs(Math.cos(this.t)) * 0.02
     } else if (state === 'sit') {
       this.rot('LeftUpLeg', SIDE, -1.45)
       this.rot('RightUpLeg', SIDE, -1.45)
