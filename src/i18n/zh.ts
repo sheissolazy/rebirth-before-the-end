@@ -92,6 +92,8 @@ export const zh = {
   'world.toast.trap': '铁门外铺好了钉板和铁丝网',
   'world.toast.crisisDay': '⚠️ 今晚是月底危机夜！翻翻重生日记里的前世记忆，提前备好子弹、燃烧瓶和钉板',
   'world.toast.dusk': '🌆 天快黑了，21 点丧尸就会摸到院门外',
+  'world.toast.lowWater': '⚠️ 家里快没水了！下雨天桶会接水，也可以派人去超市，或者上街翻翻水桶',
+  'world.toast.lowFood': '⚠️ 家里快没吃的了！派人出门搜刮、种菜、钓鱼，都能弄到吃的',
   'world.toast.duskLowAmmo': '🌆 天快黑了，子弹快没了！地图上的黑市、军区能弄到，江野也会帮忙',
   'world.toast.brute': '⚠️ 尸群里有大块头！皮厚、砸门狠——燃烧瓶留给它（打倒掉 3 颗晶核）',
   'world.toast.dying': '⚠️ 有人快撑不住了！看日记，赶紧弄吃的喝的（急救包也能吊住命）',
