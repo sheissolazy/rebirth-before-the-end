@@ -139,6 +139,34 @@ function plateTexture(text: string): THREE.CanvasTexture {
   return t
 }
 
+/** 把一个组里不会动的小零件按材质合并成几个网格（一辆车几十个零件 → 十来次绘制） */
+function mergeStatic(group: THREE.Object3D): void {
+  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>()
+  for (const o of [...group.children]) {
+    const m = o as THREE.Mesh
+    if (!m.isMesh || o.children.length || Array.isArray(m.material)) continue
+    o.updateMatrix()
+    let g = m.geometry.clone().applyMatrix4(o.matrix)
+    if (g.index) g = g.toNonIndexed()
+    g.clearGroups()
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k)
+    if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2))
+    if (!g.attributes.normal) g.computeVertexNormals()
+    const list = byMat.get(m.material) ?? []
+    list.push(g)
+    byMat.set(m.material, list)
+    group.remove(o)
+  }
+  for (const [mat, gs] of byMat) {
+    const merged = mergeGeometries(gs)
+    if (!merged) continue
+    const mesh = new THREE.Mesh(merged, mat)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    group.add(mesh)
+  }
+}
+
 export interface VanParts {
   root: THREE.Group
   /** 车身（跟着颠一颠） */
@@ -352,6 +380,8 @@ export function buildVan(): VanParts {
   beam.castShadow = false
   body.add(beam, beam.target)
 
+  mergeStatic(rack)
+  mergeStatic(body)
   root.position.set(VAN_PARK.x, 0, VAN_PARK.z)
   root.rotation.y = VAN_PARK.rot
   return { root, body, wheels, load, lamps, beam, armor }
