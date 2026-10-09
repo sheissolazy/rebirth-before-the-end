@@ -33,7 +33,7 @@ import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot, type ScavengeSpot } from './scavenge'
 import { ForageView } from './forageView'
 import { HERBS_PER_MEDKIT, type ForageSpot } from './forage'
-import { priceOf, shopFor, type Cart } from './shop'
+import { priceOf, shopFor, type Cart, type SellCart } from './shop'
 import type { ShopView } from './TradePanel'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
@@ -2528,8 +2528,9 @@ export class World {
       currency: shop.currency, wallet: shop.currency === 'money' ? l.money : l.cores,
       capacity: l.tripCapacity(t),
       items: shop.items.map((it) => ({ ...it, unit: priceOf(it, shop, l.clock.day), owned: l.owns(it) })),
+      buys: shop.buys ?? [],
       home: {
-        food: av.food, water: av.water, medkits: l.medkits, ammo: l.ammo.n, fuel: l.fuel, people,
+        food: av.food, water: av.water, medkits: l.medkits, ammo: l.ammo.n, fuel: l.fuel, molotovs: l.molotovs, people,
         daysToDoom: Math.max(0, PROLOGUE_DAYS - l.clock.day), gateBonus: l.gateBonus, trap: l.trap.hp > 0, crossbow: l.crossbow,
       },
     }
@@ -2547,8 +2548,8 @@ export class World {
   }
 
   /** 交易界面点了结账（或者"不买了"）：成功就恢复时间 */
-  checkout(tripId: number, cart: Cart): string {
-    const r = this.life.checkout(tripId, cart)
+  checkout(tripId: number, cart: Cart, sell: SellCart = {}): string {
+    const r = this.life.checkout(tripId, cart, sell)
     if (r === 'ok') {
       this.life.speed = this.shopSpeed || 1
       this.pushLifeHud()

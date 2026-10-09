@@ -751,8 +751,8 @@ export default function WorldView() {
       )}
 
       {shop && (
-        <TradePanel key={shop.tripId} view={shop} onCheckout={(cart) => {
-          const r = world.current?.checkout(shop.tripId, cart) ?? 'no'
+        <TradePanel key={shop.tripId} view={shop} onCheckout={(cart, sell) => {
+          const r = world.current?.checkout(shop.tripId, cart, sell) ?? 'no'
           if (r === 'ok') setShop(null)
           return r
         }} />

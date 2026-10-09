@@ -570,6 +570,34 @@ describe('好几拨人同时出门 + 店里挑东西', () => {
   })
 })
 
+describe('卖东西', () => {
+  it('末日后去军区：三份吃的换一颗晶核，再拿晶核买子弹；家里没那么多就卖不了', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 8 }
+    life.speed = 3
+    life.cores = 1
+    life.stock = { food: 12, water: 2 }
+    const ammo0 = life.ammo.n
+    let tried = false
+    life.onShop = (t) => {
+      tried = true
+      expect(life.checkout(t.id, {}, { water: 1 })).toBe('short')
+      // 卖 9 份吃的（3 颗晶核）+ 手上 1 颗 = 4 颗，买两盒子弹
+      expect(life.checkout(t.id, { army_ammo: 2 }, { food: 3 })).toBe('ok')
+    }
+    expect(life.startTrip('armygate', [life.actors[2]])).toBe(true)
+    const dt = 0.1
+    for (let i = 0; i < 20000 && life.trips.length; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+    expect(tried).toBe(true)
+    expect(life.cores).toBe(0)
+    expect(life.ammo.n).toBeGreaterThanOrEqual(ammo0 + 12)
+    expect(life.stock.food).toBeLessThan(4)
+  })
+})
+
 describe('野外采集（点了以后）', () => {
   it('女主走过去蹲下采，回来家里多了吃的；刚采过的再点就说"过两天"；三份草药捣成一个急救包', () => {
     const { life } = simulate('paradise', 0)

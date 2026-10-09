@@ -22,6 +22,17 @@ export interface ShopItem {
   once?: boolean
 }
 
+/** 店里收的东西（卖给店家）：一次卖一"份"（lot 个单位），换 price 钱或晶核 */
+export interface SellItem {
+  key: 'food' | 'water' | 'medkits' | 'ammo' | 'fuel' | 'molotovs'
+  name: string
+  icon: string
+  /** 一份是多少（吃的喝的按"份"，子弹按发……） */
+  lot: number
+  price: number
+  desc: string
+}
+
 export interface ShopDef {
   /** 和 TRIPS 的 id 一样 */
   id: string
@@ -29,6 +40,8 @@ export interface ShopDef {
   /** 末日前 / 末日后开不开门 */
   phase: 'prologue' | 'apocalypse'
   items: ShopItem[]
+  /** 这家店收什么 */
+  buys?: SellItem[]
 }
 
 export const SHOPS: ShopDef[] = [
@@ -64,14 +77,28 @@ export const SHOPS: ShopDef[] = [
     ],
   },
   {
-    id: 'blackmarket', currency: 'money', phase: 'prologue', items: [
+    id: 'blackmarket', currency: 'money', phase: 'prologue',
+    buys: [
+      { key: 'medkits', name: '急救包', icon: '🩹', lot: 1, price: 320, desc: '黑市收急救包，比药店卖的便宜一截。' },
+      { key: 'fuel', name: '汽油', icon: '⛽', lot: 1, price: 110, desc: '一桶。' },
+      { key: 'molotovs', name: '燃烧瓶', icon: '🍾', lot: 1, price: 250, desc: '有人专门收这个。' },
+    ],
+    items: [
       { id: 'shells', name: '霰弹（一盒 6 发）', icon: '🔫', cat: 'defense', desc: '猎枪子弹。末日后子弹比命还金贵。', price: 900, weight: 1, stock: 6, give: { ammo: 6 } },
       { id: 'helmet', name: '防暴头盔', icon: '⛑️', cat: 'defense', desc: '被咬的时候少掉一半血。', price: 2000, weight: 2, stock: 1, give: { helmet: true }, once: true },
       { id: 'molotov', name: '现成的燃烧瓶', icon: '🍾', cat: 'defense', desc: '比自己灌的贵，但拿回家就能扔。', price: 400, weight: 1, stock: 4, give: { molotovs: 1 } },
     ],
   },
   {
-    id: 'armygate', currency: 'cores', phase: 'apocalypse', items: [
+    id: 'armygate', currency: 'cores', phase: 'apocalypse',
+    // 军区什么都缺：吃的喝的药都收，换晶核
+    buys: [
+      { key: 'food', name: '吃的', icon: '🍚', lot: 3, price: 1, desc: '三份吃的换一颗晶核。军区人多，吃的永远不够。' },
+      { key: 'water', name: '水', icon: '💧', lot: 3, price: 1, desc: '三份水换一颗晶核。' },
+      { key: 'medkits', name: '急救包', icon: '🩹', lot: 1, price: 1, desc: '一个急救包换一颗晶核。' },
+      { key: 'fuel', name: '汽油', icon: '⛽', lot: 1, price: 1, desc: '军车要油，一桶换一颗。' },
+    ],
+    items: [
       { id: 'army_ammo', name: '制式霰弹（6 发）', icon: '🔫', cat: 'defense', desc: '军区仓库里的，一箱一箱码着。', price: 2, weight: 1, stock: 6, give: { ammo: 6 } },
       { id: 'army_med', name: '军用急救包', icon: '🩹', cat: 'med', desc: '比药店的好，止血粉一撒就住。', price: 2, weight: 1, stock: 3, give: { medkits: 1 } },
       { id: 'army_food', name: '压缩饼干（一箱）', icon: '🍪', cat: 'food', desc: '一块顶一顿，难吃，但管饱。', price: 1, weight: 1, stock: 8, give: { food: 3 } },
@@ -99,6 +126,13 @@ export function capacity(people: number, van: boolean): number {
 }
 
 export type Cart = Record<string, number>
+/** 卖掉几份（按 SellItem.key） */
+export type SellCart = Partial<Record<SellItem['key'], number>>
+
+/** 卖东西换回多少钱 / 晶核 */
+export function sellTotal(shop: ShopDef, sell: SellCart): number {
+  return (shop.buys ?? []).reduce((sum, b) => sum + (sell[b.key] ?? 0) * b.price, 0)
+}
 
 export function cartTotal(shop: ShopDef, cart: Cart, day: number): { cost: number; weight: number } {
   let cost = 0
@@ -131,6 +165,7 @@ export interface HomeSnapshot {
   medkits: number
   ammo: number
   fuel: number
+  molotovs?: number
   /** 家里几口人 */
   people: number
   /** 离末日还有几天（末日后是 0） */

@@ -21,7 +21,7 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
-import { capacity, cartGives, cartTotal, shopFor, type Cart, type ShopItem } from './shop'
+import { capacity, cartGives, cartTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
 import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
 import { lt, t, t as t_, type UiKey } from '../i18n'
 
@@ -241,6 +241,8 @@ export interface Trip {
   shopped?: boolean
   cargo?: ShopItem['give']
   spent?: number
+  /** 卖东西换回来的钱 / 晶核 */
+  sold?: number
 }
 
 /** 住进来的人叫什么 */
@@ -1400,22 +1402,40 @@ export class Household {
   }
 
   /** 在店里结账：钱（或晶核）马上扣，东西跟着人带回家。cart 为空 = 什么也不买，直接回家 */
-  checkout(tripId: number, cart: Cart): 'ok' | 'money' | 'heavy' | 'stock' | 'no' {
+  /** 家里某样东西有多少（卖东西用） */
+  private have(key: keyof SellCart): number {
+    if (key === 'food' || key === 'water') return this.stock[key]
+    if (key === 'ammo') return this.ammo.n
+    return this[key]
+  }
+
+  checkout(tripId: number, cart: Cart, sell: SellCart = {}): 'ok' | 'money' | 'heavy' | 'stock' | 'no' | 'short' {
     const t = this.trips.find((x) => x.id === tripId)
     if (!t || t.phase !== 'shop') return 'no'
     const shop = shopFor(t.def.id, this.clock.day < PROLOGUE_DAYS)
     const tot = shop ? cartTotal(shop, cart, this.clock.day) : { cost: 0, weight: 0 }
     if (shop) {
-      const wallet = shop.currency === 'money' ? this.money : this.cores
+      // 先把卖的东西算进钱包（家里得真有这么多）
+      for (const b of shop.buys ?? []) if ((sell[b.key] ?? 0) * b.lot > this.have(b.key) + 1e-6) return 'short'
+      const proceeds = sellTotal(shop, sell)
+      const wallet = (shop.currency === 'money' ? this.money : this.cores) + proceeds
       if (tot.cost > wallet) return 'money'
       if (tot.weight > this.tripCapacity(t)) return 'heavy'
       for (const it of shop.items) {
         const n = cart[it.id] ?? 0
         if (n > it.stock || (it.once && n > 0 && this.owns(it))) return 'stock'
       }
-      if (shop.currency === 'money') this.money -= tot.cost
-      else this.cores -= tot.cost
+      for (const b of shop.buys ?? []) {
+        const n = (sell[b.key] ?? 0) * b.lot
+        if (!n) continue
+        if (b.key === 'food' || b.key === 'water') this.stock = { ...this.stock, [b.key]: this.stock[b.key] - n }
+        else if (b.key === 'ammo') this.ammo.n -= n
+        else this[b.key] -= n
+      }
+      if (shop.currency === 'money') this.money += proceeds - tot.cost
+      else this.cores += proceeds - tot.cost
       t.cargo = cartGives(shop, cart)
+      t.sold = proceeds
     }
     t.spent = tot.cost
     t.shopped = true
