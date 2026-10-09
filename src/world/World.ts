@@ -1631,7 +1631,7 @@ export class World {
     }
     if (this.cat) {
       const cat = this.cat
-      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: this.life.clock.hour, siege: fighting })
+      cat.update(sim, { navs: this.navs, hero: this.heroine, family: this.actors, hour: this.life.clock.hour, siege: fighting, rain: this.life.rain > 0.1 })
       cat.root.visible = !(upstairsHidden && cat.root.position.y > FLOOR_H - 0.4)
       this.catHeart.visible = cat.hearts > 0 && cat.root.visible
       this.catHeart.position.y = 0.62 + Math.sin(this.elapsed * 3) * 0.03

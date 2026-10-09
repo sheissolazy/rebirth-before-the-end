@@ -46,6 +46,7 @@ export const zh = {
   'world.go.pet': '去摸摸大橘',
   'world.go.modvan': '去改装面包车',
   'world.greet.back': '我们回来啦～',
+  'world.say.rain': '下雨啦，快进屋！',
   'world.say.dinner.calm0': '开饭啦！',
   'world.say.dinner.calm1': '吃饭咯，快来！',
   'world.say.dinner.calm2': '趁热吃！',

@@ -933,9 +933,14 @@ export class Household {
     return rainAt(c.day, c.hour)
   }
 
-  /** 院子里的木桶接雨水；雨停了在日记里记一笔 */
+  private wasRaining = false
+
+  /** 院子里的木桶接雨水；雨停了在日记里记一笔；刚下起雨来，院子里的人赶紧回屋 */
   private rainTick(hours: number): void {
     const r = this.rain
+    const raining = r > 0.1
+    if (raining && !this.wasRaining && (!this.siege || this.siege.done)) this.runInside()
+    this.wasRaining = raining
     if (r > 0) {
       const got = r * 0.3 * hours
       this.rainWater += got
@@ -943,6 +948,26 @@ export class Household {
     } else if (this.rainWater > 0) {
       if (this.rainWater >= 0.1) this.note('world.log.rainWater', { n: this.rainWater.toFixed(1) })
       this.rainWater = 0
+    }
+  }
+
+  /** 下雨了：在院子里溜达、种地、擦车、撸猫、迎人的放下手里的事回屋（第一个人喊一声） */
+  private runInside(): void {
+    const outdoor = ['stroll', 'garden', 'wash', 'pet', 'company', 'idle', 'relax', 'tidy']
+    let shouted = false
+    for (const a of this.actors) {
+      if (this.isOut(a) || a.dead || a.floor !== 0 || a.settling || inRect(HOUSE, a.pos.x, a.pos.z)) continue
+      if (!inRect(YARD, a.pos.x, a.pos.z)) continue
+      if (a.task && (a.task.manual || !outdoor.includes(a.task.kind))) continue
+      if (!a.task && a.path.length) continue
+      this.release(a)
+      a.task = null
+      a.anchor = null
+      // 先走到屋檐下（大门里面一点），之后自己再想干什么（下雨天不会再去院子）
+      this.assign(a, { kind: 'idle', spot: null, phase: 'use', hours: 0.15, manual: false })
+      const p = route(this.navs, a.pos, { x: 3.5 + (shouted ? 0.6 : 0), z: 5.2, floor: 0 })
+      if (p) a.setPath(p)
+      if (!shouted) { a.line = { text: t_('world.say.rain'), hours: 0.2 }; shouted = true }
     }
   }
 

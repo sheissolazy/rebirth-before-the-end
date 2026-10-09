@@ -7,6 +7,7 @@ import { restore, snapshot } from './save'
 import { Courier, VISITORS, Visitor } from './visitors'
 import { SCAVENGE } from './scavenge'
 import { settleTrip } from './expedition'
+import { rainAt } from './weather'
 
 /** 不渲染，只跑逻辑：让一家人自己过几天，看看会不会卡住、饿着、不睡觉 */
 function simulate(style: 'toon' | 'paradise', days: number) {
@@ -119,6 +120,35 @@ describe('家里人会说话', () => {
     expect(all).toMatch(/开饭啦|吃饭咯|趁热吃/)
     expect(all).toMatch(/晚安|早点睡|明天见/)
     expect(all).toMatch(/早呀|睡得真香|天气不错/)
+  })
+})
+
+describe('下雨', () => {
+  it('刚下起雨来：院子里溜达的人放下手里的事往屋里走，有人喊一声', () => {
+    const { life } = simulate('paradise', 0)
+    // 找第一场雨开始的时刻
+    let start = -1
+    for (let h = 7 * 4; h < 24 * 30 * 4 && start < 0; h++) {
+      const day = Math.floor(h / 96)
+      const hour = (h % 96) / 4
+      if (hour > 8 && hour < 18 && rainAt(day, hour) > 0.1 && rainAt(day, hour - 0.25) <= 0.1) start = day * 24 + hour
+    }
+    expect(start).toBeGreaterThan(0)
+    life.clock = { day: Math.floor(start / 24), hour: (start % 24) - 0.3 }
+    life.speed = 3
+    const mom = life.actors[1]
+    life.cancel(mom)
+    mom.root.position.set(9.5, 0, 10.2)
+    mom.floor = 0
+    mom.task = { kind: 'stroll', spot: null, phase: 'use', hours: 3, manual: false } as never
+    let said = ''
+    const dt = 0.1
+    for (let i = 0; i < (1.2 * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed); if (a.line?.text.includes('下雨')) said = a.line.text }
+    }
+    expect(said).toBe('下雨啦，快进屋！')
+    expect(mom.pos.z).toBeLessThan(7)
   })
 })
 

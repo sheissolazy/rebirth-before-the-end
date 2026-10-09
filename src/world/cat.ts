@@ -17,6 +17,8 @@ export interface CatCtx {
   family: Actor[]
   hour: number
   siege: boolean
+  /** 下着雨：只在屋里待着 */
+  rain?: boolean
 }
 
 /** 打盹的地方：客厅沙发前的青色地毯、二楼床中间的地毯、院子长椅边晒太阳 */
@@ -114,7 +116,8 @@ export class Cat extends Walker {
       return
     }
     if (r < 0.82) {
-      const n = NAPS[Math.floor(Math.random() * NAPS.length)]
+      const naps = c.rain ? NAPS.filter((p) => inRect(HOUSE, p.x, p.z)) : NAPS
+      const n = naps[Math.floor(Math.random() * naps.length)]
       if (this.go(c.navs, n)) {
         this.plan = 'nap'
         this.left = 25 + Math.random() * 35
@@ -123,7 +126,7 @@ export class Cat extends Walker {
     }
     // 随便走走：屋里或者院子里
     for (let k = 0; k < 6; k++) {
-      const inHouse = Math.random() < 0.6
+      const inHouse = c.rain || Math.random() < 0.6
       const x = inHouse ? HOUSE.x0 + 0.6 + Math.random() * (HOUSE.x1 - HOUSE.x0 - 1.2) : YARD.x0 + 1 + Math.random() * (YARD.x1 - YARD.x0 - 2)
       const z = inHouse ? HOUSE.z0 + 0.6 + Math.random() * (HOUSE.z1 - HOUSE.z0 - 1.2) : 6.8 + Math.random() * 5
       if (!inHouse && inRect(HOUSE, x, z, -0.5)) continue
@@ -172,6 +175,8 @@ export class Cat extends Walker {
     if (!c.siege && this.plan === 'hide') this.left = Math.min(this.left, 2)
     if (night && !c.siege && this.plan !== 'bed' && this.plan !== 'poked') this.left = Math.min(this.left, 0.5)
     if (!night && this.plan === 'bed') this.left = Math.min(this.left, 2)
+    // 下起雨来还在院子里：先回屋
+    if (c.rain && this.floor === 0 && !inRect(HOUSE, this.pos.x, this.pos.z) && this.plan !== 'hide' && !this.path.length) this.left = 0
     if (this.left <= 0 && !this.path.length) this.decide(c)
 
     let walking = false
