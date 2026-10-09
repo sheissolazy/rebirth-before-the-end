@@ -29,7 +29,7 @@ import { lt, t, type UiKey } from '../i18n'
 import { Rain } from './weather'
 import { applyPerks, awardRebirthPoints, clearWorld, currentLife, dayStartClock, hardPref, loadWorld, nextLife, recordDeath, rewindToDayStart, saveDayStart, saveWorld, setHardPref } from './save'
 import { Bubbles, bubbleMaterial } from './bubbles'
-import { FISHING, SCAVENGE, nearFishing, nearestSpot } from './scavenge'
+import { FISHING, SCAVENGE, nearFishing, nearestSpot, type ScavengeSpot } from './scavenge'
 import { ForageView } from './forageView'
 import { HERBS_PER_MEDKIT, type ForageSpot } from './forage'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
@@ -174,7 +174,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.search.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -423,6 +423,7 @@ export class World {
     }
     this.buildGarden()
     this.forage = new ForageView(this.scene)
+    this.buildScavengeHits()
     this.life.onForage = (s, y, medkit) => {
       this.sound.pluck()
       if (y.sting) { this.sound.buzz(); this.sound.hurt() }
@@ -1766,6 +1767,7 @@ export class World {
     this.ring.position.set(sp.x, sp.y + 0.03, sp.z)
     this.ring.visible = this.mode === 'home' && this.selected.root.visible && this.selected.pose !== 'sleep'
     this.forage?.sync(this.life.forageDay, this.life.clock.day)
+    this.arriveScavenge()
     this.forage?.update(dt, !this.life.siege || this.life.siege.done)
     this.hudTimer -= dt
     if (this.hudTimer <= 0) {
@@ -2019,9 +2021,13 @@ export class World {
       this.petCat()
       return
     }
+    this.pendingScav = null
     // 点野外的野菜、草药、蘑菇、蜂窝……：女主走过去采
     const fs = floor === 0 ? this.forage?.pick(this.raycaster) ?? null : null
     if (fs) { this.tapForage(fs); return }
+    // 点邻居家、街上盖着车罩的车、接雨水的桶：女主走过去搜（末日以后）
+    const sc = floor === 0 ? this.scavengeUnder() : null
+    if (sc) { this.tapScavenge(sc); return }
     if (this.mode === 'home') {
       const hits = this.raycaster.intersectObjects(this.actors.filter((a) => a.root.visible).map((a) => a.root), true)
       if (hits.length) {
@@ -2074,11 +2080,68 @@ export class World {
     const over = this.raycaster.intersectObjects(people, true).length > 0
       || (!!this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length > 0)
       || (this.mode === 'home' && (this.raycaster.intersectObject(this.van.parts.root, true).length > 0 || !!this.furnitureUnder(floor)))
-      || (floor === 0 && !!this.forage?.pick(this.raycaster))
+      || (floor === 0 && (!!this.forage?.pick(this.raycaster) || !!this.scavengeUnder()))
     el.style.cursor = over ? 'pointer' : ''
   }
 
   private forage: ForageView | null = null
+
+  /** 邻居家、车、水桶上面一块看不见的"点击区"（射线打得到看不见的物体） */
+  private scavHits: THREE.Mesh[] = []
+  /** 点了要搜的地方，女主正走过去 */
+  private pendingScav: ScavengeSpot | null = null
+
+  private buildScavengeHits(): void {
+    const mat = new THREE.MeshBasicMaterial()
+    for (const s of SCAVENGE) {
+      // 找离这个搜索点最近的同类道具（房子 / 车 / 桶），点击区盖住它
+      let prop = PROPS[0]
+      let best = Infinity
+      for (const p of PROPS) {
+        if (p.kind !== s.kind) continue
+        const d = Math.hypot(p.x - s.at.x, p.z - s.at.z)
+        if (d < best) { best = d; prop = p }
+      }
+      const h = s.kind === 'house' ? 5 : s.kind === 'car' ? 1.6 : 1.1
+      const swap = Math.abs(prop.rot) % 180 >= 45 && Math.abs(prop.rot) % 180 <= 135
+      const box = new THREE.Mesh(new THREE.BoxGeometry(swap ? prop.d : prop.w, h, swap ? prop.w : prop.d), mat)
+      box.position.set(prop.x, h / 2, prop.z)
+      if (s.kind === 'barrel') box.scale.set(2.2, 1, 2.2)
+      box.visible = false
+      box.userData.scav = s.id
+      this.scene.add(box)
+      this.scavHits.push(box)
+    }
+  }
+
+  private scavengeUnder(): ScavengeSpot | null {
+    const id = this.raycaster.intersectObjects(this.scavHits, false)[0]?.object.userData.scav as string | undefined
+    return id ? SCAVENGE.find((s) => s.id === id) ?? null : null
+  }
+
+  private tapScavenge(s: ScavengeSpot): void {
+    if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
+    const h = this.heroine
+    if (h.dead || this.life.onTrip(h)) return
+    this.life.cancelSearch()
+    this.life.stopFishing()
+    const state = this.life.canSearch(s)
+    if (state !== 'ok') { this.toast(`world.search.${state}`, 3); return }
+    if (this.selected !== h) this.select(h)
+    const path = this.life.commandWalk(h, { x: s.at.x, z: s.at.z, floor: 0 })
+    if (!path) return
+    this.pendingScav = s
+    this.flashMarker(s.at.x, 0, s.at.z)
+  }
+
+  /** 女主走到了要搜的地方：开始搜 */
+  private arriveScavenge(): void {
+    const s = this.pendingScav
+    const h = this.heroine
+    if (!s || h.path.length) return
+    this.pendingScav = null
+    if (Math.hypot(h.pos.x - s.at.x, h.pos.z - s.at.z) < 1.3 && this.life.startSearch(s)) this.pushLifeHud()
+  }
 
   private tapForage(s: ForageSpot): void {
     if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }

@@ -272,7 +272,7 @@ export const zh = {
   'world.spot.house': '邻居家里',
   'world.search.go': '🔍 搜一搜：{where}（E）',
   'world.search.doing': '搜索中…… {p}%',
-  'world.search.prologue': '末日前邻居都还住着，不能乱翻',
+  'world.search.prologue': '末日前邻居都还住着，不能乱翻（末日以后就能进去搜了）',
   'world.search.empty': '这里刚搜过，过几天再来',
   'world.search.busy': '现在顾不上',
   'world.molotov': '🔥 燃烧瓶 ×{n}',
