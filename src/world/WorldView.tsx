@@ -66,6 +66,7 @@ export default function WorldView() {
   const [style, setStyle] = useState<ArtStyle>(loadStyle)
   const [diary, setDiaryState] = useState(false)
   const [map, setMapState] = useState(false)
+  const [spaceOpen, setSpaceOpen] = useState(false)
   const [welcome, setWelcome] = useState(() => {
     try { return localStorage.getItem(WELCOME_KEY) !== '1' } catch { return true }
   })
@@ -185,7 +186,25 @@ export default function WorldView() {
               className="rounded-md bg-emerald-800 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-emerald-700">
               {t('world.map.open')}
             </button>
+            <button onClick={() => setSpaceOpen((o) => !o)}
+              className="rounded-md bg-indigo-700 px-2 py-0.5 text-xs font-medium text-amber-50 shadow-sm hover:bg-indigo-600">
+              {t('world.space.open', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
+            </button>
           </div>
+          {spaceOpen && (
+            <div className={`mt-2 w-64 rounded-lg p-2 text-xs ${hud.night ? 'bg-white/10' : 'bg-indigo-50'}`}>
+              <div className="mb-1 leading-snug opacity-80">{t('world.space.hint')}</div>
+              {(['food', 'water'] as const).map((k) => (
+                <div key={k} className="mt-1 flex items-center gap-1.5">
+                  <span className="w-20">{t(`world.space.${k}` as UiKey, { n: hud.space[k].toFixed(1) })}</span>
+                  <button onClick={() => world.current?.moveToSpace(k, -1)} className="rounded bg-white/80 px-1.5 text-zinc-800 shadow-sm">{t('world.space.out')}</button>
+                  <button onClick={() => world.current?.moveToSpace(k, 1)} className="rounded bg-indigo-600 px-1.5 text-white shadow-sm">{t('world.space.in')}</button>
+                </div>
+              ))}
+              <button disabled={hud.cores < 3} onClick={() => world.current?.upgradeSpace()}
+                className="mt-2 w-full rounded bg-indigo-700 py-1 text-white shadow-sm disabled:opacity-40">{t('world.space.up')}</button>
+            </div>
+          )}
         </div>
         {hud.crisis && (
           <div className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white shadow">

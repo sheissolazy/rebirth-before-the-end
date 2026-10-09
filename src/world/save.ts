@@ -43,6 +43,8 @@ export interface WorldSave {
   raidTonight?: boolean
   tip?: string | null
   storm?: number
+  space?: Stock
+  spaceCap?: number
 }
 
 export function snapshot(life: Household): WorldSave {
@@ -68,6 +70,8 @@ export function snapshot(life: Household): WorldSave {
     raidTonight: life.raidTonight,
     tip: life.tip,
     storm: life.storm,
+    space: { ...life.space },
+    spaceCap: life.spaceCap,
   }
 }
 
@@ -87,6 +91,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.raidTonight = !!s.raidTonight
   life.tip = s.tip ?? null
   life.storm = s.storm ?? -1
+  life.space = { ...(s.space ?? { food: 0, water: 0 }) }
+  life.spaceCap = s.spaceCap ?? 6
   for (const as of s.actors) {
     let a = life.actors.find((x) => x.name === as.name)
     // 后来住进来的人：重新请进门

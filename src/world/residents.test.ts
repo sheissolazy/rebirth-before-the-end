@@ -372,3 +372,27 @@ describe('住进来的人', () => {
     expect(b.actors.find((a) => a.name === '阿杰')?.weapon).toBe('machete')
   })
 })
+
+describe('空间异能', () => {
+  it('放进空间的吃的不会被打翻；外面吃完了会从空间里拿；晶核能扩容', () => {
+    const { life } = simulate('paradise', 0)
+    expect(life.moveToSpace('food', 4)).toBe(true)
+    expect(life.space.food).toBe(4)
+    expect(life.moveToSpace('food', 3)).toBe(false) // 超过 6 份
+    // 大门被破：只打翻外面的
+    life.spawnZombie = (at) => new Zombie(at)
+    life.startSiege(1, false)
+    const outside = life.stock.food
+    ;(life as unknown as { onSiegeEvent: (e: unknown) => void }).onSiegeEvent({ kind: 'broken', layer: 'door' })
+    expect(life.stock.food).toBeCloseTo(outside * 0.75)
+    expect(life.space.food).toBe(4)
+    life.siege = null
+    // 外面吃光了，从空间里拿
+    life.stock = { food: 0, water: life.stock.water }
+    ;(life as unknown as { take: (k: string, n: number) => void }).take('food', 1)
+    expect(life.space.food).toBeCloseTo(3)
+    life.cores = 3
+    expect(life.upgradeSpace()).toBe(true)
+    expect(life.spaceCap).toBe(12)
+  })
+})

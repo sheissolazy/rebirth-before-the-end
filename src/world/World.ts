@@ -59,6 +59,8 @@ export interface Hud {
   medkits: number
   prologue: boolean
   report: NightReport | null
+  /** 空间异能里放了多少、最多放多少 */
+  space: { food: number; water: number; cap: number }
   /** 有人在门口等回话 */
   visit: { id: string; icon: string; choices: { id: string; ok: boolean }[] } | null
 }
@@ -83,7 +85,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export const EMPTY_HUD: Hud = {
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null,
+  food: 0, water: 0, people: [], toast: '', ammo: 0, cores: 0, siege: null, log: [], muted: false, day: 0, hour: 0, money: 0, medkits: 0, prologue: true, report: null, visit: null, space: { food: 0, water: 0, cap: 6 },
 }
 
 export class World {
@@ -1125,6 +1127,16 @@ export class World {
     if (def) this.life.startVisit(def)
   }
 
+  moveToSpace(kind: 'food' | 'water', n: number): void {
+    this.life.moveToSpace(kind, n)
+    this.pushLifeHud()
+  }
+
+  upgradeSpace(): void {
+    this.life.upgradeSpace()
+    this.pushLifeHud()
+  }
+
   clearReport(): void {
     this.life.report = null
     this.pushLifeHud()
@@ -1165,6 +1177,7 @@ export class World {
       prologue: c.day < PROLOGUE_DAYS,
       report: this.life.report,
       visit: this.visitHud(),
+      space: { ...this.life.space, cap: this.life.spaceCap },
       ammo: this.life.ammo.n,
       cores: this.life.cores,
       siege: this.siegeHud(),

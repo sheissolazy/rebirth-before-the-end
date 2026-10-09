@@ -243,6 +243,9 @@ export class Household {
   raidTonight = false
   /** 陌生人透露的线索：下次去那里搜刮翻倍 */
   tip: string | null = null
+  /** 女主的空间异能：放进去的吃喝不会被抢、被淹、被打翻（文字版的设定：用空间不涨暴露） */
+  space: Stock = { food: 0, water: 0 }
+  spaceCap = 6
   /** 哪一天晚上是气候危机的暴雨夜 */
   storm = -1
   private flooded = -1
@@ -404,6 +407,42 @@ export class Household {
     this.talking = null
     v.phase = 'leave'
     v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+  }
+
+  // --- 空间异能 ---------------------------------------------------------------
+
+  /** 家里能吃能喝的（仓库 + 空间） */
+  get available(): Stock {
+    return { food: this.stock.food + this.space.food, water: this.stock.water + this.space.water }
+  }
+
+  /** 先用仓库里的，不够再从空间里拿 */
+  private take(kind: keyof Stock, n: number): void {
+    const fromStock = Math.min(this.stock[kind], n)
+    this.stock = { ...this.stock, [kind]: this.stock[kind] - fromStock }
+    const rest = n - fromStock
+    if (rest > 0) this.space = { ...this.space, [kind]: Math.max(0, this.space[kind] - rest) }
+  }
+
+  /** 往空间里放（正数）或拿出来（负数），一次一份 */
+  moveToSpace(kind: keyof Stock, n: number): boolean {
+    const used = this.space.food + this.space.water
+    if (n > 0 && (this.stock[kind] < n || used + n > this.spaceCap + 1e-6)) return false
+    if (n < 0 && this.space[kind] < -n) return false
+    this.stock = { ...this.stock, [kind]: this.stock[kind] - n }
+    this.space = { ...this.space, [kind]: this.space[kind] + n }
+    return true
+  }
+
+  static readonly SPACE_UPGRADE = 3
+
+  /** 用晶核把空间扩大 */
+  upgradeSpace(): boolean {
+    if (this.cores < Household.SPACE_UPGRADE) return false
+    this.cores -= Household.SPACE_UPGRADE
+    this.spaceCap += 6
+    this.note('world.log.spaceUp', { n: this.spaceCap })
+    return true
   }
 
   // --- 一家人聊天 -------------------------------------------------------------
@@ -763,7 +802,7 @@ export class Household {
   }
 
   private think(a: Actor): void {
-    const want = chooseWant(a.needs, this.clock, this.stock, this.rand())
+    const want = chooseWant(a.needs, this.clock, this.available, this.rand())
     // 下雨天和夜里一样，不去院子里
     const night = isNight(this.clock.hour) || this.rain > 0.1
     const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
@@ -796,7 +835,7 @@ export class Household {
 
   /** 做饭再吃：先去灶台，做好了找把椅子坐下吃 */
   private eatTask(a: Actor, manual = false, at?: Spot): Task | null {
-    if (this.stock.food < MEAL.food) return null
+    if (this.available.food < MEAL.food) return null
     const stove = at ?? this.nearest(a, this.freeSpots('cook'))
     if (!stove) return null
     const cook = this.spotTask(a, stove, 'cook', 0.45, manual)
@@ -855,8 +894,8 @@ export class Household {
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
-      if (t.kind === 'cook') this.stock.food = Math.max(0, this.stock.food - MEAL.food)
-      if (t.kind === 'drink') this.stock.water = Math.max(0, this.stock.water - DRINK.water)
+      if (t.kind === 'cook') this.take('food', MEAL.food)
+      if (t.kind === 'drink') this.take('water', DRINK.water)
       return
     }
     t.hours -= hours
@@ -875,7 +914,7 @@ export class Household {
     if (t.hours <= 0) return true
     // 放松、溜达、发呆时，饿了渴了困了就不干了
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle')) {
-      return n.energy < 18 || (n.thirst < 30 && this.stock.water >= DRINK.water) || (n.hunger < 30 && this.stock.food >= MEAL.food)
+      return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false
   }
@@ -927,7 +966,7 @@ export class Household {
     this.cancel(a)
     let task: Task | null = null
     if (spot.kind === 'cook') task = this.eatTask(a, true, spot)
-    else if (spot.kind === 'drink') task = this.stock.water >= DRINK.water ? this.spotTask(a, spot, 'drink', 0.12, true) : null
+    else if (spot.kind === 'drink') task = this.available.water >= DRINK.water ? this.spotTask(a, spot, 'drink', 0.12, true) : null
     else if (spot.kind === 'sleep') task = this.spotTask(a, spot, 'sleep', 1, true)
     else if (spot.kind === 'dine') task = this.spotTask(a, spot, 'sit', 1, true)
     else if (spot.kind === 'relax') task = this.spotTask(a, spot, 'relax', 1.5, true)
