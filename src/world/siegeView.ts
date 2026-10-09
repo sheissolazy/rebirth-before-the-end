@@ -131,25 +131,32 @@ export class SiegeView {
     this.npcs.set('neighbor', npcs[0])
     this.npcs.set('stranger', npcs[1])
     this.npcs.set('jiangye', npcs[2])
-    this.templates = gl.map((g) => {
-      g.scene.traverse((o) => {
+    // 丧尸：两个专门捏的，再加上老太太、年轻男人的丧尸版（复制一份材质，不影响正常来访的人）
+    const zombify = (root: THREE.Object3D, copy: boolean) => {
+      root.traverse((o) => {
         const m = o as THREE.Mesh
         if (!m.isMesh) return
         m.castShadow = true
         m.frustumCulled = false
-        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
-          const std = mat as THREE.MeshStandardMaterial
+        const fix = (mat: THREE.Material) => {
+          const std = (copy ? mat.clone() : mat) as THREE.MeshStandardMaterial
           const n = std.name
-          if (/eyebrow|eyelash|short|long|hair/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; continue }
+          if (/eyebrow|eyelash|short|long|hair|bob|ponytail/.test(n)) { std.alphaTest = 0.5; std.transparent = false; std.side = THREE.DoubleSide; return std }
           std.transparent = false
-          if (n.endsWith('.body')) std.color.set('#9aab8c')
+          if (n.endsWith('.body')) { std.color.set('#9aab8c'); bloody(std, 0.5) }
           else if (n.endsWith('low-poly')) std.color.set('#e8e2b8')
           else { std.color.set('#8a7f6f'); bloody(std) }
-          if (n.endsWith('.body')) bloody(std, 0.5)
+          return std
         }
+        m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material)
       })
-      return g.scene
-    })
+      return root
+    }
+    this.templates = [
+      ...gl.map((g) => zombify(g.scene, false)),
+      zombify(cloneSkinned(npcs[0]), true),
+      zombify(cloneSkinned(npcs[1]), true),
+    ]
   }
 
   /** 加载完先把丧尸和特效的着色器编译好，第一只丧尸出现时就不会卡一下。
