@@ -464,3 +464,42 @@ export class StockView {
   }
 }
 
+/** 农村的土灶：砖砌的灶台、一口大铁锅、锅盖、灶门里一点火光、一根烟囱顺着墙上去（贴北墙放，z 朝屋里） */
+export function woodStove(mats?: { textured: (role: string) => THREE.Material | null } | null): THREE.Group {
+  const g = new THREE.Group()
+  const brick = mats?.textured('stone') ?? new THREE.MeshStandardMaterial({ color: '#a8735a', roughness: 0.95 })
+  const plaster = new THREE.MeshStandardMaterial({ color: '#e6dccb', roughness: 0.95 })
+  const iron = new THREE.MeshStandardMaterial({ color: '#2b2b2d', roughness: 0.55, metalness: 0.6 })
+  const wood = new THREE.MeshStandardMaterial({ color: '#8a6440', roughness: 0.8 })
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.78, 0.7), brick)
+  body.position.y = 0.39
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.06, 0.76), plaster)
+  top.position.y = 0.81
+  // 大铁锅（半个球，嵌在灶面里）和木锅盖
+  const wok = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), iron)
+  wok.position.set(-0.22, 0.86, 0.02)
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.05, 16), wood)
+  lid.position.set(-0.22, 0.88, 0.02)
+  const knob = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.03), wood)
+  knob.position.set(-0.22, 0.92, 0.02)
+  // 灶门：黑洞洞的口子，里面一点橘红的火
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.24, 0.02), new THREE.MeshStandardMaterial({ color: '#1a1210', emissive: '#c2491b', emissiveIntensity: 0.6 }))
+  mouth.position.set(-0.22, 0.22, 0.36)
+  // 小锅（烧水的）
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.16, 14), iron)
+  pot.position.set(0.35, 0.92, 0.0)
+  // 烟囱：灶后面一根方管，顺着北墙一直到屋顶
+  const flue = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, 0.22), brick)
+  flue.position.set(0.45, 1.75, -0.22)
+  // 灶边一小捆柴
+  for (let i = 0; i < 5; i++) {
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.6, 6), wood)
+    stick.rotation.z = Math.PI / 2
+    stick.position.set(0.95, 0.05 + (i % 2) * 0.07, -0.15 + i * 0.07)
+    g.add(stick)
+  }
+  g.add(body, top, wok, lid, knob, mouth, pot, flue)
+  g.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true } })
+  return g
+}
+

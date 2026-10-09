@@ -9,7 +9,7 @@ import {
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
-import { clothesline, decorateHouse, parchmentMap, couplets, StockView } from './decor'
+import { clothesline, decorateHouse, parchmentMap, couplets, StockView, woodStove } from './decor'
 import { VanView, buildVan, driveStep, vanPose, vehicleBlocker, type DriveState } from './van'
 import { Cat } from './cat'
 import {
@@ -1242,10 +1242,13 @@ export class World {
         o.parent?.add(placeModel(kit, crate++ % 2 ? 'wooden_crate_02' : 'wooden_crate_01', o.position.x, y, o.position.z, crate * 37))
         doomed.push(o)
       } else if (piece === 'counter') {
+        // 乡下的厨房：左边碗柜，右边一口砖砌的土灶（大铁锅、烟囱顺着墙上去），灶台上一把老水壶
+        const stove = woodStove(this.pmats)
+        stove.position.set(o.position.x + 0.55, y, o.position.z)
         o.parent?.add(
           placeModel(kit, 'painted_wooden_cabinet', o.position.x - 0.7, y, o.position.z, 0),
-          placeModel(kit, 'electric_stove', o.position.x + 0.45, y, o.position.z, 0),
-          placeModel(kit, 'vintage_electric_kettle', o.position.x + 0.5, y + 0.86, o.position.z - 0.05, 30, 0.8),
+          stove,
+          placeModel(kit, 'vintage_electric_kettle', o.position.x - 0.35, y + 0.86, o.position.z - 0.05, 30, 0.8),
         )
         doomed.push(o)
       } else if (piece === 'bed') {
