@@ -55,6 +55,10 @@ export interface WorldSave {
   inviteDay?: number
   /** 阳台机枪 */
   mg?: boolean
+  /** 当天的上限（逗小鸡、跑步机、同一件互动）：读档后不重置 */
+  henJoy?: { day: number; n: number }
+  runGain?: Record<string, { day: number; got: number }>
+  interactions?: Record<string, { day: number; n: number }>
   /** 今天的菜 */
   menu?: string
   invited?: { id: string; at: number } | null
@@ -134,6 +138,9 @@ export function snapshot(life: Household): WorldSave {
     phoneReminded: life.phoneReminded,
     inviteDay: life.inviteDay,
     mg: life.mg,
+    henJoy: { ...life.henJoy },
+    runGain: Object.fromEntries(life.runGain),
+    interactions: Object.fromEntries(life.interactions),
     menu: life.menu,
     invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),
@@ -211,6 +218,9 @@ export function restore(life: Household, s: WorldSave): void {
   life.phoneReminded = s.phoneReminded ?? -1
   life.inviteDay = s.inviteDay ?? -1
   life.mg = !!s.mg
+  life.henJoy = s.henJoy ? { ...s.henJoy } : { day: -1, n: 0 }
+  life.runGain = new Map(Object.entries(s.runGain ?? {}))
+  life.interactions = new Map(Object.entries(s.interactions ?? {}))
   life.menu = s.menu ?? 'rice'
   // 请的人在门口时存的档：读档后马上再来一次
   life.invited = s.invited ? { id: s.invited.id, at: Number.isFinite(s.invited.at) && s.invited.at !== null ? s.invited.at : life.absHour } : null

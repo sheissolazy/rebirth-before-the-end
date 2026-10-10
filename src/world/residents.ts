@@ -2231,7 +2231,7 @@ export class Household {
   }
 
   /** 今天在跑步机上已经练出了多少体能（一天最多涨 4，越跑越难涨） */
-  private runGain = new Map<string, { day: number; got: number }>()
+  runGain = new Map<string, { day: number; got: number }>()
 
   /** 跑步：每跑一小时体能 +6（当天越往后越少），精力、水掉得比干活还快 */
   private runTick(a: Actor, hours: number): void {
@@ -2619,7 +2619,7 @@ export class Household {
   }
 
   /** 今天谁对谁做过几次什么（"妈妈>爸爸:hug" → 次数），效果递减用 */
-  private interactions = new Map<string, { day: number; n: number }>()
+  interactions = new Map<string, { day: number; n: number }>()
 
   /** 点人物的互动：a 走到 b 身边去做 kind */
   interact(a: Actor, b: Actor, kind: InteractKind): 'ok' | 'busy' | 'asleep' | 'away' | 'fight' | 'far' {
