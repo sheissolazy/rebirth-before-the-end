@@ -310,7 +310,8 @@ export function scatter(kit: ParadiseKit, slug: string, total: number, sample: (
       }
       const im = new THREE.InstancedMesh(part.geo, part.mat, mats.length)
       mats.forEach((mm, k) => im.setMatrixAt(k, mm))
-      im.castShadow = true
+      // 草、小花、蕨、石头上的苔藓这些贴地的小东西不投影子：影子小得看不见，却占了影子图一大半的三角形
+      im.castShadow = slug === 'shrub_sorrel_01'
       im.receiveShadow = true
       g.add(im)
     }

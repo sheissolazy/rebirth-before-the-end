@@ -134,6 +134,8 @@ export interface Hud {
   sleepSkip: boolean
   /** 阳台机枪架好了没有 */
   mg: boolean
+  /** 调试：帧率（没打开是 null） */
+  fps: { n: number; dpr: number } | null
   /** 地雷：埋过没有、还剩几颗 */
   mines: { laid: boolean; left: number; cost: [number, number] }
   light: boolean
@@ -297,6 +299,23 @@ const TMP_TIP = new THREE.Vector3()
 type ToastKey = 'world.toast.mine' | 'world.space.grainOnly' | `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
+/** 中间亮、往外慢慢变暗的圆（探照灯照在地上的那一圈） */
+let glowTex: THREE.Texture | null = null
+function glowTexture(): THREE.Texture | null {
+  if (glowTex || typeof document === 'undefined') return glowTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const g = c.getContext('2d')!
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32)
+  grd.addColorStop(0, 'rgba(255,255,255,1)')
+  grd.addColorStop(0.6, 'rgba(255,255,255,0.5)')
+  grd.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = grd
+  g.fillRect(0, 0, 64, 64)
+  glowTex = new THREE.CanvasTexture(c)
+  return glowTex
+}
+
 const HEAT_TINT = new THREE.Color('#f3c98a')
 const HEAT_SUN = new THREE.Color('#ffd27a')
 const COLD_TINT = new THREE.Color('#dde7f1')
@@ -306,7 +325,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0, cost: [3000, 3] }, light: false, temp: { out: 20, in: 20, ac: false, stove: false },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, fps: null, mg: false, mines: { laid: false, left: 0, cost: [3000, 3] }, light: false, temp: { out: 20, in: 20, ac: false, stove: false },
 }
 
 export class World {
@@ -502,8 +521,11 @@ export class World {
     this.style = style
     this.navs = navFloors(style)
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // 视网膜屏按 1.5 倍画（2 倍要画四倍于普通屏的像素，画面几乎看不出区别，卡很多）
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     this.renderer.shadowMap.enabled = true
+    // 影子每帧只画一次：默认每次 render 都重画，江面倒影那一遍会把整张影子图再画一遍
+    this.renderer.shadowMap.autoUpdate = false
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     // 江面的透射要把整个场景再画一遍：用一半分辨率画，看不出区别，省不少
     this.renderer.transmissionResolutionScale = 0.5
@@ -1602,8 +1624,8 @@ export class World {
     // 屏幕：贴在电视屏幕前面一点（真模型的屏幕偏上、外壳更深）
     const scr = new TvScreen(real ? 0.34 : 0.36, real ? 0.26 : 0.28)
     scr.mesh.position.set(TV.x + (real ? -0.012 : -0.03), TV_STAND_H + (real ? 0.31 : 0.21), TV.z + (real ? 0.226 : 0.202))
-    scr.light.position.set(TV.x, TV_STAND_H + 0.35, TV.z + 0.7)
-    this.scene.add(scr.mesh, scr.light)
+    // 屏幕本身发光就够了，不再加一盏真灯（场景里每多一盏灯，每个像素都要多算一遍）
+    this.scene.add(scr.mesh)
     this.tvScreen = scr
     // 火炉：炉门朝西南（对着镜头和两个小板凳）
     const a = THREE.MathUtils.degToRad(-45)
@@ -1679,9 +1701,13 @@ export class World {
     lamp.position.set(9.4, FLOOR_H + 0.9, 7.75)
     lamp.visible = false
     this.floor2.add(lamp)
-    this.searchlight = { root: lamp, head, beamMat, light: new THREE.SpotLight('#fff1cc', 0, 18, 0.32, 0.5, 1.2) }
-    this.searchlight.light.position.set(9.4, FLOOR_H + 1.45, 7.75)
-    this.scene.add(this.searchlight.light, this.searchlight.light.target)
+    // 地上那一圈光：一张发光的圆形贴片（不用真灯，省性能）
+    const spotMat = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, map: glowTexture() })
+    const spot = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), spotMat)
+    spot.rotation.x = -Math.PI / 2
+    spot.userData.noClick = true
+    this.scene.add(spot)
+    this.searchlight = { root: lamp, head, beamMat, spot, spotMat }
     this.appliances.generator.push(gen)
     this.appliances.aircon.push(out, inner)
   }
@@ -1693,7 +1719,7 @@ export class World {
   private readonly mineObjs: THREE.Object3D[] = []
   /** 厨房柜子上的鸡蛋篮、青菜篮 */
   private readonly baskets = new KitchenBaskets()
-  private searchlight: { root: THREE.Object3D; head: THREE.Object3D; beamMat: THREE.MeshBasicMaterial; light: THREE.SpotLight } | null = null
+  private searchlight: { root: THREE.Object3D; head: THREE.Object3D; beamMat: THREE.MeshBasicMaterial; spot: THREE.Mesh; spotMat: THREE.MeshBasicMaterial } | null = null
 
   private updateHearth(dt: number): void {
     const l = this.life
@@ -1706,8 +1732,8 @@ export class World {
       const sweep = Math.sin(this.elapsed * 0.6) * 0.75
       const tx = 6 + Math.sin(sweep) * 6
       const tz = 11.2
-      sl.light.target.position.set(tx, 0, tz)
-      sl.light.intensity = on ? 40 : 0
+      sl.spot.position.set(tx, 0.04, tz)
+      sl.spotMat.opacity = on ? 0.55 : 0
       sl.beamMat.opacity = on ? 0.08 : 0
       sl.head.rotation.set(Math.atan2(FLOOR_H + 1.45, Math.hypot(tx - 9.4, tz - 7.75)) * 0.9, Math.atan2(tx - 9.4, tz - 7.75), 0, 'YXZ')
     }
@@ -2101,15 +2127,27 @@ export class World {
   private loop = (): void => {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
+    // 这一帧的影子图画一次（主画面那一遍画，江面倒影那一遍沿用）
+    this.renderer.shadowMap.needsUpdate = true
+
     const frame = this.clock.getDelta()
     const raw = Math.min(frame, 0.25)
+    if (this.fpsOn) {
+      this.fpsFrames++
+      this.fpsT += frame
+      if (this.fpsT >= 1) {
+        this.setHud({ fps: { n: Math.round(this.fpsFrames / this.fpsT), dpr: this.renderer.getPixelRatio() } })
+        this.fpsFrames = 0
+        this.fpsT = 0
+      }
+    }
     // 连续 4 秒低于约 28 帧（又不是在后台被暂停）：分辨率降一档，最多降两档
     if (frame > 0.036 && frame < 0.5 && !this.hud.loading) this.slowT += frame
     else this.slowT = Math.max(0, this.slowT - frame * 0.5)
     if (this.slowT > 4 && this.dprSteps < 2) {
       this.slowT = 0
       this.dprSteps++
-      this.renderer.setPixelRatio(Math.max(0.75, this.renderer.getPixelRatio() * 0.7))
+      this.renderer.setPixelRatio(Math.max(0.8, this.renderer.getPixelRatio() * 0.7))
       this.fit()
     }
     const dt = Math.min(raw, 0.05)
@@ -3637,6 +3675,17 @@ export class World {
   }
 
   /** 原型调试：普通 / 困难切换（切到困难时子弹减半） */
+  /** 原型调试：屏幕上方显示帧率和画面分辨率倍数 */
+  private fpsOn = false
+  private fpsFrames = 0
+  private fpsT = 0
+  toggleFps(): void {
+    this.fpsOn = !this.fpsOn
+    this.fpsFrames = 0
+    this.fpsT = 0
+    this.setHud({ fps: this.fpsOn ? { n: 0, dpr: this.renderer.getPixelRatio() } : null })
+  }
+
   toggleHard(): void {
     // 打仗的时候不能切（这一场的丧尸已经按原来的难度来了）
     if (this.life.siege && !this.life.siege.done) return

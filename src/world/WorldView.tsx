@@ -587,6 +587,12 @@ export default function WorldView() {
       </div>
 
 
+      {hud.fps && (
+        <div className="pointer-events-none fixed left-1/2 top-2 z-30 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-[12px] font-semibold tabular-nums text-white"
+          style={{ color: hud.fps.n >= 50 ? '#9be37a' : hud.fps.n >= 30 ? '#f0cf5a' : '#ff8f7a' }}>
+          {hud.fps.n} 帧/秒 · 画面 {hud.fps.dpr.toFixed(2)}×
+        </div>
+      )}
       {hud.sleepSkip && !hud.siege && (
         <div className="pointer-events-none absolute left-1/2 top-14 -translate-x-1/2 rounded-full bg-[#1d1915]/85 px-4 py-1.5 text-[13px] text-[#cfd0f0] ring-1 ring-[#8a8fd6]/40" style={{ fontFamily: SERIF }}>
           {t('world.sleepSkip')}
@@ -670,6 +676,7 @@ export default function WorldView() {
           <button onClick={() => world.current?.debugVisitor('scout')} className={DBG}>{t('world.debug.scout')}</button>
           <button onClick={() => world.current?.debugVisitor('crow_tax')} className={DBG}>{t('world.debug.crow')}</button>
           <button onClick={() => world.current?.togglePeople()} className={DBG}>{t('world.debug.people')}</button>
+          <button onClick={() => world.current?.toggleFps()} className={DBG}>{hud.fps ? '📊 关掉帧率显示' : '📊 显示帧率'}</button>
           <button onClick={() => world.current?.toggleHard()} className={DBG}>{t(hud.hard ? 'world.debug.hardOn' : 'world.debug.hardOff')}</button>
           <button onClick={() => world.current?.debugDie()} className={DBG}>{t('world.debug.die')}</button>
           <button onClick={() => { if (confirm(t('world.debug.restartAsk'))) world.current?.restart() }} className={`${DBG} text-[#ff8f7a]`}>{t('world.debug.restart')}</button>
