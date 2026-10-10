@@ -1,7 +1,7 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, wallPieces, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -21,14 +21,33 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
-import { capacity, cartGives, cartTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
+import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
 import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
 import { lt, t, t as t_, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build'
+
+/** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
+export type BuildId = 'trap' | 'wall' | 'garden'
+export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden: 2 }
+/** 价钱：末日前 [元]，末日后 [晶核] */
+export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2] }
+
+/** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
+export type InteractKind = 'chat' | 'comfort' | 'hug' | 'joke' | 'tea'
+export const INTERACTIONS: { id: InteractKind; hours: number; self: number; other: number; low?: number; water?: number }[] = [
+  { id: 'chat', hours: 0.35, self: 5, other: 8 },
+  // 安慰：对方心情不好（低于 40）时多加很多
+  { id: 'comfort', hours: 0.3, self: 2, other: 6, low: 16 },
+  { id: 'hug', hours: 0.12, self: 6, other: 10 },
+  // 讲笑话：看运气，0~12
+  { id: 'joke', hours: 0.15, self: 4, other: 6 },
+  // 一起喝杯茶：时间长一点、用掉一点水
+  { id: 'tea', hours: 0.6, self: 10, other: 12, water: 0.2 },
+]
 
 interface Task {
   kind: TaskKind
@@ -48,6 +67,10 @@ interface Task {
   waitT?: number
   /** 采集：采哪一处（FORAGE 的 id） */
   forage?: string
+  /** 互动：做哪一件（跟 with 那个人） */
+  act?: InteractKind
+  /** 砌墙：正在砌第几段 */
+  piece?: number
 }
 
 
@@ -100,7 +123,7 @@ export class Actor extends Walker {
   /** 住进来的人的特质（文字版 content/survivors.ts 里的 id） */
   trait = ''
   /** 离家出走：什么时候有结果；lost = 再也没回来 */
-  runaway: { back: number } | null = null
+  runaway: { back: number; persuaded?: boolean } | null = null
   lost = false
   /** 死了（本世永久；lost 也会是 true，各处排除 lost 的逻辑都不用改） */
   dead = false
@@ -468,6 +491,7 @@ export class Household {
     this.chatTick(hours)
     this.visitorTick()
     this.courierTick(hours)
+    this.orderTick()
     for (const a of this.actors) {
       if (a.dead) continue
       a.needs = decayNeeds(a.needs, hours, this.activity(a))
@@ -629,14 +653,15 @@ export class Household {
   }
 
   /** 男主送东西上门。有 3D 就真的走到铁门外放下再走，日志等放下了再记；没有（测试、卡通版没模型）就直接记 */
-  private sendCourier(who: CourierId, key: string, vars: Record<string, string | number>): void {
-    if (!this.spawnCourier || this.courier) { this.note(key, vars); return }
+  private sendCourier(who: CourierId, key: string, vars: Record<string, string | number>): Courier | null {
+    if (!this.spawnCourier || this.courier) { this.note(key, vars); return null }
     const east = this.rand() < 0.5
     const at = { x: east ? 30 : -20, z: 18 }
     const c = this.spawnCourier(who, at)
     c.pending = { key, vars }
     c.setPath(route(this.navs, { ...at, floor: 0 }, { x: 4.6 + (this.rand() - 0.5) * 0.8, z: 14.3, floor: 0 }) ?? [])
     this.courier = c
+    return c
   }
 
   private courierTick(hours: number): void {
@@ -648,6 +673,7 @@ export class Household {
       c.face(0, -1, 1)
       if (c.pending) this.note(c.pending.key, c.pending.vars)
       c.pending = null
+      if (c.order) { this.applyGives(cartGives(ONLINE_SHOP, c.order.cart)); c.order = null }
       this.onCourier?.(c, 'drop')
     } else if (c.phase === 'drop' && (c.wait -= hours) <= 0) {
       c.phase = 'leave'
@@ -657,6 +683,112 @@ export class Household {
       this.courier = null
       this.onCourier?.(c, 'gone')
     }
+  }
+
+  // --- 手机：网购、打电话 -----------------------------------------------------
+
+  /** 网购的单子：送到的时刻（游戏小时）到了，快递小哥就送到铁门外 */
+  orders: { id: number; cart: Cart; total: number; arrive: number }[] = []
+  private orderSeq = 0
+  /** 打过电话：联系人 → 哪天（一天一次） */
+  calls: Record<string, number> = {}
+  /** "今天是最后一天能网购"提醒过的那天 */
+  phoneReminded = -1
+  /** 要在界面上弹一句提醒（World 接成小字条） */
+  onRemind: ((key: UiKey) => void) | null = null
+
+  /** 末日后没信号；末日前一天快递停运（第二天就是末日，送不到了） */
+  orderState(): 'ok' | 'closed' | 'nosignal' {
+    if (this.clock.day >= PROLOGUE_DAYS) return 'nosignal'
+    if (this.clock.day >= PROLOGUE_DAYS - 1) return 'closed'
+    return 'ok'
+  }
+
+  placeOrder(cart: Cart): 'ok' | 'money' | 'empty' | 'closed' | 'nosignal' | 'stock' {
+    const st = this.orderState()
+    if (st !== 'ok') return st
+    const total = orderTotal(cart, this.clock.day)
+    if (total <= 0) return 'empty'
+    if (ONLINE_SHOP.items.some((it) => (cart[it.id] ?? 0) > it.stock)) return 'stock'
+    if (total > this.money) return 'money'
+    this.money -= total
+    const arrive = (this.clock.day + 1) * 24 + DELIVERY_HOUR + this.rand() * 0.8
+    this.orders.push({ id: ++this.orderSeq, cart: { ...cart }, total, arrive })
+    this.note('world.phone.ordered', { what: cartLabel(ONLINE_SHOP, cart), n: total })
+    return 'ok'
+  }
+
+  private orderTick(): void {
+    // 最后一天能网购：早上提醒一次（明天下单就赶不上了）
+    if (this.clock.day === PROLOGUE_DAYS - 2 && this.clock.hour >= 8 && this.phoneReminded !== this.clock.day) {
+      this.phoneReminded = this.clock.day
+      this.note('world.phone.lastDay')
+      this.onRemind?.('world.phone.lastDayToast')
+    }
+    const due = this.orders.find((o) => this.absHour >= o.arrive)
+    if (!due || (this.siege && !this.siege.done)) return
+    // 铁门外有人在送东西：等他走了再来
+    if (this.spawnCourier && this.courier) return
+    this.orders = this.orders.filter((o) => o !== due)
+    const what = cartLabel(ONLINE_SHOP, due.cart)
+    const c = this.sendCourier('express', 'world.phone.delivered', { what })
+    if (c) c.order = { cart: due.cart }
+    else this.applyGives(cartGives(ONLINE_SHOP, due.cart))
+  }
+
+  /** 手机通讯录：江野、王阿姨一开始就有；别的男主见过才有；出门在外、离家出走的家人 */
+  contacts(): { id: string; name: string; icon: string; status: string; can: 'ok' | 'done' | 'nosignal' | 'home' }[] {
+    const signal = this.clock.day < PROLOGUE_DAYS
+    const can = (id: string) => (!signal ? 'nosignal' : this.calls[id] === this.clock.day ? 'done' : 'ok') as 'ok' | 'done' | 'nosignal'
+    const out: ReturnType<Household['contacts']> = []
+    for (const a of this.actors.slice(1)) {
+      if (a.dead || a.lost) continue
+      if (a.runaway) out.push({ id: `fam:${a.name}`, name: a.name, icon: '💔', status: t_('world.phone.st.runaway'), can: can(`fam:${a.name}`) })
+      else if (this.onTrip(a)) {
+        const trip = this.trips.find((x) => x.members.includes(a))!
+        out.push({ id: `fam:${a.name}`, name: a.name, icon: '🚶', status: t_('world.phone.st.trip', { h: Math.max(0, trip.back - this.absHour).toFixed(1) }), can: can(`fam:${a.name}`) })
+      }
+    }
+    const lead = (id: string, name: string, icon: string, known: boolean) => {
+      if (!known) return
+      const home = this.actors.some((a) => a.model === id && !a.dead && !a.lost)
+      out.push({ id, name, icon, status: t_(home ? 'world.phone.st.home' : `world.phone.st.${id}` as UiKey), can: home ? 'home' : can(id) })
+    }
+    lead('jiangye', '江野', '🔥', true)
+    lead('neighbor', '王阿姨', '👵', true)
+    lead('shenyan', '沈砚', '🩺', this.seen.shenyan_meet !== undefined)
+    lead('guchen', '顾沉', '⚡', this.seen.guchen_visit !== undefined)
+    lead('xielin', '谢临', '⏳', this.seen.xielin_meet !== undefined)
+    return out
+  }
+
+  /** 打电话：一天一次。女主心情变好；男主加好感；出门的家人报个平安；离家出走的人有一半机会劝得回来 */
+  call(id: string): { r: 'ok' | 'done' | 'nosignal' | 'home'; line?: string } {
+    const c = this.contacts().find((x) => x.id === id)
+    if (!c) return { r: 'nosignal' }
+    if (c.can !== 'ok') return { r: c.can }
+    this.calls[id] = this.clock.day
+    const hero = this.actors[0]
+    const cheer = (v: number) => { hero.needs = { ...hero.needs, mood: Math.min(100, hero.needs.mood + v) } }
+    const n = Math.floor(this.rand() * 3)
+    if (id.startsWith('fam:')) {
+      const a = this.actors.find((x) => x.name === id.slice(4))!
+      if (a.runaway) {
+        if (this.rand() < 0.5 && a.runaway.back > this.absHour) {
+          a.runaway.persuaded = true
+          a.runaway.back = Math.min(a.runaway.back, this.absHour + 2)
+          cheer(10)
+          return { r: 'ok', line: t_('world.phone.persuaded', { who: a.name }) }
+        }
+        return { r: 'ok', line: t_('world.phone.noAnswer', { who: a.name }) }
+      }
+      cheer(5)
+      a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 5) }
+      return { r: 'ok', line: t_(`world.phone.line.trip${n}` as UiKey) }
+    }
+    cheer(6)
+    if (id in this.affection) this.affection[id] = Math.min(100, this.affection[id] + 4)
+    return { r: 'ok', line: t_(`world.phone.line.${id}${n}` as UiKey) }
   }
 
   /** 最多住 5 个人 */
@@ -1019,7 +1151,7 @@ export class Household {
 
   /** 一起坐着歇、一起吃饭的人会聊起来：心情慢慢变好 */
   private chatTick(hours: number): void {
-    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company') && !a.away
+    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company' || a.task.kind === 'interact') && !a.away
     const calm = !this.siege || this.siege.done
     for (const a of this.actors) {
       a.calm = calm
@@ -1179,6 +1311,17 @@ export class Household {
       if (!a.away && !a.path.length) a.away = true
       if (a.away && this.absHour >= r.back) {
         a.runaway = null
+        // 打电话劝回来了：自己走回家（没有奇遇，心情回到一般）
+        if (r.persuaded) {
+          a.away = false
+          a.lowMood = 0
+          a.needs = { ...a.needs, mood: 55 }
+          a.root.position.set(EXIT.x, 0, EXIT.z)
+          a.floor = 0
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+          this.note('world.phone.cameBack', { who: a.name })
+          continue
+        }
         if (this.rand() < 0.2) {
           a.away = false
           a.lowMood = 0
@@ -1460,7 +1603,11 @@ export class Household {
 
   /** 买回来的东西入库 */
   private unloadCargo(t: Trip): string[] {
-    const g = t.cargo ?? {}
+    return this.applyGives(t.cargo ?? {})
+  }
+
+  /** 买回来 / 送到的东西加进家里，返回"大米 3 份"这样的清单 */
+  private applyGives(g: ShopItem['give']): string[] {
     const what: string[] = []
     const add = (k: 'food' | 'water' | 'ammo' | 'medkits' | 'molotovs' | 'fuel' | 'cores', n: number | undefined) => {
       if (!n) return
@@ -1905,6 +2052,118 @@ export class Household {
     return 'ok'
   }
 
+  /** 砌墙时一次站着砌几段 */
+  static readonly WALL_STRETCH = 4
+
+  /** 正在干的工程：done 0~1，worker 是派去干的人（饿了困了走开，过后会自己回来接着干） */
+  project: { id: BuildId; done: number; worker: string } | null = null
+
+  private canWork(a: Actor): boolean {
+    return !this.isOut(a) && !a.dead && a.pose !== 'down' && !(a.task?.kind === 'sleep' && a.task.phase === 'use')
+  }
+
+  /** 点"建设"里的按钮：付钱，派人（选中的人能干就是 TA，不然找家里会修东西的大人）走过去干 */
+  startBuild(id: BuildId, who: Actor): 'ok' | 'money' | 'cores' | 'busy' | 'done' | 'fight' | 'van' | 'nobody' {
+    if (this.siege && !this.siege.done) return 'fight'
+    if (this.project) return 'busy'
+    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.garden.built)) return 'done'
+    const v = this.vanAt
+    if (id === 'garden' && v && v.x > GARDEN.x0 - 2 && v.x < GARDEN.x1 + 2 && v.z > GARDEN.z0 - 1.2 && v.z < GARDEN.z1 + 1.2) return 'van'
+    const worker = this.canWork(who) ? who
+      : this.actors.find((a) => a.handy && this.canWork(a)) ?? this.actors.find((a) => !a.guest && this.canWork(a))
+    if (!worker) return 'nobody'
+    const [money, cores] = BUILD_COST[id]
+    if (this.clock.day < PROLOGUE_DAYS) {
+      if (this.money < money) return 'money'
+      this.money -= money
+    } else {
+      if (this.cores < cores) return 'cores'
+      this.cores -= cores
+    }
+    this.project = { id, done: 0, worker: worker.name }
+    this.note('world.log.buildStart', { who: worker.name, what: t_(`world.build.name.${id}` as UiKey), h: BUILD_WORK[id] })
+    this.sendToBuild(worker)
+    return 'ok'
+  }
+
+  /** 换个人接着干（或者把走开的人叫回来） */
+  continueBuild(who: Actor): 'ok' | 'none' | 'busy' {
+    if (!this.project) return 'none'
+    if (!this.canWork(who) || (this.siege && !this.siege.done)) return 'busy'
+    this.project.worker = who.name
+    this.sendToBuild(who)
+    return (who.task as Task | null)?.kind === 'build' ? 'ok' : 'busy'
+  }
+
+  private sendToBuild(a: Actor): void {
+    const task = this.buildTask(a)
+    if (!task) return
+    task.manual = true
+    this.cancel(a)
+    this.assign(a, task)
+  }
+
+  /** 干活站的地方：钉板在铁门外、菜地在南边、院墙是正在砌的那一段（院子里面、面朝墙；挡着就往里挪一点） */
+  private buildTask(a: Actor): Task | null {
+    const p = this.project
+    if (!p) return null
+    let spot: Spot
+    let piece: number | undefined
+    if (p.id === 'garden') spot = GARDEN_SPOT
+    else if (p.id === 'trap') spot = { kind: 'stroll', x: 3.6 + Math.floor(p.done * 3) * 0.7, z: 13.75, floor: 0, face: 0, pose: 'work' }
+    else {
+      // 一次站在一个地方砌 4 段（4 米），砌完再挪：不然每砌一米都要走一趟，大半天都花在走路上
+      const pieces = wallPieces()
+      piece = Math.floor(Math.min(pieces.length - 1, Math.floor(p.done * pieces.length)) / Household.WALL_STRETCH)
+      const w = pieces[Math.min(pieces.length - 1, piece * Household.WALL_STRETCH + 1)]
+      const nav = this.navs[0]
+      // 朝院子里面的方向（墙的反方向）挪着找一块能站的地方
+      const inX = w.stand.face === 90 ? -1 : w.stand.face === -90 ? 1 : 0
+      const inZ = w.stand.face === 0 ? -1 : w.stand.face === 180 ? 1 : 0
+      let x = w.stand.x
+      let z = w.stand.z
+      for (let k = 0; k < 8 && nav.isBlockedAt(x, z); k++) { x += inX * 0.4 + (k % 2 ? 0.5 : -0.5) * Math.abs(inZ); z += inZ * 0.4 + (k % 2 ? 0.5 : -0.5) * Math.abs(inX) }
+      if (nav.isBlockedAt(x, z)) return null
+      spot = { kind: 'stroll', x, z, floor: 0, face: w.stand.face, pose: 'work' }
+    }
+    void a
+    return { kind: 'build', spot, phase: 'go', hours: 3, manual: true, piece }
+  }
+
+  /** 还能接着干吗：天黑了、下大雨、饿了渴了累了就先歇着 */
+  private canKeepBuilding(a: Actor): boolean {
+    const n = a.needs
+    return !isNight(this.clock.hour) && this.rain <= 0.3 && n.energy >= 20 && n.hunger >= 25 && n.thirst >= 25
+  }
+
+  private buildProgress(a: Actor, t: Task, hours: number): void {
+    const p = this.project
+    if (!p || p.worker !== a.name) { t.hours = 0; return }
+    p.done = Math.min(1, p.done + (hours / BUILD_WORK[p.id]) * (a.handy ? 1.3 : 1))
+    if (p.done >= 1) { this.completeBuild(); t.hours = 0; return }
+    // 砌完这一段：挪到下一段（钉板一样，一块一块挪着铺）
+    if (p.id === 'wall') {
+      const n = wallPieces().length
+      if (Math.floor(Math.min(n - 1, Math.floor(p.done * n)) / Household.WALL_STRETCH) !== t.piece) { t.hours = 0; t.then = () => (this.canKeepBuilding(a) ? this.buildTask(a) : null) }
+    } else if (p.id === 'trap') {
+      const k = Math.floor(p.done * 3)
+      if (t.spot && Math.abs(t.spot.x - (3.6 + k * 0.7)) > 0.01) { t.hours = 0; t.then = () => (this.canKeepBuilding(a) ? this.buildTask(a) : null) }
+    }
+  }
+
+  private completeBuild(): void {
+    const p = this.project!
+    this.project = null
+    if (p.id === 'trap') { this.trap.hp = 100; this.note('world.log.trap') }
+    if (p.id === 'wall') {
+      this.wall = true
+      this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 100)
+      this.note('world.log.wall')
+    }
+    if (p.id === 'garden') { this.garden = { built: true, growth: 0, watered: -1 }; this.note('world.log.gardenBuilt') }
+    this.onRemind?.(`world.build.done.${p.id}` as UiKey)
+  }
+
   buildGarden(): boolean {
     // 车停在那块地上：先挪车
     const v = this.vanAt
@@ -1973,11 +2232,12 @@ export class Household {
     if (t.kind === 'walk' || t.kind === 'guard') return 'idle'
     if (t.kind === 'repair' || t.kind === 'garden') return 'cook'
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
-    if (t.kind === 'company') return 'relax'
+    if (t.kind === 'company' || t.kind === 'interact') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
     if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
     if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'craft') return 'cook'
+    if (t.kind === 'build') return 'cook'
     if (t.kind === 'pump') return 'cook'
     if (t.kind === 'feed') return 'stroll'
     if (t.kind === 'modvan') return 'cook'
@@ -2011,6 +2271,8 @@ export class Household {
     const fixer = a.handy || (a !== this.actors[0] && !a.guest && !this.actors.some((x) => x.handy && !x.away && !x.lost && !x.runaway))
     const handy = fixer && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
     if (handy) task = this.repairTask()
+    // 手上有没干完的工程（之前派给 TA 的）：白天有空就回去接着干
+    if (!task && !night && this.project?.worker === a.name && this.canKeepBuilding(a) && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.buildTask(a)
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
     if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
     // 白天有空：喂鸡捡蛋、去压水井压水（家里水不多的时候）
@@ -2052,11 +2314,16 @@ export class Household {
       && (busy(b) || (b === this.actors[0] && !b.path.length)))
     const b = pool[Math.floor(this.rand() * pool.length)]
     if (!b) return null
+    const spot = this.besideSpot(a, b)
+    return spot && { kind: 'company', spot, phase: 'go', hours: 0.4 + this.rand() * 0.5, manual: false, with: b }
+  }
+
+  /** 站到 b 身边 0.95 米、面朝 TA 的位置：先试从自己这边过去的方向，挡着（墙、桌子、楼梯口）就绕着对方换个方向 */
+  private besideSpot(a: Actor, b: Actor): Spot | null {
     let dx = a.pos.x - b.pos.x
     let dz = a.pos.z - b.pos.z
     const len = Math.hypot(dx, dz)
     if (len < 0.2) { dx = Math.sin(b.root.rotation.y); dz = Math.cos(b.root.rotation.y) } else { dx /= len; dz /= len }
-    // 站在对方身边 0.95 米：先试从自己这边过去的方向，挡着（墙、桌子、楼梯口）就绕着对方换个方向
     const nav = this.navs[b.floor]
     const base = Math.atan2(dx, dz)
     for (const turn of [0, 0.8, -0.8, 1.6, -1.6, 2.6, -2.6]) {
@@ -2066,10 +2333,67 @@ export class Household {
       if (nav.isBlockedAt(x, z) || !nav.clearLine(b.anchor ?? b.pos, { x, z })) continue
       if (this.actors.some((o) => o !== a && o.task?.spot && Math.hypot(o.task.spot.x - x, o.task.spot.z - z) < 0.6)) continue
       const face = THREE.MathUtils.radToDeg(Math.atan2(b.pos.x - x, b.pos.z - z))
-      const spot: Spot = { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
-      return { kind: 'company', spot, phase: 'go', hours: 0.4 + this.rand() * 0.5, manual: false, with: b }
+      return { kind: 'relax', x, z, floor: b.floor, face, pose: 'idle' }
     }
     return null
+  }
+
+  /** 今天谁对谁做过几次什么（"妈妈>爸爸:hug" → 次数），效果递减用 */
+  private interactions = new Map<string, { day: number; n: number }>()
+
+  /** 点人物的互动：a 走到 b 身边去做 kind */
+  interact(a: Actor, b: Actor, kind: InteractKind): 'ok' | 'busy' | 'asleep' | 'away' | 'fight' | 'far' {
+    if (this.siege && !this.siege.done) return 'fight'
+    if (a === b || a.dead || b.dead || this.isOut(a) || this.isOut(b)) return 'away'
+    if (b.task?.kind === 'sleep' && b.task.phase === 'use') return 'asleep'
+    if (a.task?.kind === 'sleep' && a.task.phase === 'use') return 'asleep'
+    if (a.pose === 'down' || b.pose === 'down') return 'busy'
+    const def = INTERACTIONS.find((d) => d.id === kind)!
+    if (def.water && this.available.water < def.water) return 'busy'
+    const spot = this.besideSpot(a, b)
+    if (!spot) return 'far'
+    this.cancel(a)
+    this.assign(a, { kind: 'interact', spot, phase: 'go', hours: def.hours, manual: true, with: b, act: kind })
+    return (a.task as Task | null)?.kind === 'interact' ? 'ok' : 'far'
+  }
+
+  /** 走到了：先开口说一句；对方如果只是闲着，就停下来转过身听 */
+  private beginInteract(a: Actor, t: Task): void {
+    const b = t.with!
+    const n = Math.floor(this.rand() * 3)
+    a.line = { text: t_(`world.act.${t.act}.say${n}` as UiKey, { name: b.name }), hours: 0.2 }
+    const idle = ['idle', 'stroll', 'tidy', 'company', 'pet', 'wash', 'relax']
+    if (!b.task || (!b.task.manual && idle.includes(b.task.kind) && !(b.task.kind === 'relax' && b.task.phase === 'use' && b.pose === 'sit'))) {
+      if (b.task) this.release(b)
+      b.path = []
+      b.task = { kind: 'company', spot: null, phase: 'use', hours: t.hours + 0.08, manual: false, with: a }
+      b.pose = 'idle'
+    }
+  }
+
+  /** 做完了：两个人加心情（对方回一句）；男主加好感；对方心情很差时记一笔日记 */
+  private endInteract(a: Actor, t: Task): void {
+    const b = t.with!
+    const def = INTERACTIONS.find((d) => d.id === t.act)!
+    const key = `${a.name}>${b.name}:${def.id}`
+    const log = this.interactions.get(key)
+    const times = log && log.day === this.clock.day ? log.n : 0
+    this.interactions.set(key, { day: this.clock.day, n: times + 1 })
+    const k = 1 / (1 + times)
+    const before = b.needs.mood
+    let other = def.other + (def.low && before < 40 ? def.low : 0)
+    if (def.id === 'joke') other = Math.floor(this.rand() * 13)
+    if (def.water) this.take('water', def.water)
+    const add = (x: Actor, v: number) => { x.needs = { ...x.needs, mood: Math.min(100, x.needs.mood + v * k) } }
+    add(a, def.self)
+    add(b, other)
+    // 低落的时间也往回拉一点（陪着说说话，离家出走的念头就淡了）
+    if (b.lowMood > 0) b.lowMood = Math.max(0, b.lowMood - 6 * k)
+    if (a === this.actors[0] && b.model in this.affection) this.affection[b.model] = Math.min(100, this.affection[b.model] + 3 * k)
+    const n = Math.floor(this.rand() * 3)
+    const flat = def.id === 'joke' && other < 3
+    b.line = { text: t_(`world.act.${def.id}.${flat ? 'flat' : 'reply'}${flat ? '' : n}` as UiKey, { name: a.name }), hours: 0.22 }
+    if (before < 40) this.note('world.log.cheered', { who: a.name, whom: b.name })
   }
 
   /** 收拾屋子：在屋里随便找个地方擦擦、扫扫 */
@@ -2279,6 +2603,9 @@ export class Household {
         if (this.saidNight !== night || this.rand() < 0.35) this.say(a, 'night')
         this.saidNight = night
       }
+      if (t.kind === 'interact' && t.with) this.beginInteract(a, t)
+      // 走到工地天已经黑了（或者累了）：今天先不干了
+      if (t.kind === 'build' && !this.canKeepBuilding(a)) { this.finish(a); return }
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
@@ -2289,8 +2616,9 @@ export class Household {
     }
     t.hours -= hours
     // 陪聊：一直面朝对方
-    if (t.kind === 'company' && t.with) a.face(t.with.pos.x - a.pos.x, t.with.pos.z - a.pos.z, 0.05)
+    if ((t.kind === 'company' || t.kind === 'interact') && t.with) a.face(t.with.pos.x - a.pos.x, t.with.pos.z - a.pos.z, 0.05)
     if (t.kind === 'greet') this.greetTick(a, t, hours)
+    if (t.kind === 'build') this.buildProgress(a, t, hours)
     if (t.kind === 'repair' && t.layer) {
       const max = this.maxOf(t.layer)
       this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
@@ -2305,9 +2633,9 @@ export class Household {
     if (t.kind === 'sleep') return (t.hours <= 0 && shouldWake(n, this.clock)) || n.hunger < 6 || n.thirst < 6
     if (t.hours <= 0) return true
     // 陪着说话的人走开了（或者不歇了），就散了
-    if (t.kind === 'company' && t.with) {
+    if ((t.kind === 'company' || t.kind === 'interact') && t.with) {
       const b = t.with
-      if (b.away || b.dead || b.floor !== a.floor || Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) > 2.2) return true
+      if (b.away || b.dead || b.floor !== a.floor || Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) > 2.4) return true
     }
     // 放松、溜达、发呆、陪聊、收拾时，饿了渴了困了就不干了
     // 车开走了就不擦了、不改了
@@ -2315,6 +2643,8 @@ export class Household {
     if (t.kind === 'modvan' && this.vanArmor) return true
     // 晾到一半下雨了：不晾了
     if (t.kind === 'hang' && this.rain > 0.1) return true
+    // 干工程：天黑了、下大雨、饿了渴了累了就先歇着（白天有空会自己回来接着干）
+    if (t.kind === 'build' && !this.canKeepBuilding(a)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
@@ -2338,6 +2668,7 @@ export class Household {
 
   private finish(a: Actor): void {
     const t = a.task!
+    if (t.kind === 'interact' && t.phase === 'use' && t.hours <= 0 && t.with) this.endInteract(a, t)
     const others = this.actors.some((b) => b !== a && !this.isOut(b) && !b.dead)
     // 饭做好了喊一声；早上醒了打个招呼
     if (t.kind === 'cook' && isMealTime(this.clock.hour) && others) this.say(a, 'dinner')

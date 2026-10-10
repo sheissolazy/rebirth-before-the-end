@@ -181,7 +181,8 @@ export class Visitor extends StreetWalker {
 }
 
 /** 男主送东西：走到铁门外放下就走，不敲门、不打扰（顾沉放一箱物资，沈砚放药，谢临塞纸条） */
-export type CourierId = 'guchen' | 'shenyan' | 'xielin'
+/** 送东西上门的人：三位男主，或者网购的快递小哥 */
+export type CourierId = 'guchen' | 'shenyan' | 'xielin' | 'express'
 export class Courier extends StreetWalker {
   readonly who: CourierId
   phase: 'walk' | 'drop' | 'leave' = 'walk'
@@ -189,6 +190,8 @@ export class Courier extends StreetWalker {
   wait = 0
   /** 放下东西时才记进日志（路上就记的话，人还没到字先出来了） */
   pending: { key: string; vars: Record<string, string | number> } | null = null
+  /** 快递：放下时把这一单的东西加进家里 */
+  order: { cart: Record<string, number> } | null = null
 
   constructor(who: CourierId, at: Pt, model?: THREE.Object3D) {
     super(at, model, false)

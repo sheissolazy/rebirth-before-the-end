@@ -44,6 +44,12 @@ export interface WorldSave {
   spikes?: number[]
   pump?: [number, number]
   fedDay?: number
+  /** 网购在路上的单子、今天给谁打过电话、最后一天提醒过没有 */
+  orders?: { id: number; cart: Record<string, number>; total: number; arrive: number }[]
+  calls?: Record<string, number>
+  phoneReminded?: number
+  /** 干到一半的工程 */
+  project?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string } | null
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -110,6 +116,11 @@ export function snapshot(life: Household): WorldSave {
     spikes: life.spikes.map((r) => r.hits),
     pump: [life.pumpDay, life.pumpCount],
     fedDay: life.fedDay,
+    // 快递小哥还在路上（东西放下时才到账）：这一单存回去，读档后重新送
+    orders: [...life.orders, ...(life.courier?.order ? [{ id: 0, cart: life.courier.order.cart, total: 0, arrive: life.absHour }] : [])],
+    calls: { ...life.calls },
+    phoneReminded: life.phoneReminded,
+    project: life.project ? { ...life.project } : null,
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
@@ -178,6 +189,10 @@ export function restore(life: Household, s: WorldSave): void {
   life.bamboo = s.bamboo ?? 0
   if (s.pump) { life.pumpDay = s.pump[0]; life.pumpCount = s.pump[1] }
   life.fedDay = s.fedDay ?? -1
+  life.orders = (s.orders ?? []).map((o) => ({ ...o, cart: { ...o.cart } }))
+  life.calls = { ...(s.calls ?? {}) }
+  life.phoneReminded = s.phoneReminded ?? -1
+  life.project = s.project ? { ...s.project } : null
   ;(s.spikes ?? []).forEach((h, k) => { if (life.spikes[k]) life.spikes[k].hits = h })
   life.gateBonus = s.gateBonus
   life.barriers = { ...s.barriers }

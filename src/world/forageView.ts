@@ -405,17 +405,13 @@ export class ForageView {
       it.ripe = ok
       it.full.visible = ok
       it.empty.visible = !ok
-      it.glint.visible = ok
     }
   }
 
-  update(dt: number, showGlints: boolean): void {
+  /** 植物头顶原来有一颗转着的小黄点提示能采；用户说不要（植物本身看得出来，鼠标放上去会变小手） */
+  update(dt: number, _showGlints: boolean): void {
     this.t += dt
-    for (const [i, it] of this.items.entries()) {
-      it.glint.visible = it.ripe && showGlints
-      it.glint.position.y = (it.spot.kind === 'honey' ? 2.35 : 0.75) + Math.sin(this.t * 2.2 + i) * 0.06
-      it.glint.rotation.y = this.t * 1.5
-    }
+    for (const it of this.items) it.glint.visible = false
   }
 
   /** 鼠标下面是哪一处（拿不准就返回 null） */

@@ -1,18 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lt, t, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
-import { EMPTY_HUD, World, type FurnitureMenu, type Hud } from './World'
+import { EMPTY_HUD, World, type FurnitureMenu, type Hud, type PhoneView } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel } from './life'
 import type { PersonHud } from './residents'
 import { DiaryPanel } from './DiaryPanel'
 import { MapPanel, type AwayTrip, type MapMember } from './MapPanel'
 import { TradePanel, type ShopView } from './TradePanel'
+import { PhonePanel } from './PhonePanel'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
 import { peopleStyle } from './people'
-import { BTN_GOLD, BTN_RED, CHIP, GRAIN, Grain, PANEL, SERIF } from './ui'
+import { BTN_GOLD, BTN_RED, CHIP, GRAIN, Grain, PANEL, SERIF, TONE, toneOf, type Tone } from './ui'
 
 const WELCOME_KEY = 'rbte-proto-welcome-v9'
 const WELCOME_ITEMS = ['life', 'night', 'map', 'feel'] as const
@@ -31,21 +32,26 @@ const logKey = (l: LogEntry) => `${l.day}-${l.hour}-${l.key}`
 const FACE_MASK = 'radial-gradient(ellipse 90% 80% at 75% 30%, black 35%, transparent 75%)'
 
 
-/** 状态词（像《这是我的战争》卡片上的"很饿""累了""受伤"）：只列不好的 */
-function statusWords(p: PersonHud): string[] {
-  const out: string[] = []
+/** 状态词（像《这是我的战争》卡片上的"很饿""累了""受伤"）：只列不好的；严重的红、轻的黄 */
+function statusWords(p: PersonHud): [string, Tone][] {
+  const out: [string, Tone][] = []
   const n = p.needs
-  if (p.health < 30) out.push(t('world.st.badlyHurt'))
-  else if (p.health < 70) out.push(t('world.st.hurt'))
-  if (n.hunger < 20) out.push(t('world.st.starving'))
-  else if (n.hunger < 40) out.push(t('world.st.hungry'))
-  if (n.thirst < 20) out.push(t('world.st.parched'))
-  else if (n.thirst < 40) out.push(t('world.st.thirsty'))
-  if (n.energy < 15) out.push(t('world.st.exhausted'))
-  else if (n.energy < 30) out.push(t('world.st.tired'))
-  if (n.mood < DEPRESSED) out.push(t('world.st.depressed'))
-  else if (n.mood < 40) out.push(t('world.st.sad'))
+  if (p.health < 30) out.push([t('world.st.badlyHurt'), 'bad'])
+  else if (p.health < 70) out.push([t('world.st.hurt'), 'warn'])
+  if (n.hunger < 20) out.push([t('world.st.starving'), 'bad'])
+  else if (n.hunger < 40) out.push([t('world.st.hungry'), 'warn'])
+  if (n.thirst < 20) out.push([t('world.st.parched'), 'bad'])
+  else if (n.thirst < 40) out.push([t('world.st.thirsty'), 'warn'])
+  if (n.energy < 15) out.push([t('world.st.exhausted'), 'bad'])
+  else if (n.energy < 30) out.push([t('world.st.tired'), 'warn'])
+  if (n.mood < DEPRESSED) out.push([t('world.st.depressed'), 'bad'])
+  else if (n.mood < 40) out.push([t('world.st.sad'), 'warn'])
   return out
+}
+
+/** 存货够几天：不到 2 天红、不到 5 天黄 */
+function daysTone(days: number): Tone {
+  return days < 2 ? 'bad' : days < 5 ? 'warn' : 'good'
 }
 
 function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait?: string; selected: boolean; onClick: () => void }) {
@@ -53,12 +59,14 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
     ? t('world.away', { where: lt(locations.find((l) => l.id === p.trip!.id)?.name ?? { zh: '' }), h: p.trip.left.toFixed(1) })
     : t(`${p.going ? 'world.go' : 'world.do'}.${p.doing}` as UiKey)
   const words = p.gone ? [] : statusWords(p)
-  const bars: [string, number, string][] = [
-    ['🍚', p.needs.hunger, '#d9a441'], ['💧', p.needs.thirst, '#6fa8c8'], ['☾', p.needs.energy, '#a99ad6'], ['♥', p.needs.mood, '#d4787a'],
+  // 饱、水、精力、心情、健康：统一红黄绿（低于 30 红、低于 60 黄）
+  const bars: [string, string, number][] = [
+    ['🍚', t('world.bar.hunger'), p.needs.hunger], ['💧', t('world.bar.thirst'), p.needs.thirst],
+    ['☾', t('world.bar.energy'), p.needs.energy], ['♥', t('world.bar.mood'), p.needs.mood], ['✚', t('world.bar.health'), p.health],
   ]
   return (
     <button onClick={onClick}
-      className={`relative h-[12.5rem] w-[9.25rem] shrink-0 overflow-hidden rounded-md text-left shadow-[0_8px_22px_rgba(0,0,0,0.5)] transition duration-200
+      className={`relative h-[14rem] w-[9.25rem] shrink-0 overflow-hidden rounded-md text-left shadow-[0_8px_22px_rgba(0,0,0,0.5)] transition duration-200
         ${selected ? '-translate-y-1.5 ring-2 ring-[#e8c98a]' : 'ring-1 ring-black/50 hover:-translate-y-0.5'} ${p.gone ? 'grayscale' : ''}`}>
       {/* 卡片图（public/portraits/<模型>.jpg），略微压一点饱和度，加颗粒和暗角 */}
       <div className="absolute inset-0 bg-[#2e2924]" />
@@ -77,24 +85,19 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
         <div className="text-[17px] font-bold leading-tight tracking-[0.06em] text-[#f4ecdc] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" style={{ fontFamily: SERIF }}>{p.name}</div>
         <div className="mt-0.5 truncate text-[11px] text-[#d9ccb4]" title={doing}>{doing}</div>
         {p.doing === 'down' && !p.gone && <div className="mt-0.5 text-[11px] font-semibold text-[#ff8f7a]">{t('world.rescueHint')}</div>}
-        <div className="mt-0.5 min-h-[15px] truncate text-[11px] font-semibold tracking-wide text-[#ec8a72]" style={{ fontFamily: SERIF }}>
-          {words.join(' · ')}
+        <div className="mt-0.5 min-h-[15px] truncate text-[11px] font-semibold tracking-wide" style={{ fontFamily: SERIF }}>
+          {words.map(([w, tone], i) => <span key={w} style={{ color: TONE[tone] }}>{i ? ' · ' : ''}{w}</span>)}
         </div>
         {p.gone !== 'dead' && (
-          <div className="mt-1 grid grid-cols-4 gap-1">
-            {bars.map(([icon, v, color]) => (
-              <div key={icon} className="flex items-center gap-0.5" title={String(Math.round(v))}>
-                <span className="w-2.5 text-center text-[9px] leading-none text-[#e9dfcc]/80">{icon}</span>
-                <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/15">
-                  <div className="h-full rounded-full" style={{ width: `${Math.round(v)}%`, background: v < 25 ? '#e2553f' : color }} />
+          <div className="mt-1 space-y-[3px]">
+            {bars.map(([icon, label, v]) => (
+              <div key={icon} className="flex items-center gap-1" title={`${label} ${Math.round(v)}`}>
+                <span className="w-3 text-center text-[10px] leading-none text-[#efe4d0]">{icon}</span>
+                <div className="h-[6px] flex-1 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+                  <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.round(v))}%`, background: TONE[toneOf(v)] }} />
                 </div>
               </div>
             ))}
-          </div>
-        )}
-        {p.health < 100 && p.gone !== 'dead' && (
-          <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-white/15">
-            <div className="h-full rounded-full bg-[#c9473a]" style={{ width: `${Math.round(p.health)}%` }} />
           </div>
         )}
       </div>
@@ -103,7 +106,7 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
 }
 
 /** 点家具弹出的小菜单（同一套深色纸面风格） */
-function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onPick: (s: FurnitureMenu['options'][number]['spot']) => void; onClose: () => void }) {
+function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onPick: (o: FurnitureMenu['options'][number]) => void; onClose: () => void }) {
   const left = Math.min(menu.x + 12, window.innerWidth - 200)
   const top = Math.min(menu.y - 10, window.innerHeight - 60 - menu.options.length * 34)
   return (
@@ -113,11 +116,20 @@ function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onP
         <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.35 }} />
         <div className="relative border-b border-[#e8c98a]/20 px-3 pb-1.5 pt-2">
           <div className="text-[15px] font-bold tracking-[0.08em] text-[#f4ecdc]" style={{ fontFamily: SERIF }}>{menu.title}</div>
-          <div className="text-[11px] text-[#c9bba2]">{t('world.use.who', { name: menu.who })}</div>
+          {menu.mood !== undefined && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#c9bba2]">
+              <span>♥ {t('world.bar.mood')}</span>
+              <div className="h-[6px] w-16 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+                <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.round(menu.mood))}%`, background: TONE[toneOf(menu.mood)] }} />
+              </div>
+              <span className="tabular-nums" style={{ color: TONE[toneOf(menu.mood)] }}>{Math.round(menu.mood)}</span>
+            </div>
+          )}
+          <div className="text-[11px] text-[#c9bba2]">{t(menu.target ? 'world.act.who' : 'world.use.who', { name: menu.who })}</div>
         </div>
         <div className="relative py-1">
           {menu.options.map((o) => (
-            <button key={o.label} onClick={() => onPick(o.spot)}
+            <button key={o.label} onClick={() => onPick(o)}
               className="block w-full px-3 py-1.5 text-left text-[13px] text-[#efe4d0] transition hover:bg-[#e8c98a]/15">
               {t(o.label)}
             </button>
@@ -168,6 +180,8 @@ export default function WorldView() {
   const [mapData, setMapData] = useState<{ checks: Record<string, ReturnType<World['tripCheck']>>; vanChecks: Record<string, ReturnType<World['tripCheck']>>; members: MapMember[]; away: AwayTrip[]; van: { fuel: number; home: boolean; armored: boolean; parkedOut: boolean } }>({ checks: {}, vanChecks: {}, members: [], away: [], van: { fuel: 0, home: true, armored: false, parkedOut: false } })
   /** 有人到了店里：交易界面 */
   const [shop, setShop] = useState<ShopView | null>(null)
+  // 手机开着时的画面数据（下单、打电话以后重新取一次）
+  const [phone, setPhone] = useState<PhoneView | null>(null)
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()); setLogSeen(w.latestLogKey()) }
@@ -216,7 +230,9 @@ export default function WorldView() {
   }, [style])
 
   const visitId = hud.visit?.id ?? null
-  const blocking = welcome || diary || map || !!visitId || !!shop
+  // 家里几张嘴（存货够几天按人头算，一人一天大约一份吃的、一份水）
+  const mouths = Math.max(1, hud.people.filter((p) => !p.gone).length)
+  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone
   // 面板一出现就停（layout effect 跟渲染同步，中间不会漏掉一次按空格或调速）
   useLayoutEffect(() => {
     const w = world.current
@@ -307,13 +323,17 @@ export default function WorldView() {
               </button>
             ))}
           </div>
-          {/* 存货只显示最要紧的四样，点一下展开全部 */}
+          {/* 钱和晶核一直看得见；存货只显示最要紧的四样（按够吃几天红黄绿），点一下展开全部 */}
+          <div className="relative mt-1.5 flex items-center gap-3 text-[13px] font-semibold tabular-nums" style={{ fontFamily: SERIF }}>
+            <span title={t('world.money', { n: hud.money.toLocaleString() })}>💰 {hud.money.toLocaleString()}</span>
+            <span title={t('world.cores', { n: hud.cores })}>💎 {hud.cores}</span>
+          </div>
           <button onClick={() => togglePop('stock')} title={t('world.stock.more')}
-            className="relative mt-1.5 flex w-full items-center gap-x-3 rounded-sm text-left text-xs tabular-nums text-[#d9ccb4] hover:text-[#f4ecdc]">
-            <span className={hud.food < 3 ? 'text-[#ff8f7a]' : ''}>🍚 {hud.food.toFixed(1)}</span>
-            <span className={hud.water < 3 ? 'text-[#ff8f7a]' : ''}>💧 {hud.water.toFixed(1)}</span>
-            <span className={!hud.prologue && hud.ammo < 6 ? 'text-[#ff8f7a]' : ''}>🔫 {hud.ammo}</span>
-            <span>🩹 {hud.medkits}</span>
+            className="relative mt-1 flex w-full items-center gap-x-3 rounded-sm text-left text-xs font-semibold tabular-nums hover:brightness-125">
+            <span style={{ color: TONE[daysTone(hud.food / mouths)] }}>🍚 {hud.food.toFixed(1)}</span>
+            <span style={{ color: TONE[daysTone(hud.water / mouths)] }}>💧 {hud.water.toFixed(1)}</span>
+            <span style={{ color: TONE[hud.ammo < 6 ? 'bad' : hud.ammo < 20 ? 'warn' : 'good'] }}>🔫 {hud.ammo}</span>
+            <span style={{ color: TONE[hud.medkits < 1 ? 'bad' : hud.medkits < 3 ? 'warn' : 'good'] }}>🩹 {hud.medkits}</span>
             <span className="ml-auto text-[10px] text-[#8a7f6d]">{pop === 'stock' ? '▲' : '▼'}</span>
           </button>
         </div>
@@ -324,6 +344,7 @@ export default function WorldView() {
             </button>
           )}
           <button onClick={() => { setPop(null); setMap(true) }} className={TOOL}>{t('world.tool.out')}</button>
+          <button onClick={() => { setPop(null); setPhone(world.current?.phoneView() ?? null) }} className={TOOL}>{t('world.tool.phone')}</button>
           <button onClick={() => togglePop('build')} className={`${TOOL} ${pop === 'build' ? TOOL_ON : ''}`}>{t('world.tool.build')}</button>
           <button onClick={() => togglePop('space')} className={`${TOOL} ${pop === 'space' ? TOOL_ON : ''}`}>
             {t('world.tool.space', { n: Math.round(hud.space.food + hud.space.water), cap: hud.space.cap })}
@@ -355,20 +376,36 @@ export default function WorldView() {
             {pop === 'build' && (
               <div className="relative flex flex-col gap-1">
                 <div className="mb-0.5 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.build.title')}</div>
+                {/* 正在干的工程：进度条、谁在干；停工了可以让选中的人接着干 */}
+                {hud.build && (
+                  <div className="rounded-sm bg-white/5 px-2 py-1.5 ring-1 ring-[#e8c98a]/30">
+                    <div className="text-[11px] text-[#efe4d0]">
+                      {t(hud.build.working ? 'world.build.doing' : 'world.build.paused', { what: t(`world.build.name.${hud.build.id}` as UiKey), who: hud.build.worker, p: hud.build.p })}
+                    </div>
+                    <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(3, hud.build.p)}%`, background: TONE[toneOf(hud.build.p, 34, 67)] }} />
+                    </div>
+                    {!hud.build.working && (
+                      <button onClick={() => world.current?.continueBuild()} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
+                        {t('world.build.resume', { who: hud.selected })}
+                      </button>
+                    )}
+                  </div>
+                )}
                 {hud.trap > 0 ? (
                   <div className={BUILD_DONE}>{t('world.trap.left', { n: hud.trap })}</div>
                 ) : (
-                  <button onClick={() => world.current?.buildGateTrap()} disabled={hud.prologue ? hud.money < 1500 : hud.cores < 2} className={BUILD}>
+                  <button onClick={() => world.current?.buildGateTrap()} disabled={!!hud.build || (hud.prologue ? hud.money < 1500 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
                     {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
                   </button>
                 )}
-                {!hud.wall && (
-                  <button onClick={() => world.current?.buildYardWall()} disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6} className={BUILD}>
+                {!hud.wall && hud.build?.id !== 'wall' && (
+                  <button onClick={() => world.current?.buildYardWall()} disabled={!!hud.build || (hud.prologue ? hud.money < 6000 : hud.cores < 6)} className={BUILD} title={t('world.build.hours', { h: 9 })}>
                     {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
                   </button>
                 )}
                 {!hud.garden.built ? (
-                  <button onClick={() => world.current?.buildGardenPlot()} disabled={hud.prologue ? hud.money < 800 : hud.cores < 2} className={BUILD}>
+                  <button onClick={() => world.current?.buildGardenPlot()} disabled={!!hud.build || (hud.prologue ? hud.money < 800 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 2 })}>
                     {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
                   </button>
                 ) : (
@@ -759,7 +796,11 @@ export default function WorldView() {
         }} />
       )}
 
-      {furn && <FurnitureMenuView menu={furn} onPick={(spot) => world.current?.useFurniture(spot)} onClose={() => setFurn(null)} />}
+      {phone && <PhonePanel view={phone} onClose={() => setPhone(null)}
+        onOrder={(cart) => { const r = world.current?.placeOrder(cart) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
+        onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }} />}
+      {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
+        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

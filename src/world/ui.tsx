@@ -14,3 +14,11 @@ export const BTN_RED = 'rounded-md bg-[#7c2d24] font-semibold text-[#f4ecdc] rin
 export function Grain({ opacity = 0.35 }: { opacity?: number }) {
   return <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity }} />
 }
+
+/** 全游戏统一的状态颜色：红 = 不好、黄 = 一般、绿 = 好（人物的需求、存货够几天、防线、菜地……都用这一套） */
+export const TONE = { bad: '#e2553f', warn: '#e3b341', good: '#7cc35f' } as const
+export type Tone = keyof typeof TONE
+/** 0–100 的数值：低于 bad 是红、低于 warn 是黄、其余绿 */
+export function toneOf(v: number, bad = 30, warn = 60): Tone {
+  return v < bad ? 'bad' : v < warn ? 'warn' : 'good'
+}

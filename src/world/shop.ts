@@ -197,3 +197,37 @@ export function shopHints(h: HomeSnapshot, gives: ShopItem['give']): { text: str
   if (!out.length) out.push({ text: `吃的够 ${fd} 天、水够 ${wd} 天，家底挺厚了。`, level: 'ok' })
   return out
 }
+
+// --- 网购（手机）-----------------------------------------------------------------
+// 末日前在手机上下单，第二天上午快递小哥送到铁门外。比去店里贵一点、还要运费，但不用派人跑一趟，也没有背不动的问题。
+// 末日前一天下单就赶不上了（第二天就是末日，快递停运）；末日后手机没信号。
+
+/** 每单运费（元） */
+export const ONLINE_FEE = 30
+/** 比店里贵多少 */
+export const ONLINE_MARKUP = 1.15
+/** 第二天几点送到 */
+export const DELIVERY_HOUR = 10
+
+const pick = (ids: string[]) => ids.map((id) => {
+  const it = SHOPS.flatMap((s) => s.items).find((x) => x.id === id)
+  if (!it) throw new Error(`网购找不到 ${id}`)
+  return { ...it, price: Math.round((it.price * ONLINE_MARKUP) / 10) * 10 }
+})
+
+/** 网上能买的（当成一家"店"，价格已经含加价；一样跟着末日临近涨价） */
+export const ONLINE_SHOP: ShopDef = {
+  id: 'online', currency: 'money', phase: 'prologue',
+  items: pick(['rice', 'noodles', 'cans', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire']),
+}
+
+/** 一单多少钱（含运费） */
+export function orderTotal(cart: Cart, day: number): number {
+  const { cost } = cartTotal(ONLINE_SHOP, cart, day)
+  return cost > 0 ? cost + ONLINE_FEE : 0
+}
+
+/** "大米×2、矿泉水×3"（日记、手机里显示） */
+export function cartLabel(shop: ShopDef, cart: Cart): string {
+  return shop.items.filter((it) => (cart[it.id] ?? 0) > 0).map((it) => `${it.name.replace(/（.*?）/g, '')}×${cart[it.id]}`).join('、')
+}

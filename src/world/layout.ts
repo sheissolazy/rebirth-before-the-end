@@ -324,3 +324,19 @@ export const WELL_SPOT: Spot = { kind: 'stroll', x: 15.6, z: 3.75, floor: 0, fac
 export const COOP: Rect = { x0: 14.3, z0: -5.6, x1: 16.6, z1: -3.2 }
 export const COOP_SPOT: Spot = { kind: 'stroll', x: 15.4, z: -2.65, floor: 0, face: 180, pose: 'work' }
 export const GARDEN_SPOT: Spot = { kind: 'stroll', x: 14.8, z: 9.05, floor: 0, face: 180, pose: 'work' }
+
+/** 砌院墙的顺序：从铁门西边开始，沿南边往西、西边往北、北边往东、东边往南，最后回到铁门东边。
+ * 每一段 1 米（和围栏一样，砌好一段就拆掉那一段围栏）；stand 是砌这一段时人站的地方（院子里面、面朝墙） */
+export function wallPieces(): { x: number; z: number; axis: 'x' | 'z'; stand: { x: number; z: number; face: number } }[] {
+  const segs = fenceSegments().filter((s) => !s.gate)
+  const out: ReturnType<typeof wallPieces> = []
+  const side = (pred: (s: (typeof segs)[number]) => boolean, sort: (a: (typeof segs)[number], b: (typeof segs)[number]) => number) => segs.filter(pred).sort(sort)
+  const south = (s: (typeof segs)[number]) => s.axis === 'x' && s.z === YARD.z1
+  const put = (list: typeof segs, stand: (s: (typeof segs)[number]) => { x: number; z: number; face: number }) => { for (const s of list) out.push({ ...s, stand: stand(s) }) }
+  put(side((s) => south(s) && s.x < GATE.x, (a, b) => b.x - a.x), (s) => ({ x: s.x, z: YARD.z1 - 0.75, face: 0 }))
+  put(side((s) => s.axis === 'z' && s.x === YARD.x0, (a, b) => b.z - a.z), (s) => ({ x: YARD.x0 + 0.75, z: s.z, face: -90 }))
+  put(side((s) => s.axis === 'x' && s.z === YARD.z0, (a, b) => a.x - b.x), (s) => ({ x: s.x, z: YARD.z0 + 0.75, face: 180 }))
+  put(side((s) => s.axis === 'z' && s.x === YARD.x1, (a, b) => a.z - b.z), (s) => ({ x: YARD.x1 - 0.75, z: s.z, face: 90 }))
+  put(side((s) => south(s) && s.x > GATE.x, (a, b) => b.x - a.x), (s) => ({ x: s.x, z: YARD.z1 - 0.75, face: 0 }))
+  return out
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { navFloors } from './nav'
 import { Actor, Household } from './residents'
-import { DAY_SECONDS, PROLOGUE_DAYS } from './life'
+import { DAY_SECONDS, PROLOGUE_DAYS, isNight } from './life'
 import { Zombie } from './siege'
 import { restore, snapshot } from './save'
 import { Courier, VISITORS, Visitor } from './visitors'
@@ -1899,5 +1899,128 @@ describe('没人下命令就不出门', () => {
     const mom = life.actors[1]
     expect(life.petCat(mom, { x: 20, z: 2, floor: 0 })).toBe(false)
     expect(life.petCat(mom, { x: 6, z: 4, floor: 0 })).toBe(true)
+  })
+})
+
+describe('点人物互动', () => {
+  it('女主走到妈妈身边安慰她：妈妈心情明显变好，抑郁的时间往回拉；同一天再安慰一次效果减半', () => {
+    const { life } = simulate('paradise', 0)
+    const [hero, mom] = life.actors
+    life.clock = { day: 1, hour: 10 }
+    mom.needs = { ...mom.needs, mood: 15 }
+    mom.lowMood = 12
+    expect(life.interact(hero, mom, 'comfort')).toBe('ok')
+    const run = () => {
+      for (let i = 0; i < 600 && hero.task?.kind === 'interact'; i++) {
+        life.tick(0.05, (a) => a !== hero && a !== mom && life.isHomeBody(a))
+        for (const a of life.actors) { a.follow(0.05 * life.speed, 2.2); a.updateSettle(0.05 * life.speed) }
+      }
+    }
+    life.speed = 1
+    run()
+    const first = mom.needs.mood - 15
+    expect(first).toBeGreaterThan(15)
+    expect(mom.lowMood).toBeLessThan(12)
+    const before = mom.needs.mood
+    expect(life.interact(hero, mom, 'comfort')).toBe('ok')
+    run()
+    // 第二次：妈妈心情已经不低了，只加基础的一半
+    expect(mom.needs.mood - before).toBeLessThan(first / 2)
+  })
+
+  it('睡着的人、打丧尸的时候不能互动', () => {
+    const { life } = simulate('paradise', 0)
+    const [hero, mom] = life.actors
+    mom.task = { kind: 'sleep', spot: null, phase: 'use', hours: 5, manual: false } as never
+    expect(life.interact(hero, mom, 'chat')).toBe('asleep')
+  })
+})
+
+describe('手机', () => {
+  it('网购：下单扣钱，第二天上午送到（没有 3D 时直接到账、记日记）；末日前一天快递停运，末日后没信号', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 15 }
+    const money = life.money
+    const food = life.stock.food
+    expect(life.placeOrder({})).toBe('empty')
+    expect(life.placeOrder({ rice: 2 })).toBe('ok')
+    expect(life.money).toBeLessThan(money)
+    expect(life.orders.length).toBe(1)
+    life.speed = 1
+    // 当天不到
+    for (let i = 0; i < 200 && life.clock.day === 0; i++) life.tick(1, () => false)
+    expect(life.stock.food).toBeLessThanOrEqual(food)
+    // 第二天中午以前到
+    for (let i = 0; i < 400 && life.clock.hour < 12; i++) life.tick(0.5, () => false)
+    expect(life.orders.length).toBe(0)
+    expect(life.stock.food).toBeGreaterThan(food + 5)
+    expect(life.log.some((l) => l.key === 'world.phone.delivered')).toBe(true)
+    life.clock = { day: PROLOGUE_DAYS - 1, hour: 9 }
+    expect(life.placeOrder({ rice: 1 })).toBe('closed')
+    life.clock = { day: PROLOGUE_DAYS, hour: 9 }
+    expect(life.placeOrder({ rice: 1 })).toBe('nosignal')
+    expect(life.call('jiangye').r).toBe('nosignal')
+  })
+
+  it('打电话：一天一次，江野加好感；离家出走的家人有时劝得回来', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    const aff = life.affection.jiangye
+    expect(life.call('jiangye').r).toBe('ok')
+    expect(life.affection.jiangye).toBeGreaterThan(aff)
+    expect(life.call('jiangye').r).toBe('done')
+    // 妈妈离家出走：多打几天总有一次劝回来
+    const mom = life.actors[1]
+    mom.runaway = { back: life.absHour + 40 }
+    mom.away = true
+    let ok = false
+    for (let d = 0; d < 12 && !ok; d++) {
+      life.clock = { day: 1, hour: 10 + d }
+      life.calls = {}
+      life.call(`fam:${mom.name}`)
+      ok = !!mom.runaway?.persuaded
+    }
+    expect(ok).toBe(true)
+  })
+})
+
+describe('建设要人去干活', () => {
+  it('砌院墙：爸爸真的走到墙边一段一段砌，天黑收工、第二天自己接着干，干完才算砌好', () => {
+    const { life } = simulate('paradise', 0)
+    const dad = life.actors[2]
+    life.clock = { day: 0, hour: 8 }
+    life.money = 20000
+    expect(life.startBuild('wall', dad)).toBe('ok')
+    expect(life.wall).toBe(false)
+    expect(life.startBuild('trap', dad)).toBe('busy')
+    life.speed = 3
+    const dt = 0.1
+    let workedAt = new Set<string>()
+    let days = 0
+    for (let i = 0; i < Math.round((4 * DAY_SECONDS) / (dt * life.speed)) && !life.wall; i++) {
+      life.tick(dt, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+      if (dad.task?.kind === 'build' && dad.task.phase === 'use') {
+        workedAt.add(`${Math.round(dad.pos.x)},${Math.round(dad.pos.z)}`)
+        // 不会摸黑干活
+        expect(`${isNight(life.clock.hour)} d${life.clock.day} h${life.clock.hour.toFixed(2)} ${dad.task.hours.toFixed(2)}`).toMatch(/^false/)
+      }
+      days = life.clock.day
+    }
+    expect(`${life.wall} ${life.project?.done.toFixed(2)} spots ${workedAt.size} d${life.clock.day} ${dad.task?.kind}`).toMatch(/^true/)
+    expect(life.project).toBeNull()
+    // 绕着院子换了很多地方砌
+    expect(workedAt.size).toBeGreaterThan(15)
+    // 9 小时的活，白天干、饭点歇：要两天左右
+    expect(days).toBeGreaterThanOrEqual(1)
+  })
+
+  it('开菜地：钱先扣，地要干完才有', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    const money = life.money
+    expect(life.startBuild('garden', life.actors[1])).toBe('ok')
+    expect(life.money).toBe(money - 800)
+    expect(life.garden.built).toBe(false)
   })
 })

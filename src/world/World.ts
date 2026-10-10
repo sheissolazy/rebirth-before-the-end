@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
   COOP, COURT, FLOOR_H, FRONT_DOOR, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
-  fenceSegments, isHome, type Floor, type Placement, type Spot,
+  fenceSegments, isHome, wallPieces, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
 import { PoseDriver as PoseDriverFor, loadPerson, peopleStyle, setPeopleStyle } from './people'
@@ -17,12 +17,13 @@ import {
   ParadiseMaterials, Petals, RIVER, River, boxProjectUV, hills, loadParadiseKit, placeModel, sakuraTree, samplers, scatter, variants, type ArtStyle, type ParadiseKit,
 } from './paradise'
 import { PantryView } from './pantry'
+import { TONE } from './ui'
 import { campBed, ironBedBedding, platformBed } from './bedroom'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
 } from './meshes'
-import { Actor, Household, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
+import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId } from './siege'
 import { SiegeView } from './siegeView'
@@ -36,7 +37,7 @@ import { Bubbles, bubbleMaterial } from './bubbles'
 import { FISHING, SCAVENGE, nearFishing, nearestSpot, type ScavengeSpot } from './scavenge'
 import { ForageView } from './forageView'
 import { HERBS_PER_MEDKIT, type ForageSpot } from './forage'
-import { priceOf, shopFor, type Cart, type SellCart } from './shop'
+import { ONLINE_FEE, ONLINE_SHOP, cartLabel, priceOf, shopFor, type Cart, type SellCart } from './shop'
 import type { ShopView } from './TradePanel'
 import { Courier, VISITORS, Visitor, isFemaleModel } from './visitors'
 import { skyAt, type StyleDay } from './daylight'
@@ -106,6 +107,8 @@ export interface Hud {
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
   garden: { built: boolean; growth: number }
+  /** 正在干的工程：干到百分之几、谁在干、这会儿在不在干 */
+  build: { id: string; p: number; worker: string; working: boolean } | null
   /** 江边钓鱼：在钓吗、站在钓鱼点旁边吗、今天钓了几条 */
   fishing: { active: boolean; near: boolean; caught: number }
   /** 屋外：女主身边能搜的地方 */
@@ -156,7 +159,28 @@ const DROP = {
 /** 谢临：衣服换成黑色（复制一次材质就缓存起来，不影响别人，也不会每次来都复制） */
 const darkCopies = new WeakMap<THREE.Material, THREE.Material>()
 /** 点家具弹出的菜单 */
-export interface FurnitureMenu { x: number; y: number; title: string; who: string; options: { label: UiKey; spot: Spot }[] }
+/** 手机界面（网购、快递、通讯录） */
+export interface PhoneView {
+  state: 'ok' | 'closed' | 'nosignal'
+  /** 今天是最后一天能网购 */
+  lastDay: boolean
+  money: number
+  day: number
+  hour: number
+  items: { id: string; name: string; icon: string; desc: string; cat: string; price: number; max: number }[]
+  orders: { id: number; what: string; total: number; day: number; hour: number }[]
+  contacts: ReturnType<Household['contacts']>
+  fee: number
+}
+
+/** 点家具 / 点人物弹出的小菜单：家具的选项带 spot（去用它），人物的选项带 act（走过去互动） */
+export interface FurnitureMenu {
+  x: number; y: number; title: string; who: string
+  /** 点的是人：TA 的名字和现在的心情 */
+  target?: string
+  mood?: number
+  options: { label: UiKey; spot?: Spot; act?: InteractKind }[]
+}
 
 /** 家具在菜单标题上叫什么 */
 const FURNITURE_NAMES: [RegExp, string][] = [
@@ -186,7 +210,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -194,7 +218,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: null, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -276,7 +300,6 @@ export class World {
   private dprSteps = 0
   /** 院子的木围栏（砌了院墙就藏起来）、院墙、世外桃源的材质 */
   private readonly fences: THREE.Object3D[] = []
-  private stoneWall: THREE.Group | null = null
   private pmats: ParadiseMaterials | null = null
   /** 白天天上慢慢飞过的一小群鸟（扇翅膀的折线） */
   private readonly birds = (() => {
@@ -462,12 +485,14 @@ export class World {
       return v
     }
     this.life.spawnCourier = (who, at) => {
-      const model = this.siegeView.npc(who)
+      // 快递小哥借用"陌生人"的模型
+      const model = this.siegeView.npc(who === 'express' ? 'stranger' : who)
       if (model && who === 'xielin') darkCoat(model)
       const c = new Courier(who, at, model)
       this.scene.add(c.root)
       return c
     }
+    this.life.onRemind = (key) => this.toast(key as ToastKey, 6)
     this.life.onCourier = (c, phase) => {
       if (phase === 'drop') {
         this.sound.knock()
@@ -908,34 +933,99 @@ export class World {
   }
 
   /** 砌一圈石头院墙（铁门那两米留着），靠近镜头的南墙、东墙在家里视角下压低 */
-  private raiseStoneWall(): void {
+  /** 正在砌 / 已经砌好的石头院墙：一段 1 米，按 wallPieces 的顺序一段一段出现，砌好一段就拆掉那一段围栏 */
+  private wallBits: { mesh: THREE.Object3D; fence: THREE.Object3D | null }[] = []
+  private wallShown = -1
+  /** 工地头顶的进度条 */
+  private buildBar: { sprite: THREE.Sprite; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; shown: number } | null = null
+
+  private updateConstruction(): void {
+    if (this.hud.loading) return
+    const p = this.life.project
+    const building = p?.id === 'wall'
+    if ((this.life.wall || building) && !this.wallBits.length) this.makeWallPieces()
+    if (this.wallBits.length) {
+      const n = this.life.wall ? this.wallBits.length : building ? Math.floor(p!.done * this.wallBits.length) : 0
+      if (n !== this.wallShown) {
+        this.wallShown = n
+        this.wallBits.forEach((w, k) => {
+          w.mesh.visible = k < n
+          if (w.fence) w.fence.visible = k >= n
+        })
+      }
+    }
+    // 进度条：跟着工地走（院墙是正在砌的那一段）
+    if (p && !this.buildBar) this.buildBar = this.makeBuildBar()
+    const bar = this.buildBar
+    if (!bar) return
+    bar.sprite.visible = !!p
+    if (!p) return
+    const pct = Math.floor(p.done * 100)
+    if (pct !== bar.shown) {
+      bar.shown = pct
+      const c = bar.ctx
+      c.clearRect(0, 0, 256, 64)
+      c.fillStyle = 'rgba(20,16,12,0.82)'
+      c.beginPath(); c.roundRect(2, 2, 252, 60, 14); c.fill()
+      c.fillStyle = 'rgba(255,255,255,0.15)'
+      c.fillRect(16, 38, 224, 12)
+      c.fillStyle = TONE[pct < 34 ? 'bad' : pct < 67 ? 'warn' : 'good']
+      c.fillRect(16, 38, (224 * pct) / 100, 12)
+      c.fillStyle = '#f4ecdc'
+      c.font = 'bold 22px "Songti SC", serif'
+      c.textAlign = 'center'
+      c.fillText(`${t(`world.build.name.${p.id}` as UiKey)} ${pct}%`, 128, 28)
+      bar.tex.needsUpdate = true
+    }
+    let at: THREE.Vector3
+    if (p.id === 'garden') at = new THREE.Vector3((GARDEN.x0 + GARDEN.x1) / 2, 1.6, (GARDEN.z0 + GARDEN.z1) / 2)
+    else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
+    else {
+      const all = wallPieces()
+      const w = all[Math.min(all.length - 1, Math.floor(p.done * all.length))]
+      at = new THREE.Vector3(w.x, 2.6, w.z)
+    }
+    bar.sprite.position.copy(at)
+  }
+
+  private makeBuildBar(): NonNullable<World['buildBar']> {
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')!
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
+    sprite.scale.set(2.2, 0.55, 1)
+    sprite.renderOrder = 10
+    this.scene.add(sprite)
+    return { sprite, ctx, tex, shown: -1 }
+  }
+
+  private makeWallPieces(): void {
     const mat = this.pmats?.textured('stone') ?? toon(COLORS.stone)
     const cap = this.pmats?.textured('trim') ?? toon(COLORS.wall)
     const H = 1.9
-    const g = new THREE.Group()
-    const seg = (x0: number, z0: number, x1: number, z1: number, near: boolean) => {
-      const len = Math.hypot(x1 - x0, z1 - z0)
-      const along = x1 - x0 !== 0
+    const body = new THREE.BoxGeometry(1.02, H, 0.3)
+    body.translate(0, H / 2, 0)
+    const top = new THREE.BoxGeometry(1.08, 0.1, 0.4)
+    top.translate(0, H + 0.05, 0)
+    for (const g of [body, top]) boxProjectUV(g)
+    const fenceAt = new Map(this.fences.map((f) => [`${f.position.x.toFixed(2)},${f.position.z.toFixed(2)}`, f]))
+    for (const w of wallPieces()) {
       const holder = new THREE.Group()
-      holder.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2)
-      const body = new THREE.Mesh(new THREE.BoxGeometry(along ? len : 0.3, H, along ? 0.3 : len), mat)
-      body.position.y = H / 2
-      const top = new THREE.Mesh(new THREE.BoxGeometry(along ? len + 0.1 : 0.4, 0.1, along ? 0.4 : len + 0.1), cap)
-      top.position.y = H + 0.05
-      for (const m of [body, top]) { boxProjectUV(m.geometry); m.castShadow = true; m.receiveShadow = true }
-      holder.add(body, top)
-      if (near) this.nearWalls.push(holder)
-      g.add(holder)
+      holder.position.set(w.x, 0, w.z)
+      if (w.axis === 'z') holder.rotation.y = Math.PI / 2
+      const a = new THREE.Mesh(body, mat)
+      const b = new THREE.Mesh(top, cap)
+      for (const m of [a, b]) { m.castShadow = true; m.receiveShadow = true }
+      holder.add(a, b)
+      holder.visible = false
+      // 靠近镜头的南墙、东墙在家里视角下跟着矮墙压低
+      if (w.stand.face === 0 || w.stand.face === 90) this.nearWalls.push(holder)
+      this.scene.add(holder)
+      this.wallBits.push({ mesh: holder, fence: fenceAt.get(`${w.x.toFixed(2)},${w.z.toFixed(2)}`) ?? null })
     }
-    seg(YARD.x0, YARD.z0, YARD.x1, YARD.z0, false) // 北
-    seg(YARD.x0, YARD.z0, YARD.x0, YARD.z1, false) // 西
-    seg(YARD.x1, YARD.z0, YARD.x1, YARD.z1, true) // 东
-    seg(YARD.x0, YARD.z1, GATE.x - 1, YARD.z1, true) // 南（铁门西边）
-    seg(GATE.x + 1, YARD.z1, YARD.x1, YARD.z1, true) // 南（铁门东边）
-    for (const f of this.fences) f.visible = false
-    this.stoneWall = g
-    this.scene.add(g)
-    this.collectClickables()
   }
 
   private spikeMeshes: THREE.Group[] = []
@@ -986,20 +1076,24 @@ export class World {
     this.pushLifeHud()
   }
 
-  buildGateTrap(): void {
-    if (this.life.buildTrap()) this.toast('world.toast.trap', 3)
+  /** 建设：付钱、派选中的人（干不了就换家里会修东西的人）走过去真的干活 */
+  startBuild(id: BuildId): void {
+    const r = this.life.startBuild(id, this.selected)
+    const who = this.life.project?.worker ?? this.selected.name
+    this.toast(`world.build.r.${r}`, 4, { who, what: t(`world.build.name.${id}` as UiKey), h: String(BUILD_WORK[id]) })
     this.pushLifeHud()
   }
 
-  buildYardWall(): void {
-    if (this.life.buildWall()) this.toast('world.toast.wall', 3)
+  /** 工程停了：让选中的人接着干 */
+  continueBuild(): void {
+    const r = this.life.continueBuild(this.selected)
+    if (r !== 'none') this.toast(`world.build.r.resume.${r}`, 3, { who: this.selected.name })
     this.pushLifeHud()
   }
 
-  buildGardenPlot(): void {
-    if (this.life.buildGarden()) this.toast('world.toast.garden')
-    this.pushLifeHud()
-  }
+  buildGateTrap(): void { this.startBuild('trap') }
+  buildYardWall(): void { this.startBuild('wall') }
+  buildGardenPlot(): void { this.startBuild('garden') }
 
   /** 额外模型加载好以后：给住进来的人换上真人模型，再预热一帧（武器、丧尸、特效） */
   private afterExtraModels(): void {
@@ -1013,7 +1107,7 @@ export class World {
     }
     const c = this.life.courier
     if (c?.placeholder) {
-      const m = this.siegeView.npc(c.who)
+      const m = this.siegeView.npc(c.who === 'express' ? 'stranger' : c.who)
       if (m) { if (c.who === 'xielin') darkCoat(m); c.setModel(m) }
     }
     const fighting = !!this.life.siege && !this.life.siege.done
@@ -1782,9 +1876,15 @@ export class World {
       if (old) old.visible = false
     }
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
-    if (this.life.wall && !this.stoneWall && !this.hud.loading) this.raiseStoneWall()
+    this.updateConstruction()
     const g = this.life.garden
-    this.gardenObj.visible = g.built
+    const digging = this.life.project?.id === 'garden' ? this.life.project.done : -1
+    this.gardenObj.visible = g.built || digging >= 0
+    // 开地的时候：先翻出一块土，再起两道垄，菜苗等开好了才种上
+    if (!g.built && digging >= 0) {
+      const kids = this.gardenObj.children
+      kids.forEach((c, k) => { c.visible = k === 0 ? true : c === this.ripeMark || this.sprouts.includes(c as THREE.Group) ? false : digging > (k < 6 ? 0.35 : 0.7) })
+    } else if (g.built) this.gardenObj.children.forEach((c) => { if (c !== this.ripeMark) c.visible = true })
     if (g.built) {
       const sc = 0.2 + g.growth * 0.8
       this.sprouts.forEach((p, k) => { p.scale.setScalar(sc * (0.9 + (k % 3) * 0.08)); p.rotation.y = Math.sin(this.elapsed * 0.8 + k) * 0.05 })
@@ -1834,11 +1934,17 @@ export class World {
       this.scene.add(g)
     }
     // 钉板：铺了才出现，踩烂了就收起来
-    if (this.life.trap.hp > 0 && !this.trapMesh && !this.hud.loading) {
+    const laying = this.life.project?.id === 'trap' ? this.life.project.done : -1
+    if ((this.life.trap.hp > 0 || laying >= 0) && !this.trapMesh && !this.hud.loading) {
       this.trapMesh = this.makeTrap()
       this.scene.add(this.trapMesh)
     }
-    if (this.trapMesh) this.trapMesh.visible = this.life.trap.hp > 0
+    if (this.trapMesh) {
+      this.trapMesh.visible = this.life.trap.hp > 0 || laying >= 0
+      // 铺的时候一块一块出现：五块钉板、钉子、两根木桩、最后拉上铁丝网
+      const kids = this.trapMesh.children
+      kids.forEach((c, k) => { c.visible = this.life.trap.hp > 0 || laying >= (k + 1) / (kids.length + 1) })
+    }
     // 竹尖刺：每一排按还能扎几只，显示还立着的几根
     if (!this.spikeMeshes.length && !this.hud.loading) this.spikeMeshes = this.makeSpikes()
     this.life.spikes.forEach((r, k) => {
@@ -2213,8 +2319,15 @@ export class World {
       if (hits.length) {
         let o: THREE.Object3D | null = hits[0].object
         while (o && !o.userData.actor) o = o.parent
+        // 点人物 = 跟 TA 互动（换人只能点下面的卡片）
         if (o) {
-          this.select(o.userData.actor as Actor)
+          const target = o.userData.actor as Actor
+          if (target === this.selected) { this.toast('world.toast.pickCard'); return }
+          if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
+          this.onFurnitureMenu?.({
+            x: cx, y: cy, title: target.name, who: this.selected.name, target: target.name, mood: target.needs.mood,
+            options: INTERACTIONS.map((d) => ({ label: `world.act.${d.id}` as UiKey, act: d.id })),
+          })
           return
         }
       }
@@ -2522,6 +2635,44 @@ export class World {
     }
     const order: Spot['kind'][] = ['cook', 'drink', 'dine', 'relax', 'sleep']
     return order.filter((k) => best.has(k)).map((k) => ({ label: `world.use.${k}` as UiKey, spot: best.get(k)!.spot }))
+  }
+
+  /** 手机界面要的东西：网购能不能下单、货架（今天的价格）、钱、在路上的快递、通讯录 */
+  phoneView(): PhoneView {
+    const l = this.life
+    const day = l.clock.day
+    return {
+      state: l.orderState(),
+      lastDay: day === PROLOGUE_DAYS - 2,
+      money: l.money,
+      day,
+      hour: l.clock.hour,
+      items: ONLINE_SHOP.items.map((it) => ({ id: it.id, name: it.name, icon: it.icon, desc: it.desc, cat: it.cat, price: priceOf(it, ONLINE_SHOP, day), max: it.stock })),
+      orders: l.orders.map((o) => ({ id: o.id, what: cartLabel(ONLINE_SHOP, o.cart), total: o.total, day: Math.floor(o.arrive / 24), hour: Math.floor(o.arrive % 24) })),
+      contacts: l.contacts(),
+      fee: ONLINE_FEE,
+    }
+  }
+
+  placeOrder(cart: Cart): string {
+    const r = this.life.placeOrder(cart)
+    this.pushLifeHud()
+    return r
+  }
+
+  callContact(id: string): { r: string; line?: string } {
+    const r = this.life.call(id)
+    this.pushLifeHud()
+    return r
+  }
+
+  /** 人物菜单里选了一项：选中的人走过去跟 TA 互动 */
+  interactWith(name: string, act: InteractKind): void {
+    this.onFurnitureMenu?.(null)
+    const target = this.actors.find((a) => a.name === name)
+    if (!target) return
+    const r = this.life.interact(this.selected, target, act)
+    if (r !== 'ok') this.toast(`world.act.r.${r}`, 3, { who: this.selected.name, whom: target.name })
   }
 
   /** 菜单里选了一项：让选中的人去用 */
@@ -2911,6 +3062,10 @@ export class World {
       molotovs: this.life.molotovs,
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
+      build: this.life.project ? {
+        id: this.life.project.id, p: Math.floor(this.life.project.done * 100), worker: this.life.project.worker,
+        working: this.actors.some((a) => a.name === this.life.project!.worker && a.task?.kind === 'build'),
+      } : null,
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
       wall: this.life.wall,
       trap: Math.ceil(this.life.trap.hp),
