@@ -48,6 +48,7 @@ export interface WorldSave {
   fedDay?: number
   /** 网购在路上的单子、今天给谁打过电话、最后一天提醒过没有 */
   orders?: { id: number; cart: Record<string, number>; total: number; arrive: number }[]
+  orderSeq?: number
   calls?: Record<string, number>
   phoneReminded?: number
   /** 今天请过谁、请的人什么时候到 */
@@ -125,7 +126,8 @@ export function snapshot(life: Household): WorldSave {
     pump: [life.pumpDay, life.pumpCount],
     fedDay: life.fedDay,
     // 快递小哥还在路上（东西放下时才到账）：这一单存回去，读档后重新送
-    orders: [...life.orders, ...(life.courier?.order ? [{ id: 0, cart: life.courier.order.cart, total: 0, arrive: life.absHour }] : [])],
+    orders: [...life.orders, ...(life.courier?.order ? [{ id: life.orderSeq + 1, cart: life.courier.order.cart, total: 0, arrive: life.absHour }] : [])],
+    orderSeq: life.orderSeq + 1,
     calls: { ...life.calls },
     phoneReminded: life.phoneReminded,
     inviteDay: life.inviteDay,
@@ -201,11 +203,13 @@ export function restore(life: Household, s: WorldSave): void {
   if (s.pump) { life.pumpDay = s.pump[0]; life.pumpCount = s.pump[1] }
   life.fedDay = s.fedDay ?? -1
   life.orders = (s.orders ?? []).map((o) => ({ ...o, cart: { ...o.cart } }))
+  life.orderSeq = Math.max(s.orderSeq ?? 0, ...life.orders.map((o) => o.id))
   life.calls = { ...(s.calls ?? {}) }
   life.phoneReminded = s.phoneReminded ?? -1
   life.inviteDay = s.inviteDay ?? -1
   life.menu = s.menu ?? 'rice'
-  life.invited = s.invited ?? null
+  // 请的人在门口时存的档：读档后马上再来一次
+  life.invited = s.invited ? { id: s.invited.id, at: Number.isFinite(s.invited.at) && s.invited.at !== null ? s.invited.at : life.absHour } : null
   life.projects = (s.projects ?? (s.project ? [s.project] : [])).map((p) => ({ ...p }))
   ;(s.spikes ?? []).forEach((h, k) => { if (life.spikes[k]) life.spikes[k].hits = h })
   life.gateBonus = s.gateBonus

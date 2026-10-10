@@ -75,6 +75,8 @@ interface Task {
   dish?: string
   /** 玩家亲口下令接着干的工程：天黑也干，只有快累垮、快渴死、快饿死才停 */
   forced?: boolean
+  /** 做饭：已经从家里拿了料（被叫走时还回去） */
+  paid?: boolean
 }
 
 
@@ -536,6 +538,10 @@ export class Household {
       else {
         a.hold = Math.max(0, a.hold - hours)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
+        // 干完活（铺钉板、撸猫……）站在院子外面、没事可做的家里人：自己走回家（女主是玩家在操控，不管）
+        else if (a.hold <= 0 && !a.path.length && !a.settling && a !== this.actors[0] && a.floor === 0 && !inRect(YARD, a.pos.x, a.pos.z) && !fighting) {
+          a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
+        }
       }
     }
   }
@@ -559,8 +565,10 @@ export class Household {
     const inv = this.invited
     if (!v && inv && this.absHour >= inv.at && this.spawnVisitor && !(this.siege && !this.siege.done)) {
       const def = INVITES.find((d) => d.id === `invite_${inv.id}`)
-      this.invited = null
+      // 等回完话再清掉（人在门口时刷新网页，读档后会再来一次）
+      inv.at = Infinity
       if (def) { this.startVisit(def); return }
+      this.invited = null
     }
     if (!v) {
       // 每个游戏小时掷一次：一天最多来一个
@@ -652,7 +660,7 @@ export class Household {
   /** 能借出去的家人：不算女主、来帮忙的客人、不在家的；已经借出去一个就不能再借 */
   lendable(): Actor[] {
     if (this.lent) return []
-    return this.actors.filter((a) => a !== this.actors[0] && !a.guest && !this.isOut(a))
+    return this.actors.filter((a) => a !== this.actors[0] && !a.guest && !this.isOut(a) && !this.isInjured(a))
   }
 
   /** 借出去的人：走出街口就不见了；两天后带着子弹和吃的回来 */
@@ -722,7 +730,7 @@ export class Household {
 
   /** 网购的单子：送到的时刻（游戏小时）到了，快递小哥就送到铁门外 */
   orders: { id: number; cart: Cart; total: number; arrive: number }[] = []
-  private orderSeq = 0
+  orderSeq = 0
   /** 打过电话：联系人 → 哪天（一天一次） */
   calls: Record<string, number> = {}
   /** "今天是最后一天能网购"提醒过的那天 */
@@ -1162,7 +1170,7 @@ export class Household {
       v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
       return
     }
-    if (def.id.startsWith('invite_')) this.answerInvite(def.id.slice(7), choice)
+    if (def.id.startsWith('invite_')) { this.answerInvite(def.id.slice(7), choice); this.invited = null }
     this.note(`world.visit.${def.id}.log.${choice}`, this.visitVars())
     this.talking = null
     v.phase = 'leave'
@@ -2199,7 +2207,7 @@ export class Household {
 
   /** 点鸡圈选"逗逗小鸡"：选中的人走到鸡圈边蹲下逗一会儿 */
   playHens(a: Actor): 'ok' | 'busy' {
-    if (this.isOut(a) || a.dead || (this.siege && !this.siege.done)) return 'busy'
+    if (this.isOut(a) || a.dead || this.isInjured(a) || (this.siege && !this.siege.done)) return 'busy'
     const who = this.taken.get(COOP_SPOT)
     if (who && who !== a) return 'busy'
     this.cancel(a)
@@ -2250,8 +2258,9 @@ export class Household {
     if (t.van) this.fuel = Math.round((this.fuel + Household.VAN_FUEL) * 10) / 10
     this.trips = this.trips.filter((x) => x !== t)
     for (const a of t.members) {
-      a.path = []
       a.away = false
+      // 走回家（走到半路的人也回得来）
+      a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
     }
     this.note('world.log.tripCancel', { who: t.members.map((m) => m.name).join('、'), where: placeName(t.def.id) })
     return true
@@ -2832,7 +2841,7 @@ export class Household {
   /** 灶台菜单里选了一道菜：选中的人去做（做完自己吃），以后家里人做饭也做这个 */
   cookDish(a: Actor, spot: Spot, id: string): 'ok' | 'short' | 'busy' {
     if (!this.canCook(id)) return 'short'
-    if (this.isOut(a)) return 'busy'
+    if (this.isOut(a) || this.isInjured(a)) return 'busy'
     const who = this.taken.get(spot)
     if (who && who !== a) return 'busy'
     this.menu = id
@@ -2908,10 +2917,15 @@ export class Household {
       if (t.kind === 'pet' || t.kind === 'hens') a.pose = 'pet'
       if (t.kind === 'run') a.pose = 'walk'
       if (t.kind === 'cook') {
-        const d = dishOf(t.dish)
-        this.take('food', d.food)
-        if (d.water) this.take('water', d.water)
-        if (d.herbs) this.herbs = Math.max(0, this.herbs - d.herbs)
+        // 开火前再看一眼：东西被别人先用掉了就改做白米饭，白米饭也不够就不做了
+        if (!this.canCook(t.dish ?? 'rice')) t.dish = this.canCook('rice') ? 'rice' : undefined
+        if (!t.dish) { t.then = undefined; t.hours = 0 } else {
+          const d = dishOf(t.dish)
+          this.take('food', d.food)
+          if (d.water) this.take('water', d.water)
+          if (d.herbs) this.herbs = Math.max(0, this.herbs - d.herbs)
+          t.paid = true
+        }
       }
       if (t.kind === 'drink') this.take('water', DRINK.water)
       return
@@ -3051,6 +3065,13 @@ export class Household {
 
   /** 打断：立刻站起来，放下手里的事 */
   cancel(a: Actor): void {
+    // 做饭做到一半被叫走：用掉的东西还回去
+    const t = a.task
+    if (t?.kind === 'cook' && t.paid && t.hours > 0) {
+      const d = dishOf(t.dish)
+      this.stock = { food: this.stock.food + d.food, water: this.stock.water + d.water }
+      this.herbs += d.herbs
+    }
     this.release(a)
     a.task = null
     a.path = []
@@ -3072,7 +3093,7 @@ export class Household {
   /** 点了野外的一丛野菜 / 草药 / 蜂窝…：走过去蹲下采。'picked' = 刚采过还没长出来 */
   commandForage(a: Actor, id: string): 'ok' | 'picked' | 'no' {
     const s = FORAGE.find((f) => f.id === id)
-    if (!s || this.isOut(a) || a.floor !== 0) return 'no'
+    if (!s || this.isOut(a) || a.floor !== 0 || this.isInjured(a)) return 'no'
     if (!ripe(s, this.forageDay, this.clock.day)) return 'picked'
     this.cancel(a)
     const at = standAt(s)
@@ -3124,7 +3145,7 @@ export class Household {
     else if (spot.kind === 'sleep') task = this.spotTask(a, spot, 'sleep', 1, true)
     else if (spot.kind === 'dine') task = this.spotTask(a, spot, 'sit', 1, true)
     else if (spot.kind === 'relax') task = this.spotTask(a, spot, 'relax', 1.5, true)
-    else if (spot.kind === 'run') task = a.needs.energy < 15 ? null : this.spotTask(a, spot, 'run', 0.5, true)
+    else if (spot.kind === 'run') task = a.needs.energy < 15 || this.isInjured(a) ? null : this.spotTask(a, spot, 'run', 0.5, true)
     else task = this.spotTask(a, spot, 'stroll', 0.5, true)
     if (!task) return false
     this.assign(a, task)

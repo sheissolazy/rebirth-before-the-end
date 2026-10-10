@@ -2354,8 +2354,9 @@ export class World {
     this.raycaster.setFromCamera(ndc, this.camera)
     const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
     // 打丧尸时：点丧尸 = 盯住它（开枪先打它）并打开防线面板；点正在被砸的防线也打开面板
-    if (this.tapSiege()) return
+    // 先看是不是点了守位（换站位），再看是不是点了防线 / 丧尸
     if (this.mode === 'home' && this.tapPost()) return
+    if (this.tapSiege()) return
     // 点大橘：喵一声、呼噜呼噜，身边的人心情好一点
     if (this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length) {
       this.petCat()
@@ -2405,7 +2406,7 @@ export class World {
       // 点家具：弹出一个小菜单（坐着歇会儿 / 做饭吃 / 喝口水 / 睡一觉…），选了以后让选中的人去
       const options = hit ? this.furnitureOptions(hit, floor) : []
       if (hit && options.length) {
-        this.onFurnitureMenu?.({ x: cx, y: cy, title: furnitureName(hit), who: this.selected.name, options: options.map((o) => ({ label: o.label, spot: o.spot })) })
+        this.onFurnitureMenu?.({ x: cx, y: cy, title: furnitureName(hit), who: this.selected.name, options })
         return
       }
     }
@@ -2774,23 +2775,27 @@ export class World {
   /** 全家都睡着了：时间自动快进，有人醒了（或者打起来了）就回到原来的速度 */
   static readonly SLEEP_SKIP = 10
   private sleepSkip: { prev: number } | null = null
+  private sleepOptOut = false
   private updateSleepSkip(): void {
     const L = this.life
     const fighting = !!L.siege && !L.siege.done
     const home = this.actors.filter((a) => !a.dead && !L.isOut(a))
-    const asleep = home.length > 0 && home.every((a) => a.task?.kind === 'sleep' && a.task.phase === 'use')
+    // 女主在开车：她醒着
+    const asleep = !this.driving && home.length > 0 && home.every((a) => a.task?.kind === 'sleep' && a.task.phase === 'use')
+    // 玩家在快进时自己调了速度：这一觉不再快进，等有人醒了再说
+    if (!asleep) this.sleepOptOut = false
     // 面板暂停过、回来时速度被恢复成快进的速度：接着当作快进处理
     if (!this.sleepSkip && L.speed === World.SLEEP_SKIP) this.sleepSkip = { prev: 1 }
     if (this.sleepSkip) {
       // 玩家自己调了速度、或者有面板把游戏停了：听玩家的（面板关了以后上面那句会接回来）
-      if (L.speed !== World.SLEEP_SKIP) { if (L.speed > 0) { this.sleepSkip = null; this.setHud({ sleepSkip: false }) } return }
+      if (L.speed !== World.SLEEP_SKIP) { if (L.speed > 0) { this.sleepSkip = null; this.sleepOptOut = true; this.setHud({ sleepSkip: false }) } return }
       if (!asleep || fighting) {
         L.speed = fighting ? 1 : this.sleepSkip.prev
         this.sleepSkip = null
         this.setHud({ sleepSkip: false })
         this.pushLifeHud()
       }
-    } else if (asleep && !fighting && L.speed > 0 && L.speed <= 3) {
+    } else if (asleep && !fighting && !this.sleepOptOut && L.speed > 0 && L.speed <= 3) {
       this.sleepSkip = { prev: L.speed }
       L.speed = World.SLEEP_SKIP
       this.setHud({ sleepSkip: true })

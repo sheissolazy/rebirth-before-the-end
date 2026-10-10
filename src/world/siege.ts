@@ -106,6 +106,8 @@ export const BLOAT = { radius: 1.9, hurt: 12, barrier: 15, zombies: 30 }
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
   kind: ZombieKind = 'walker'
+  /** 吐酸水的：前面砸门的都死光了，就自己凑上来砸门（拿刀也够得着了） */
+  closing = false
   /** 危机夜里的大块头：高大、皮厚、走得慢，砸门砸得狠 */
   brute = false
   /** 黑鸦的人（不是丧尸）：走得快、皮厚、打不过会跑 */
@@ -342,13 +344,14 @@ export class Siege {
     }
     if (this.done) return
     const standing = this.o.defenders.filter((a) => !this.downed.has(a))
-    if (!standing.length) this.finish(false)
+    // 家里没人能守（都受了重伤躺着）：丧尸照样砸门，最后一道也破了才算输
+    if (this.o.defenders.length ? !standing.length : this.layer >= LAYERS.length) this.finish(false)
     else if (!this.queue.length && !this.zombies.some((z) => z.alive)) this.finish(true)
   }
 
   /** 天亮了：剩下的丧尸散回街上 */
   dawn(): void {
-    this.finish(this.o.defenders.some((a) => !this.downed.has(a)))
+    this.finish(this.o.defenders.length ? this.o.defenders.some((a) => !this.downed.has(a)) : this.layer < LAYERS.length)
   }
 
   private scatter(): void {
@@ -372,8 +375,8 @@ export class Siege {
     const layer = this.current
     z.slot = -1
     if (!layer) { z.state = 'hunt'; z.repath = 0; return }
-    // 吐酸水的不挤上去砸门，站在后面一点吐
-    if (z.kind === 'spitter') {
+    // 吐酸水的不挤上去砸门，站在后面一点吐（前面没人了才凑上来）
+    if (z.kind === 'spitter' && !z.closing) {
       const base = layer.bash[z.id % layer.bash.length]
       const post = layer.posts[1]
       const dx = base.x - post.x
@@ -411,7 +414,8 @@ export class Siege {
     if (!layer) return
     const used = this.zombies.filter((z) => z.alive && z.slot >= 0).length
     if (used >= layer.bash.length) return
-    const waiter = this.zombies.find((z) => z.alive && z.slot < 0 && (z.state === 'wait' || z.state === 'walk'))
+    // 吐酸水的不抢砸门的位置（它们站在后面吐，除非已经凑上来了）
+    const waiter = this.zombies.find((z) => z.alive && z.slot < 0 && (z.state === 'wait' || z.state === 'walk') && (z.kind !== 'spitter' || z.closing))
     if (waiter) this.sendZombie(waiter)
   }
 
@@ -468,6 +472,13 @@ export class Siege {
     }
     if (z.state === 'wait') {
       if (!layer) { z.state = 'hunt'; return }
+      // 砸门的都倒下了、后面也没有再来的：吐酸水的凑上来砸门（不然一家人拿刀够不着，被它一口口吐倒）
+      if (z.kind === 'spitter' && !z.closing && !this.queue.length
+        && !this.zombies.some((o) => o !== z && o.alive && o.state !== 'leave' && o.kind !== 'spitter')) {
+        z.closing = true
+        this.sendZombie(z)
+        return
+      }
       if (z.kind === 'spitter' && z.cool <= 0) this.spit(z)
       return
     }
@@ -605,7 +616,8 @@ export class Siege {
       const w = WEAPONS[a.weapon as 'shotgun' | 'crossbow']
       const high = a.floor === 1 && inRect(PORCH, a.pos.x, a.pos.z, -0.1)
       const reach = w.range + (high ? BALCONY_REACH : 0)
-      const inRange = (z: Zombie) => z.alive && z.state !== 'leave' && Math.hypot(z.pos.x - a.pos.x, z.pos.z - a.pos.z) <= reach
+      // 防线都破了：只能打同一层的（隔着楼板打不到）
+      const inRange = (z: Zombie) => z.alive && z.state !== 'leave' && (!!this.current || z.floor === a.floor) && Math.hypot(z.pos.x - a.pos.x, z.pos.z - a.pos.z) <= reach
       let target = prefer && inRange(prefer) ? prefer : null
       if (!target) {
         let bd = Infinity
@@ -639,8 +651,12 @@ export class Siege {
 
   /** 谁拿着枪 / 弩、还要等几秒（界面显示用） */
   shooter(): { name: string; weapon: 'shotgun' | 'crossbow'; cool: number } | null {
-    const a = this.o.defenders.find((d) => !this.downed.has(d) && (d.weapon === 'shotgun' || d.weapon === 'crossbow'))
-    return a ? { name: a.name, weapon: a.weapon as 'shotgun' | 'crossbow', cool: Math.max(0, this.fireCool.get(a) ?? 0) } : null
+    const guns = this.o.defenders.filter((d) => !this.downed.has(d) && (d.weapon === 'shotgun' || d.weapon === 'crossbow'))
+    // 能打的（弩，或者还有子弹的枪）里挑最先装好的；都不能打就报第一个拿枪的（界面上灰掉）
+    const usable = guns.filter((d) => d.weapon === 'crossbow' || this.o.ammo.n > 0)
+    const cool = (d: Actor) => Math.max(0, this.fireCool.get(d) ?? 0)
+    const a = usable.sort((p, q) => cool(p) - cool(q))[0] ?? guns[0]
+    return a ? { name: a.name, weapon: a.weapon as 'shotgun' | 'crossbow', cool: cool(a) } : null
   }
 
   /** 吐酸水：吐向离得最近、还站着的人（隔着门也吐得到） */
@@ -656,6 +672,7 @@ export class Siege {
   }
 
   private kill(z: Zombie, by: string): void {
+    if (z.state === 'dead') return
     z.state = 'dead'
     z.path = []
     z.slot = -1
@@ -701,7 +718,8 @@ export class Siege {
       at = { x: pts.reduce((v, p) => v + p.x, 0) / pts.length, z: pts.reduce((v, p) => v + p.z, 0) / pts.length }
     } else at = alive[0].pos
     for (const z of alive) {
-      if (Math.hypot(z.pos.x - at.x, z.pos.z - at.z) > 2.4) continue
+      // 前面那只炸开时可能已经把它炸死了
+      if (!z.alive || Math.hypot(z.pos.x - at.x, z.pos.z - at.z) > 2.4) continue
       z.hp -= 40
       z.burn = 3
       z.hitT = 0.3

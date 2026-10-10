@@ -2250,3 +2250,76 @@ describe('停工的工程谁有空谁接着干', () => {
     expect(life.continueBuild(p.id, mom)).toBe('tired')
   })
 })
+
+describe('审查发现的问题（10-09 晚）', () => {
+  const step = (life: Household, n: number, auto = true) => {
+    for (let i = 0; i < n; i++) {
+      life.tick(0.05, (a) => auto && life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(0.05 * life.speed, 2.2); a.updateSettle(0.05 * life.speed) }
+      for (const z of life.siege?.zombies ?? []) z.follow(0.05, z.speed)
+    }
+  }
+
+  it('爸爸在铁门外铺完钉板：自己走回院子，不会站在街上饿着', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 8 }
+    life.speed = 3
+    const dad = life.actors[2]
+    expect(life.startBuild('trap', dad)).toBe('ok')
+    for (let i = 0; i < 6000 && life.trap.hp <= 0; i++) step(life, 1)
+    expect(life.trap.hp).toBe(100)
+    step(life, 600)
+    expect(inRect(YARD, dad.pos.x, dad.pos.z)).toBe(true)
+  })
+
+  it('走到街上的人被叫回来：自己走回家', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.speed = 1
+    const mom = life.actors[1]
+    life.startTrip('supermarket', [mom])
+    for (let i = 0; i < 4000 && mom.pos.z < 15.5; i++) step(life, 1)
+    expect(life.cancelTrip(life.trips[0].id)).toBe(true)
+    step(life, 1500)
+    expect(inRect(YARD, mom.pos.x, mom.pos.z)).toBe(true)
+  })
+
+  it('燃烧瓶 + 胀鼓鼓的：同一只丧尸不会被打死两次（晶核不会多算）', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(2, false)
+    const s = life.siege!
+    for (let i = 0; i < 4000 && s.zombies.filter((z) => z.state === 'bash').length < 2; i++) { for (const z of s.zombies) z.hp = 500; step(life, 1, false) }
+    const [a, b] = s.zombies
+    a.kind = 'bloater'; a.hp = 30; b.hp = 20
+    b.root.position.set(a.pos.x + 0.6, 0, a.pos.z)
+    const kills = s.kills
+    life.throwMolotov()
+    expect(s.kills - kills).toBe(2)
+  })
+
+  it('家里的人都受了重伤：丧尸照样来砸门，不会一开打就算输', () => {
+    const { life } = simulate('paradise', 0)
+    life.spawnZombie = (at) => new Zombie(at)
+    for (const a of life.actors) a.injured = 9999
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(2, false)
+    step(life, 40, false)
+    expect(life.siege?.done).toBe(false)
+  })
+
+  it('做饭做到一半被叫走：用掉的粮食还回来', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 18 }
+    life.speed = 1
+    life.stock = { food: 5, water: 5 }
+    const mom = life.actors[1]
+    const stove = life.allSpots.find((x) => x.kind === 'cook')!
+    expect(life.cookDish(mom, stove, 'feast')).toBe('ok')
+    for (let i = 0; i < 2000 && !(mom.task?.kind === 'cook' && mom.task.phase === 'use'); i++) step(life, 1, false)
+    expect(life.stock.food).toBeLessThan(5)
+    life.cancel(mom)
+    expect(life.stock.food).toBeCloseTo(5, 1)
+  })
+})

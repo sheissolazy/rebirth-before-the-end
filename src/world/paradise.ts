@@ -103,6 +103,14 @@ export async function loadParadiseKit(renderer: THREE.WebGLRenderer): Promise<Pa
       m.receiveShadow = true
       // 叶子和草用镂空而不是半透明混合，避免前后排序出错
       for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+        // 玻璃（钟面、相框）：不用透射材质——它每帧要把场景多画一遍，和江面倒影一起用还会把画面弄黑
+        const phys = mat as THREE.MeshPhysicalMaterial
+        if (phys.transmission > 0) {
+          phys.transmission = 0
+          phys.transparent = true
+          phys.opacity = 0.3
+          phys.depthWrite = false
+        }
         const std = mat as THREE.MeshStandardMaterial
         if (std.transparent && std.map) {
           // 远处的叶子贴图缩小以后边缘变透明，0.5 的阈值会把叶子整片裁掉（树看着像秃枝）：
