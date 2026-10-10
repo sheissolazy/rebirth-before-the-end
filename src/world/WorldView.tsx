@@ -551,6 +551,11 @@ export default function WorldView() {
       </div>
 
 
+      {hud.sleepSkip && !hud.siege && (
+        <div className="pointer-events-none absolute left-1/2 top-14 -translate-x-1/2 rounded-full bg-[#1d1915]/85 px-4 py-1.5 text-[13px] text-[#cfd0f0] ring-1 ring-[#8a8fd6]/40" style={{ fontFamily: SERIF }}>
+          {t('world.sleepSkip')}
+        </div>
+      )}
       {hud.siege && (
         <div className="absolute left-1/2 top-14 w-80 -translate-x-1/2 overflow-hidden rounded-md bg-[#2a0f0c]/90 px-4 py-2 text-[#f4ecdc] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-[#e2553f]/40">
           <Grain />

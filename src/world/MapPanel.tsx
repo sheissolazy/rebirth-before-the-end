@@ -23,17 +23,17 @@ export function MapPanel({ prologue, check, members, van, away, onGo, onClose }:
   const [pick, setPick] = useState<string | null>(null)
   const [who, setWho] = useState<string[]>(() => members.slice(0, 1).map((m) => m.name))
   // 有油、车在家就默认开车去
-  const [drive, setDrive] = useState(van.fuel > 0 && van.home)
+  const [drive, setDrive] = useState(van.fuel >= 0.2 && van.home)
   // 地点按文字版的阶段筛；加油站这种 3D 原型里两边都能去的，按出门规则来
   const places = locations.filter((l) => l.id !== 'home' && (l.phase === 'both' || l.phase === (prologue ? 'prologue' : 'apocalypse')
     || TRIPS.some((x) => x.id === l.id && x.phase === 'both')))
   const trip = TRIPS.find((x) => x.id === pick)
   const loc = locations.find((l) => l.id === pick)
-  const canDrive = !!trip && vanAllowed(trip.id) && van.fuel > 0 && van.home && check(trip.id, true) !== 'fuel'
+  const canDrive = !!trip && vanAllowed(trip.id) && van.fuel >= 0.2 && van.home && check(trip.id, true) !== 'fuel'
   const byVan = canDrive && drive
   const shop = trip ? shopFor(trip.id, prologue) : null
   // 能开的车（现在只有一辆面包车）
-  const cars = van.fuel > 0 && van.home && !away.some((a) => a.van) ? 1 : 0
+  const cars = van.fuel >= 0.2 && van.home && !away.some((a) => a.van) ? 1 : 0
   const status: Check | null = trip ? check(trip.id, byVan) : null
   const toggle = (n: string) => setWho((w) => (w.includes(n) ? w.filter((x) => x !== n) : [...w, n]))
   return (

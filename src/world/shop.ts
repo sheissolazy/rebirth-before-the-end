@@ -72,7 +72,7 @@ export const SHOPS: ShopDef[] = [
   },
   {
     id: 'gasstation', currency: 'money', phase: 'prologue', items: [
-      { id: 'fuel', name: '汽油（一桶）', icon: '⛽', cat: 'other', desc: '面包车出门一趟烧一桶。', price: 70, weight: 2, stock: 8, give: { fuel: 1 } },
+      { id: 'fuel', name: '汽油（一桶）', icon: '⛽', cat: 'other', desc: '面包车出门一趟烧 0.2 桶，一桶能跑五趟。', price: 70, weight: 2, stock: 8, give: { fuel: 1 } },
       { id: 'snacks', name: '便利店零食', icon: '🍫', cat: 'food', desc: '小鱼店里的饼干、巧克力，嘴甜的小鱼还会多塞两包。', price: 80, weight: 1, stock: 6, give: { food: 1 } },
     ],
   },

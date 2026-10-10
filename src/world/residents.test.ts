@@ -350,7 +350,7 @@ describe('出门', () => {
     expect(life.tripCheck('river')).toBe('ok')
   })
 
-  it('开面包车去超市：上车、车开走、回来倒进车位，烧一桶油，更快、多装一半', () => {
+  it('开面包车去超市：上车、车开走、回来倒进车位，烧 0.2 桶油，更快、多装一半', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 0, hour: 17 }
     life.speed = 3
@@ -361,7 +361,7 @@ describe('出门', () => {
     life.clock = { day: 0, hour: 9 }
     expect(life.fuel).toBe(3)
     expect(life.startTrip('supermarket', [hero, mom], true)).toBe(true)
-    expect(life.fuel).toBe(2)
+    expect(life.fuel).toBe(2.8)
     expect(life.trip!.back - life.absHour).toBe(2)
     const food0 = life.stock.food
     // 两个人加面包车能装 36 件：开车去能多买
@@ -503,7 +503,7 @@ describe('出门', () => {
     // 末日后加油站没人卖了：去抢剩下的，不要钱
     life.startTrip('gasstation', [life.actors[2]], true)
     expect(life.money).toBe(money)
-    expect(life.fuel).toBe(2)
+    expect(life.fuel).toBe(2.8)
   })
 
   it('开车出去时存档：读档后车也不在家，到点开回来', () => {
@@ -517,7 +517,7 @@ describe('出门', () => {
     const { life: again } = simulate('paradise', 0)
     restore(again, snap)
     expect(again.vanAway).toBe(true)
-    expect(again.fuel).toBe(2)
+    expect(again.fuel).toBe(2.8)
     again.speed = 3
     run(again, 3)
     expect(again.trip).toBeNull()
@@ -2095,7 +2095,7 @@ describe('叫回来、撸猫、逗小鸡、跑步机', () => {
     expect(life.cancelTrip(t.id)).toBe(true)
     expect(life.money).toBe(money)
     // 开车去的：油也退回来
-    expect(life.fuel).toBe(fuel + 1)
+    expect(life.fuel).toBeCloseTo(fuel + 0.2)
     expect(life.trips.length).toBe(0)
     expect(life.isOut(mom)).toBe(false)
   })
@@ -2209,5 +2209,44 @@ describe('出门在外不掉食水', () => {
     const before = { ...mom.needs }
     for (let i = 0; i < 600 && mom.away; i++) life.tick(0.05, (a) => life.isHomeBody(a))
     expect(mom.needs).toEqual(before)
+  })
+})
+
+describe('停工的工程谁有空谁接着干', () => {
+  it('爸爸干到一半被派出门：家里有空的人自己去接着干；晚上点"让 XX 接着干"也照干', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.speed = 1
+    const [, mom, dad] = life.actors
+    expect(life.startBuild('garden', dad)).toBe('ok')
+    const step = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        life.tick(0.05, (a) => life.isHomeBody(a))
+        for (const a of life.actors) { a.follow(0.05, 2.2); a.updateSettle(0.05) }
+      }
+    }
+    step(200)
+    // 爸爸出门了：工程停着
+    life.startTrip('office', [dad])
+    const p = life.projects[0]
+    let took: string | null = null
+    for (let i = 0; i < 4000 && !took; i++) {
+      step(1)
+      const w = life.actors.find((a) => a !== dad && a.task?.kind === 'build')
+      if (w) took = w.name
+    }
+    expect(took).not.toBeNull()
+    expect(p.worker).toBe(took)
+    // 晚上：玩家下令让妈妈接着干，只要她撑得住就干
+    life.clock = { day: 0, hour: 23 }
+    mom.needs = { ...mom.needs, energy: 40, thirst: 50, hunger: 50 }
+    for (const a of life.actors) if (a !== mom && a.task?.kind === 'build') life.cancelTrip(-1)
+    p.worker = 'nobody'
+    expect(life.continueBuild(p.id, mom)).toBe('ok')
+    step(20)
+    expect(mom.task?.kind).toBe('build')
+    // 累垮了就不干，还说为什么
+    mom.needs = { ...mom.needs, energy: 3 }
+    expect(life.continueBuild(p.id, mom)).toBe('tired')
   })
 })

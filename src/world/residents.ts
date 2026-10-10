@@ -73,6 +73,8 @@ interface Task {
   piece?: number
   /** 做饭 / 吃饭：哪道菜 */
   dish?: string
+  /** 玩家亲口下令接着干的工程：天黑也干，只有快累垮、快渴死、快饿死才停 */
+  forced?: boolean
 }
 
 
@@ -1627,7 +1629,7 @@ export class Household {
   /** 面包车在家、有油，这趟能开车去 */
   vanReady(id: string): boolean {
     // 车已经派给别的一拨人了（哪怕他们还在走去上车）也不行
-    return this.fuel > 0 && !this.vanAway && !this.vanMove && !this.vanAt && !this.trips.some((t) => t.van) && vanAllowed(id)
+    return this.fuel >= Household.VAN_FUEL - 1e-6 && !this.vanAway && !this.vanMove && !this.vanAt && !this.trips.some((t) => t.van) && vanAllowed(id)
   }
 
   startTrip(id: string, members: Actor[], van = false): boolean {
@@ -1637,7 +1639,8 @@ export class Household {
     if (members.includes(this.actors[0])) { this.cancelSearch(); this.stopFishing() }
     const def = TRIPS.find((t) => t.id === id)!
     this.money -= tripCost(def, this.clock.day < PROLOGUE_DAYS)
-    if (van) this.fuel -= 1
+    // 开一趟车烧 0.2 桶油（老板：一次一桶用太快了）
+    if (van) this.fuel = Math.max(0, Math.round((this.fuel - Household.VAN_FUEL) * 10) / 10)
     // 开车：先走到车门边上车；走路：从街东头出去
     members.forEach((a, k) => {
       this.cancel(a)
@@ -2231,6 +2234,8 @@ export class Household {
   }
 
   static readonly RUN_MAX = 4
+  /** 开车出门一趟烧几桶油 */
+  static readonly VAN_FUEL = 0.2
 
   /** 干完哪种活心情涨多少（成就感） */
   static readonly PRIDE: Partial<Record<TaskKind, number>> = {
@@ -2242,7 +2247,7 @@ export class Household {
     const t = this.trips.find((x) => x.id === tripId)
     if (!t || t.phase !== 'out') return false
     this.money += tripCost(t.def, this.clock.day < PROLOGUE_DAYS)
-    if (t.van) this.fuel += 1
+    if (t.van) this.fuel = Math.round((this.fuel + Household.VAN_FUEL) * 10) / 10
     this.trips = this.trips.filter((x) => x !== t)
     for (const a of t.members) {
       a.path = []
@@ -2298,13 +2303,22 @@ export class Household {
   }
 
   /** 换个人接着干某项工程（或者把走开的人叫回来）；选中的人手上已经有别的工程就不行 */
-  continueBuild(id: BuildId, who: Actor): 'ok' | 'none' | 'busy' {
+  continueBuild(id: BuildId, who: Actor): 'ok' | 'none' | 'busy' | 'tired' | 'thirsty' | 'hungry' | 'injured' | 'out' | 'other' {
     const p = this.projects.find((x) => x.id === id)
     if (!p) return 'none'
+    if (this.siege && !this.siege.done) return 'busy'
+    const why = this.whyNotBuild(who)
+    if (why) return why
     const mine = this.projectOf(who.name)
-    if (!this.canWork(who) || (mine && mine !== p) || (this.siege && !this.siege.done)) return 'busy'
+    if (mine && mine !== p) return 'other'
+    // 原来在干的人（如果不是 TA）放下手里的
     p.worker = who.name
-    this.sendToBuild(who)
+    const task = this.buildTask(who)
+    if (!task) return 'busy'
+    task.manual = true
+    task.forced = true
+    this.cancel(who)
+    this.assign(who, task)
     return (who.task as Task | null)?.kind === 'build' ? 'ok' : 'busy'
   }
 
@@ -2344,9 +2358,28 @@ export class Household {
   }
 
   /** 还能接着干吗：天黑了、下大雨、饿了渴了累了就先歇着 */
-  private canKeepBuilding(a: Actor): boolean {
+  private canKeepBuilding(a: Actor, forced = false): boolean {
     const n = a.needs
+    if (forced) return n.energy >= 8 && n.hunger >= 10 && n.thirst >= 10
     return !isNight(this.clock.hour) && this.rain <= 0.3 && n.energy >= 20 && n.hunger >= 25 && n.thirst >= 25
+  }
+
+  /** 这一段干完了，挪到下一段接着干（条件不允许就先停） */
+  private nextStint(a: Actor, forced?: boolean): Task | null {
+    if (!this.canKeepBuilding(a, forced)) return null
+    const n = this.buildTask(a)
+    return n && { ...n, forced }
+  }
+
+  /** 叫人接着干但干不了：为什么（界面上说一声） */
+  whyNotBuild(a: Actor): 'tired' | 'thirsty' | 'hungry' | 'injured' | 'out' | null {
+    if (this.isOut(a)) return 'out'
+    if (this.isInjured(a)) return 'injured'
+    const n = a.needs
+    if (n.energy < 8) return 'tired'
+    if (n.thirst < 10) return 'thirsty'
+    if (n.hunger < 10) return 'hungry'
+    return null
   }
 
   private buildProgress(a: Actor, t: Task, hours: number): void {
@@ -2357,10 +2390,10 @@ export class Household {
     // 砌完这一段：挪到下一段（钉板一样，一块一块挪着铺）
     if (p.id === 'wall') {
       const n = wallPieces().length
-      if (Math.floor(Math.min(n - 1, Math.floor(p.done * n)) / Household.WALL_STRETCH) !== t.piece) { t.hours = 0; t.then = () => (this.canKeepBuilding(a) ? this.buildTask(a) : null) }
+      if (Math.floor(Math.min(n - 1, Math.floor(p.done * n)) / Household.WALL_STRETCH) !== t.piece) { const f = t.forced; t.hours = 0; t.then = () => this.nextStint(a, f) }
     } else if (p.id === 'trap') {
       const k = Math.floor(p.done * 3)
-      if (t.spot && Math.abs(t.spot.x - (3.6 + k * 0.7)) > 0.01) { t.hours = 0; t.then = () => (this.canKeepBuilding(a) ? this.buildTask(a) : null) }
+      if (t.spot && Math.abs(t.spot.x - (3.6 + k * 0.7)) > 0.01) { const f = t.forced; t.hours = 0; t.then = () => this.nextStint(a, f) }
     }
   }
 
@@ -2496,7 +2529,15 @@ export class Household {
     const handy = fixer && !night && (want === 'idle' || want === 'relax' || want === 'stroll')
     if (handy) task = this.repairTask()
     // 手上有没干完的工程（之前派给 TA 的）：白天有空就回去接着干
-    if (!task && !night && this.projectOf(a.name) && this.canKeepBuilding(a) && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.buildTask(a)
+    // 停着的工程：自己手上的接着干；没人在干的，谁有空谁去接（老板：这种默认谁有空就回去干）
+    if (!task && !night && !a.guest && this.canWork(a) && this.canKeepBuilding(a) && (want === 'idle' || want === 'stroll' || want === 'relax')) {
+      const mine = this.projectOf(a.name)
+      const idle = mine ?? this.projects.find((p) => !this.actors.some((o) => o.name === p.worker && o.task?.kind === 'build') && !this.projectOf(a.name))
+      if (idle) {
+        idle.worker = a.name
+        task = this.buildTask(a)
+      }
+    }
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
     if (!task && !night && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
     // 白天有空：喂鸡捡蛋、去压水井压水（家里水不多的时候）
@@ -2860,7 +2901,7 @@ export class Household {
       }
       if (t.kind === 'interact' && t.with) this.beginInteract(a, t)
       // 走到工地天已经黑了（或者累了）：今天先不干了
-      if (t.kind === 'build' && !this.canKeepBuilding(a)) { this.finish(a); return }
+      if (t.kind === 'build' && !this.canKeepBuilding(a, t.forced)) { this.finish(a); return }
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
@@ -2906,7 +2947,7 @@ export class Household {
     // 晾到一半下雨了：不晾了
     if (t.kind === 'hang' && this.rain > 0.1) return true
     // 干工程：天黑了、下大雨、饿了渴了累了就先歇着（白天有空会自己回来接着干）
-    if (t.kind === 'build' && !this.canKeepBuilding(a)) return true
+    if (t.kind === 'build' && !this.canKeepBuilding(a, t.forced)) return true
     if (t.kind === 'run' && (a.needs.energy < 12 || a.needs.thirst < 15)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true

@@ -121,6 +121,8 @@ export interface Hud {
   build: { id: string; p: number; worker: string; working: boolean }[]
   /** 江边钓鱼：在钓吗、站在钓鱼点旁边吗、今天钓了几条 */
   fishing: { active: boolean; near: boolean; caught: number }
+  /** 全家都睡着了，时间在快进 */
+  sleepSkip: boolean
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 全新开局的片头正在放 */
@@ -230,7 +232,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false,
 }
 
 export class World {
@@ -1748,6 +1750,7 @@ export class World {
     }
     this.life.heroDriving = !!this.driving
     this.life.tick(raw, (a) => this.life.isHomeBody(a) && !(a === this.heroine && (this.keysMoving || !!this.driving)))
+    this.updateSleepSkip()
     const fighting = !!this.life.siege && !this.life.siege.done
     // 打起来了还在车上：先下车
     if (this.driving && (fighting || this.life.onTrip(this.heroine))) this.exitVan(true)
@@ -2768,6 +2771,33 @@ export class World {
     }
   }
 
+  /** 全家都睡着了：时间自动快进，有人醒了（或者打起来了）就回到原来的速度 */
+  static readonly SLEEP_SKIP = 10
+  private sleepSkip: { prev: number } | null = null
+  private updateSleepSkip(): void {
+    const L = this.life
+    const fighting = !!L.siege && !L.siege.done
+    const home = this.actors.filter((a) => !a.dead && !L.isOut(a))
+    const asleep = home.length > 0 && home.every((a) => a.task?.kind === 'sleep' && a.task.phase === 'use')
+    // 面板暂停过、回来时速度被恢复成快进的速度：接着当作快进处理
+    if (!this.sleepSkip && L.speed === World.SLEEP_SKIP) this.sleepSkip = { prev: 1 }
+    if (this.sleepSkip) {
+      // 玩家自己调了速度、或者有面板把游戏停了：听玩家的（面板关了以后上面那句会接回来）
+      if (L.speed !== World.SLEEP_SKIP) { if (L.speed > 0) { this.sleepSkip = null; this.setHud({ sleepSkip: false }) } return }
+      if (!asleep || fighting) {
+        L.speed = fighting ? 1 : this.sleepSkip.prev
+        this.sleepSkip = null
+        this.setHud({ sleepSkip: false })
+        this.pushLifeHud()
+      }
+    } else if (asleep && !fighting && L.speed > 0 && L.speed <= 3) {
+      this.sleepSkip = { prev: L.speed }
+      L.speed = World.SLEEP_SKIP
+      this.setHud({ sleepSkip: true })
+      this.pushLifeHud()
+    }
+  }
+
   /** 盯住的丧尸脚下一圈红圈 */
   private updateTargetRing(): void {
     const z = this.lineTarget
@@ -2936,7 +2966,7 @@ export class World {
   /** 地图上"开面包车去"要用：还剩几桶油、车在不在家 */
   vanInfo(): { fuel: number; home: boolean; armored: boolean; parkedOut: boolean } {
     const l = this.life
-    return { fuel: l.fuel, home: !l.vanAway && !l.vanMove && !l.vanAt, armored: l.vanArmor, parkedOut: !!l.vanAt && !l.vanAway && !l.vanMove }
+    return { fuel: Math.round(l.fuel * 10) / 10, home: !l.vanAway && !l.vanMove && !l.vanAt, armored: l.vanArmor, parkedOut: !!l.vanAt && !l.vanAway && !l.vanMove }
   }
 
   /** 地图上"在外面的人" */
@@ -2970,7 +3000,7 @@ export class World {
       items: shop.items.map((it) => ({ ...it, unit: priceOf(it, shop, l.clock.day), owned: l.owns(it) })),
       buys: shop.buys ?? [],
       home: {
-        food: av.food, water: av.water, medkits: l.medkits, ammo: l.ammo.n, fuel: l.fuel, molotovs: l.molotovs, people,
+        food: av.food, water: av.water, medkits: l.medkits, ammo: l.ammo.n, fuel: Math.round(l.fuel * 10) / 10, molotovs: l.molotovs, people,
         daysToDoom: Math.max(0, PROLOGUE_DAYS - l.clock.day), gateBonus: l.gateBonus, trap: l.trap.hp > 0, crossbow: l.crossbow,
       },
     }
@@ -3292,7 +3322,7 @@ export class World {
       hour: c.hour,
       money: this.life.money,
       medkits: this.life.medkits,
-      fuel: this.life.fuel,
+      fuel: Math.round(this.life.fuel * 10) / 10,
       prologue: c.day < PROLOGUE_DAYS,
       report: this.life.report,
       visit: this.visitHud(),
