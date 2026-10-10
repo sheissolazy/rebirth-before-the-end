@@ -2707,10 +2707,11 @@ describe('菜园：多块地、种子、选种什么', () => {
 describe('高温、寒潮', () => {
   const run = (life: Household, hours: number) => {
     const dt = 0.1
-    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed); i++) life.tick(dt, () => false)
+    const steps = (hours * DAY_SECONDS) / 24 / (dt * life.speed)
+    for (let i = 0; i < steps && !life.over; i++) life.tick(dt, () => false)
   }
 
-  it('第 7 个月下午四十多度：有空调有电屋里 26 度、发电机烧油；没有空调在屋里也会中暑掉血', () => {
+  it('第 7 个月下午四十多度：有空调有电屋里 26 度、发电机烧油；没有空调屋里三十七八度也会中暑掉血；没人在家空调不开', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: PROLOGUE_DAYS + 6 * 4, hour: 14 }
     expect(life.outTemp).toBeGreaterThan(40)
@@ -2728,13 +2729,36 @@ describe('高温、寒潮', () => {
     run(life, 1)
     expect(life.fuel).toBeLessThan(2)
     expect(mom.health).toBeGreaterThanOrEqual(h0 - 0.01)
-    // 关掉空调（拔了）：下午还在四十度上下，屋里三十六七度，渴得快，外面晒着的人中暑
+    // 关掉空调（拔了）：下午还在四十度上下，屋里三十七八度，渴得快，待在屋里也中暑
     life.aircon = false
-    mom.root.position.set(15, 0, 5)
+    expect(life.inTemp).toBeGreaterThanOrEqual(36)
     const t0 = mom.needs.thirst
     run(life, 1)
-    expect(mom.needs.thirst).toBeLessThan(t0 - 4)
+    expect(mom.needs.thirst).toBeLessThan(t0 - 3)
     expect(mom.health).toBeLessThan(h0)
+    // 一家人都出门了：空调不开
+    life.aircon = true
+    for (const a of life.actors) a.away = true
+    expect(life.acOn).toBe(false)
+  })
+
+  it('不冷的时候火炉不白烧；汽油只在冷到要冻伤时才烧，而且给面包车留一趟的油', () => {
+    const { life } = simulate('paradise', 0)
+    // 第 10 个月（16/7 度）：屋里不冷，不烧
+    life.clock = { day: PROLOGUE_DAYS + 9 * 4, hour: 4 }
+    life.bamboo = 5
+    expect(life.stoveHeat).toBe(false)
+    // 第 11 个月白天零下两度：屋里四度左右，烧竹竿；没竹竿也不烧汽油（还没到冻伤）
+    life.clock = { day: PROLOGUE_DAYS + 10 * 4, hour: 14 }
+    expect(life.stoveHeat).toBe(true)
+    life.bamboo = 0
+    life.fuel = 1
+    expect(life.stoveHeat).toBe(false)
+    // 夜里零下十四度：屋里零下八度，烧汽油；只剩一趟的油就不烧了
+    life.clock = { day: PROLOGUE_DAYS + 10 * 4, hour: 3 }
+    expect(life.stoveHeat).toBe(true)
+    life.fuel = 0.2
+    expect(life.stoveHeat).toBe(false)
   })
 
   it('寒潮夜里零下十几度：火炉先烧竹竿、没有就烧汽油，屋里撑到 16 度；什么都没有就冻伤；菜冻死', () => {

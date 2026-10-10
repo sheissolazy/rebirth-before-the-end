@@ -57,7 +57,7 @@ export class Rain {
     this.flakePos = new Float32Array(this.n * 3)
     const fg = new THREE.BufferGeometry()
     fg.setAttribute('position', new THREE.BufferAttribute(this.flakePos, 3))
-    this.flakeMat = new THREE.PointsMaterial({ color: '#ffffff', size: 0.09, transparent: true, opacity: 0, depthWrite: false })
+    this.flakeMat = new THREE.PointsMaterial({ color: '#ffffff', size: 0.32, transparent: true, opacity: 0, depthWrite: false })
     this.flakes = new THREE.Points(fg, this.flakeMat)
     this.flakes.frustumCulled = false
     this.flakes.visible = false

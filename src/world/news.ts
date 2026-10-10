@@ -102,6 +102,9 @@ export function buildNews(c: NewsCtx): NewsView {
   const m = month % 12
   if (m === 6) lines.push({ icon: '🌡️', text: `高温预警：白天超过 40 度。${c.aircon ? '家里有空调，记得开发电机。' : '没有空调的话，中午别干重活。'}`, tone: 'bad' })
   if (m === 10 || m === 11) lines.push({ icon: '❄️', text: `寒潮预警：夜里零下二十度。${c.generator ? '火炉烧旺，发电机加满油。' : '多囤燃料和棉被，火炉不能断。'}`, tone: 'bad' })
+  // 提前一个月：气象台的长期预报
+  if (m === 5) lines.push({ icon: '🌡️', text: '长期预报：下个月起持续高温，最高四十度以上。', tone: 'warn' })
+  if (m === 9) lines.push({ icon: '❄️', text: '长期预报：下个月起强冷空气南下，随后是罕见的极寒。', tone: 'warn' })
   lines.push(rainLine(c.day + 1, '明天'))
   // 这个月新出现了哪种丧尸就先说这个；大夜前一天起改说大夜
   const headline = c.crisisKind && inDays <= 1 ? BROADCAST[c.crisisKind] : (NEW_KINDS[month] ?? BROADCAST[c.crisisKind ?? 'horde'])

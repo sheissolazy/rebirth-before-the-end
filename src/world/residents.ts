@@ -21,7 +21,7 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { buildNews, type NewsView } from './news'
 import { LOT, LOTTERY, marketState, stockPrice } from './money'
-import { AC_FUEL, BAMBOO_HOURS, STOVE_FUEL, extremeOf, indoorTemp, outdoorTemp, tempEffect } from './climate'
+import { AC_ABOVE, AC_FUEL, BAMBOO_HOURS, FUEL_BELOW, FUEL_RESERVE, STOVE_BELOW, STOVE_FUEL, extremeOf, indoorTemp, outdoorTemp, tempEffect } from './climate'
 import { CROPS, MAX_PLOTS, PLOT_SLOTS, cropOf, emptyPlot, growPerDay, plotSpot, type CropId, type Plot } from './garden'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
@@ -703,14 +703,21 @@ export class Household {
     return this.clock.day < PROLOGUE_DAYS || (this.generator && this.fuel > 0)
   }
 
-  /** 空调开着：外面热（30 度以上）、家里有空调、有电 */
-  get acOn(): boolean {
-    return this.aircon && this.powered && this.outTemp > 30
+  /** 家里有人（不在家就不开空调、不烧火炉） */
+  private get anyoneHome(): boolean {
+    return this.actors.some((a) => !a.dead && !a.lost && !a.runaway && !a.away && !this.isOut(a))
   }
 
-  /** 火炉在取暖：外面冷（12 度以下）、有东西烧（竹竿或者汽油） */
+  /** 空调开着：不开的话屋里要热到中暑那条线附近、家里有空调、有电、有人在家 */
+  get acOn(): boolean {
+    return this.aircon && this.powered && indoorTemp(this.outTemp, false, false) >= AC_ABOVE && this.anyoneHome
+  }
+
+  /** 火炉在取暖：不烧的话屋里 5 度以下、有人在家、有东西烧——竹竿（柴）；汽油只在冷到要冻伤时才烧，而且给面包车留一趟的油 */
   get stoveHeat(): boolean {
-    return this.outTemp < 12 && (this.stoveLeft > 0 || this.bamboo > 0 || this.fuel > 0)
+    const raw = indoorTemp(this.outTemp, false, false)
+    if (raw > STOVE_BELOW || !this.anyoneHome) return false
+    return this.stoveLeft > 0 || this.bamboo > 0 || (raw <= FUEL_BELOW && this.fuel > FUEL_RESERVE)
   }
 
   /** 屋里几度 */
@@ -727,16 +734,23 @@ export class Household {
   private climateTick(hours: number): void {
     const ext = extremeOf(this.clock.day)
     const month = Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)
-    if (ext && this.climateNoted !== month) {
+    // 提前一个月想起前世（这个月第一天）；到了那个月再提醒一次
+    const soon = this.clock.day >= PROLOGUE_DAYS ? extremeOf(this.clock.day + 4) : null
+    if (this.climateNoted !== month && (ext || (soon && soon !== 'frost'))) {
       this.climateNoted = month
-      this.note(`world.climate.${ext}`)
-      this.onRemind?.(`world.climate.${ext}Toast` as UiKey)
+      if (ext) {
+        this.note(`world.climate.${ext}`)
+        this.onRemind?.(`world.climate.${ext}Toast` as UiKey)
+      } else {
+        this.note(`world.climate.soon.${soon}`)
+        this.onRemind?.(`world.climate.soonToast.${soon}` as UiKey)
+      }
     }
     if (this.acOn && this.clock.day >= PROLOGUE_DAYS) this.fuel = Math.max(0, this.fuel - hours * AC_FUEL)
     if (this.stoveHeat) {
       if (this.stoveLeft <= 0 && this.bamboo > 0) { this.bamboo -= 1; this.stoveLeft = BAMBOO_HOURS }
       if (this.stoveLeft > 0) this.stoveLeft = Math.max(0, this.stoveLeft - hours)
-      else this.fuel = Math.max(0, this.fuel - hours * STOVE_FUEL)
+      else this.fuel = Math.max(FUEL_RESERVE, this.fuel - hours * STOVE_FUEL)
     }
     for (const a of this.actors) {
       if (a.dead || a.lost || a.runaway || a.away) continue
@@ -2786,8 +2800,8 @@ export class Household {
     const t = this.outTemp
     for (const p of this.plots) {
       if (!p.built || !p.crop || p.growth >= 1) continue
-      // 寒潮：零度以下不长，零下 12 度冻死
-      if (t < -12) {
+      // 寒潮：零度以下不长，零下 15 度（极寒的夜里）冻死
+      if (t < -15) {
         this.note('world.garden.frozen', { crop: cropOf(p.crop)?.name ?? '' })
         p.crop = null
         p.growth = 0
@@ -2986,6 +3000,12 @@ export class Household {
     if (n.energy < 40 && h >= 9 && h < 17) {
       const nap = this.sleepTask(a, false)
       if (nap) return nap
+    }
+    // 夜里十点以后没别的事：上床睡觉（精神好的人——比如异能者——也别在屋里干站着到半夜）
+    const bedtime = h >= 22 || h < 5
+    if (bedtime && !this.freeSpots('relax', (x) => x.near === 'fire').length) {
+      const bed = this.sleepTask(a, false)
+      if (bed) return bed
     }
     const opts: { w: number; make: () => Task | 'tv' | null }[] = []
     const add = (w: number, make: () => Task | 'tv' | null) => { opts.push({ w, make }) }

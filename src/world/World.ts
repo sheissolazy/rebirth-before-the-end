@@ -3441,16 +3441,19 @@ export class World {
     this.setHud({ toast: key, toastVars: vars ?? null })
   }
 
-  /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
-  /** 原型调试：跳到高温（第 7 个月）/ 寒潮（第 11 个月）/ 极寒（第 12 个月）的第一天上午 */
+  /** 原型调试：跳到高温（第 7 个月）/ 寒潮（第 11 个月）/ 极寒（第 12 个月）的第一天上午（只往后跳；打着仗不跳） */
   debugClimate(kind: 'heat' | 'cold' | 'frost'): void {
+    if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
     const m = kind === 'heat' ? 6 : kind === 'cold' ? 10 : 11
-    this.life.clock = { day: PROLOGUE_DAYS + m * 4, hour: 9 }
+    let day = PROLOGUE_DAYS + m * 4
+    while (day < this.life.clock.day) day += 48
+    this.life.clock = { day, hour: 9 }
     this.life.resetNight()
     this.applySky()
     this.pushLifeHud()
   }
 
+  /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
   debugNight(crisis: boolean): void {
     if (this.life.siege) return
     // 只往后跳，不倒回去（倒回去的话出门、访客、菜地这些按时间算的东西都会乱）
