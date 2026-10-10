@@ -1,11 +1,12 @@
 // 菜园的样子：每块地一个木板围的高床，土浇过水颜色深一点；种什么长什么样（代码搭的低面数小菜），按长到哪了慢慢长高；
 // 地头插一块木牌写着种的什么、熟了没有。开地的时候先翻出一块土，再围上木板。
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { PLOT_SLOTS, cropOf, type CropId, type Plot } from './garden'
 
 const M = (c: THREE.ColorRepresentation, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
 const MAT = {
-  leaf: M('#6aa84f'), dark: M('#3f7a35'), pale: M('#d3e6ad'), stem: M('#eef3df'), red: M('#d8432f', 0.5), unripe: M('#7fae45', 0.6),
+  leaf: Object.assign(M('#6aa84f'), { side: THREE.DoubleSide }), dark: Object.assign(M('#3f7a35'), { side: THREE.DoubleSide }), pale: M('#d3e6ad'), stem: M('#eef3df'), red: M('#d8432f', 0.5), unripe: M('#7fae45', 0.6),
   yellow: M('#e9c24a', 0.6), husk: M('#9cbf5a'), stake: M('#8a6a45'), flower: M('#f6f2e4'), sage: M('#8fa889'), wood: M('#8a6440', 0.85), woodDark: M('#6b4a2e', 0.85),
 }
 const WET = new THREE.Color('#3b2819')
@@ -20,6 +21,22 @@ function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 
 }
 
 interface Built { root: THREE.Group; ripe: THREE.Object3D[]; unripe: THREE.Object3D[] }
+
+/** 玉米叶：一条长丝带，从原点往 +z 拱出去、叶尖往下垂（两面都画） */
+let cornLeafGeo: THREE.BufferGeometry | null = null
+function cornLeaf(): THREE.BufferGeometry {
+  if (cornLeafGeo) return cornLeafGeo
+  const geo = new THREE.PlaneGeometry(0.07, 0.6, 1, 8)
+  const p = geo.attributes.position
+  for (let i = 0; i < p.count; i++) {
+    const v = p.getY(i) / 0.6 + 0.5 // 0（叶根）～1（叶尖）
+    const w = p.getX(i) * (1 - v * 0.8)
+    p.setXYZ(i, w, Math.sin(v * Math.PI * 0.8) * 0.18, v * 0.55)
+  }
+  geo.computeVertexNormals()
+  cornLeafGeo = geo
+  return geo
+}
 
 /** 一棵菜（原点在土面上）。ripe 里的东西熟了才露出来，unripe 里的熟了就藏起来（比如青番茄） */
 function plant(crop: CropId, seed: number): Built {
@@ -86,8 +103,9 @@ function plant(crop: CropId, seed: number): Built {
     g.add(mesh(new THREE.CylinderGeometry(0.018, 0.026, 1.5, 6), MAT.leaf, 0, 0.75, 0))
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2 + rnd(k)
-      const leaf = mesh(new THREE.BoxGeometry(0.035, 0.55, 0.006), k % 2 ? MAT.leaf : MAT.dark, Math.sin(a) * 0.12, 0.35 + k * 0.17, Math.cos(a) * 0.12)
-      leaf.rotation.set(Math.cos(a) * 0.7, a, -Math.sin(a) * 0.7)
+      // 一片弯下来的长叶子：从秆子上长出来往外拱、叶尖往下垂
+      const leaf = mesh(cornLeaf(), k % 2 ? MAT.leaf : MAT.dark, 0, 0.3 + k * 0.18, 0)
+      leaf.rotation.y = a
       g.add(leaf)
     }
     const cob = new THREE.Group()
@@ -144,12 +162,53 @@ interface Bed {
   soilMat: THREE.MeshStandardMaterial
   frame: THREE.Group
   furrows: THREE.Group
+  /** 一块地的菜合并成几块网格（按材质分，熟了才露的、熟了就藏的各一组），省绘制次数 */
   plants: THREE.Group
-  built: Built[]
-  crop: CropId | null
+  plantKey: string
   sign: THREE.Group
   signMat: THREE.MeshStandardMaterial
   signKey: string
+}
+
+/** 把一块地的菜按"哪一组（平常/熟了才有/没熟才有）+ 材质"合并成几块网格 */
+function mergePlants(crop: CropId, i: number, w: number, d: number, scale: number): THREE.Group {
+  const tmp = new THREE.Group()
+  const tags = new Map<THREE.Object3D, 'ripe' | 'unripe'>()
+  layout(crop, w, d).forEach((at, k) => {
+    const pl = plant(crop, i * 10 + k)
+    pl.root.position.set(at.x, 0, at.z)
+    pl.root.rotation.y = k * 1.7
+    pl.root.scale.setScalar(scale * (0.92 + (k % 3) * 0.05))
+    for (const o of pl.ripe) tags.set(o, 'ripe')
+    for (const o of pl.unripe) tags.set(o, 'unripe')
+    tmp.add(pl.root)
+  })
+  tmp.updateMatrixWorld(true)
+  const buckets = new Map<string, { tag: string; mat: THREE.Material; geos: THREE.BufferGeometry[] }>()
+  tmp.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    let tag = 'base'
+    for (let q: THREE.Object3D | null = m; q; q = q.parent) { const t = tags.get(q); if (t) { tag = t; break } }
+    const mat = m.material as THREE.Material
+    const key = `${tag}|${mat.uuid}`
+    const b = buckets.get(key) ?? { tag, mat, geos: [] }
+    b.geos.push(m.geometry.clone().applyMatrix4(m.matrixWorld))
+    buckets.set(key, b)
+    m.geometry.dispose()
+  })
+  const out = new THREE.Group()
+  for (const b of buckets.values()) {
+    const geo = mergeGeometries(b.geos)
+    for (const g of b.geos) g.dispose()
+    if (!geo) continue
+    const mesh = new THREE.Mesh(geo, b.mat)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.tag = b.tag
+    out.add(mesh)
+  }
+  return out
 }
 
 export class GardenView {
@@ -187,7 +246,7 @@ export class GardenView {
       sign.rotation.y = -0.25
       root.add(soil, frame, furrows, plants, sign)
       this.group.add(root)
-      this.beds.push({ root, soil, soilMat, frame, furrows, plants, built: [], crop: null, sign, signMat, signKey: '' })
+      this.beds.push({ root, soil, soilMat, frame, furrows, plants, plantKey: '', sign, signMat, signKey: '' })
     })
   }
 
@@ -204,28 +263,26 @@ export class GardenView {
       b.soil.scale.set(1, p.built ? 1 : Math.max(0.15, Math.min(1, digP * 2)), 1)
       b.sign.visible = p.built
       b.soilMat.color.copy(p.watered === day ? WET : DRY)
-      if (p.crop !== b.crop) {
+      // 种的菜：换了菜、长了 5%、熟了才重新合并一次（长得很慢，不用每帧动）
+      const ripe = !!p.crop && p.growth >= 1
+      const step = Math.floor(Math.min(1, p.growth) * 20)
+      const pk = p.crop ? `${p.crop}|${step}` : ''
+      if (pk !== b.plantKey) {
+        b.plantKey = pk
+        for (const c of b.plants.children) (c as THREE.Mesh).geometry?.dispose()
         b.plants.clear()
-        b.built = []
-        b.crop = p.crop
         if (p.crop) {
           const r = PLOT_SLOTS[i]
-          layout(p.crop, r.x1 - r.x0, r.z1 - r.z0).forEach((at, k) => {
-            const pl = plant(p.crop!, i * 10 + k)
-            pl.root.position.set(at.x, 0, at.z)
-            pl.root.rotation.y = k * 1.7
-            b.plants.add(pl.root)
-            b.built.push(pl)
-          })
+          b.plants.add(mergePlants(p.crop, i, r.x1 - r.x0, r.z1 - r.z0, 0.15 + (step / 20) * 0.85))
         }
       }
-      const ripe = !!p.crop && p.growth >= 1
-      b.built.forEach((pl, k) => {
-        pl.root.scale.setScalar((0.15 + Math.min(1, p.growth) * 0.85) * (0.92 + (k % 3) * 0.05))
-        pl.root.rotation.z = Math.sin(elapsed * 0.9 + k + i) * 0.03
-        for (const o of pl.ripe) o.visible = ripe
-        for (const o of pl.unripe) o.visible = !ripe && p.growth > 0.5
+      b.plants.traverse((o) => {
+        const tag = o.userData.tag as string | undefined
+        if (tag === 'ripe') o.visible = ripe
+        else if (tag === 'unripe') o.visible = !ripe && p.growth > 0.5
       })
+      // 风吹得整块地的菜轻轻晃
+      b.plants.rotation.z = Math.sin(elapsed * 0.9 + i) * 0.006
       // 木牌：种的什么、长到哪了
       const c = cropOf(p.crop)
       const key = c ? `${c.id}|${ripe ? 'ripe' : Math.floor(p.growth * 10)}` : 'empty'

@@ -94,6 +94,8 @@ interface Task {
   dish?: string
   /** 做饭：这一锅做几人份 */
   servings?: number
+  /** 做饭：开火时实际用掉了哪些食材（叫走了、存档时按这个退回去） */
+  paidIng?: Partial<Record<Ing, number>>
   /** 菜地：第几块、种什么（没有 crop 就是浇水或者收菜） */
   plot?: number
   crop?: CropId
@@ -1503,6 +1505,16 @@ export class Household {
   moveToSpace(kind: keyof Stock, n: number): boolean {
     const used = this.space.food + this.space.water
     if (n > 0 && (this.stock[kind] < n || used + n > this.spaceCap + 1e-6)) return false
+    // 空间里只放主食（米面饼干）：肉、菜、蛋放进去拿出来就分不清了
+    if (kind === 'food' && n > 0) {
+      this.syncLarder()
+      if (this.larder.grain + 1e-6 < n) return false
+      this.larder = { ...this.larder, grain: this.larder.grain - n }
+    }
+    if (kind === 'food' && n < 0 && this.space.food >= -n) {
+      this.syncLarder()
+      this.larder = { ...this.larder, grain: this.larder.grain - n }
+    }
     if (n < 0 && this.space[kind] < -n) return false
     this.stock = { ...this.stock, [kind]: this.stock[kind] - n }
     this.space = { ...this.space, [kind]: this.space[kind] + n }
@@ -2794,10 +2806,10 @@ export class Household {
     const i = t.plot ?? 0
     const p = this.plots[i]
     if (!p?.built) return
-    const r = PLOT_SLOTS[i]
-    const at = { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 }
-    if (t.crop && !p.crop) {
+    if (t.crop) {
       if ((this.seeds[t.crop] ?? 0) <= 0) return
+      // 改种：原来那茬熟了就先收了再种；没熟就拔掉
+      if (p.crop && p.growth >= 1) this.harvestPlot(i)
       this.seeds[t.crop] = (this.seeds[t.crop] ?? 0) - 1
       this.plots[i] = { ...p, crop: t.crop, growth: 0, watered: this.clock.day, last: t.crop }
       this.take('water', 0.2)
@@ -2806,24 +2818,33 @@ export class Household {
       return
     }
     if (p.crop && p.growth >= 1) {
-      const c = cropOf(p.crop)!
-      const g = c.gives
-      if (g.veg) this.gainFood('veg', g.veg)
-      if (g.grain) this.gainFood('grain', g.grain)
-      if (g.herbs) this.herbs += g.herbs
-      // 一半机会留一包种（末日后买不到种子，靠这个接着种）
-      const keep = this.rand() < 0.5
-      if (keep) this.seeds[c.id] = (this.seeds[c.id] ?? 0) + 1
-      const got = [g.veg ? `🥬+${g.veg}` : '', g.grain ? `🌾+${g.grain}` : '', g.herbs ? `🌿+${g.herbs}` : '', keep ? '🌱+1' : ''].filter(Boolean).join(' ')
-      this.onGain?.(`${c.icon} ${got}`, null, at)
-      this.plots[i] = { ...p, crop: null, growth: 0 }
-      this.note('world.log.harvest', { crop: c.name })
+      this.harvestPlot(i)
       return
     }
     if (p.crop && p.watered !== this.clock.day) {
       this.take('water', 0.3)
       p.watered = this.clock.day
     }
+  }
+
+  /** 收一块地：菜、主食、草药入库，一半机会留一包种 */
+  private harvestPlot(i: number): void {
+    const p = this.plots[i]
+    const r = PLOT_SLOTS[i]
+    const at = { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 }
+    const c = cropOf(p.crop)
+    if (!c) return
+    const g = c.gives
+    if (g.veg) this.gainFood('veg', g.veg)
+    if (g.grain) this.gainFood('grain', g.grain)
+    if (g.herbs) this.herbs += g.herbs
+    // 一半机会留一包种（末日后买不到种子，靠这个接着种）
+    const keep = this.rand() < 0.5
+    if (keep) this.seeds[c.id] = (this.seeds[c.id] ?? 0) + 1
+    const got = [g.veg ? `🥬+${g.veg}` : '', g.grain ? `🌾+${g.grain}` : '', g.herbs ? `🌿+${g.herbs}` : '', keep ? '🌱+1' : ''].filter(Boolean).join(' ')
+    this.onGain?.(`${c.icon} ${got}`, null, at)
+    this.plots[i] = { ...p, crop: null, growth: 0 }
+    this.note('world.log.harvest', { crop: c.name })
   }
 
   /** 点菜地选了：种什么 / 浇水 / 收菜 / 拔掉（选中的人去干；拔掉马上就拔） */
@@ -2838,7 +2859,6 @@ export class Household {
     if (this.isOut(a) || a.away || a.dead || this.isInjured(a) || (this.siege && !this.siege.done)) return 'busy'
     if (act === 'plant') {
       if (!crop || (this.seeds[crop] ?? 0) <= 0) return 'seeds'
-      if (p.crop) this.plots[i] = { ...p, crop: null, growth: 0 }
     } else if (act === 'harvest' && !(p.crop && p.growth >= 1)) return 'none'
     else if (act === 'water') {
       if (!p.crop || p.growth >= 1) return 'none'
@@ -3300,6 +3320,7 @@ export class Household {
     const d = dishOf(id)
     if (this.herbs < d.herbs) return 0
     let n = Infinity
+    if (d.any) n = Math.floor((INGS.reduce((m, k) => m + this.ingHave(k), 0) + 1e-6) / d.any)
     for (const k of INGS) {
       const u = d.use[k]
       if (u) n = Math.min(n, Math.floor((this.ingHave(k) + 1e-6) / u))
@@ -3350,6 +3371,43 @@ export class Household {
     if (this.cooking) return this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'sit', 0.3, manual)
     const id = this.fallbackDish()
     return id ? this.potTask(a, id, manual) : null
+  }
+
+  /** 拿出来的一份没吃：放回冰柜 */
+  private returnPortion(dish: string): void {
+    const p = this.fridge.find((x) => x.dish === dish)
+    if (p) p.left += 1
+    else this.fridge.push({ dish, left: 1 })
+    this.fridgeWarned = false
+  }
+
+  /** 存档用的吃的：正在做的那锅已经付了的食材算回去、拿在手里没吃的那份放回冰柜（读档后人不在灶台、饭桌边了） */
+  foodForSave(): { stock: Stock; larder: Record<Ing, number>; herbs: number; fridge: { dish: string; left: number }[] } {
+    this.syncLarder()
+    const stock = { ...this.stock }
+    const larder = { ...this.larder }
+    let herbs = this.herbs
+    const fridge = this.fridge.map((p) => ({ ...p }))
+    for (const a of this.actors) {
+      const t = a.task
+      if (!t) continue
+      if (t.kind === 'cook' && t.paid && t.hours > 0) {
+        const d = dishOf(t.dish)
+        for (const k of INGS) {
+          const u = t.paidIng?.[k] ?? 0
+          larder[k] += u
+          stock.food += u
+        }
+        stock.water += d.water * (t.servings ?? 1)
+        herbs += d.herbs
+      }
+      if ((t.kind === 'eat' || t.kind === 'plate') && t.dish) {
+        const p = fridge.find((x) => x.dish === t.dish)
+        if (p) p.left += 1
+        else fridge.push({ dish: t.dish, left: 1 })
+      }
+    }
+    return { stock, larder, herbs, fridge }
   }
 
   /** 从冰柜拿一份（先拿早做的那锅）；拿完了提醒一句 */
@@ -3465,10 +3523,15 @@ export class Household {
         if (!id) { t.then = undefined; t.hours = 0 } else {
           const d = dishOf(id)
           const n = Math.max(1, Math.min(t.servings ?? this.mouths, this.maxServings(id)))
-          for (const k of INGS) {
-            const u = d.use[k]
-            if (u) this.useIng(k, u * n)
-          }
+          // 要用多少：照菜谱；大杂烩按家里各样的比例凑
+          const need: Partial<Record<Ing, number>> = {}
+          if (d.any) {
+            const have = INGS.map((k) => this.ingHave(k))
+            const sum = have.reduce((m, x) => m + x, 0)
+            INGS.forEach((k, j) => { if (have[j] > 0) need[k] = (have[j] / sum) * d.any! * n })
+          } else for (const k of INGS) if (d.use[k]) need[k] = d.use[k]! * n
+          for (const k of INGS) if (need[k]) this.useIng(k, need[k]!)
+          t.paidIng = need
           if (d.water) this.take('water', d.water * n)
           if (d.herbs) this.herbs = Math.max(0, this.herbs - d.herbs)
           t.dish = id
@@ -3647,13 +3710,15 @@ export class Household {
       const d = dishOf(t.dish)
       const n = t.servings ?? 1
       for (const k of INGS) {
-        const u = d.use[k]
-        if (u) this.gainFood(k, u * n)
+        const u = t.paidIng?.[k] ?? 0
+        if (u) this.gainFood(k, u)
       }
       this.stock = { ...this.stock, water: this.stock.water + d.water * n }
       this.herbs += d.herbs
       t.paid = false
     }
+    // 从冰柜拿了一份还没吃完就被叫走：放回冰柜
+    if ((t?.kind === 'eat' || t?.kind === 'plate') && t.dish) this.returnPortion(t.dish)
     this.release(a)
     a.task = null
     a.path = []

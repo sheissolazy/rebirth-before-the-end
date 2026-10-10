@@ -134,16 +134,18 @@ export interface WorldSave {
 }
 
 export function snapshot(life: Household): WorldSave {
+  // 正在做的那锅、手里拿着没吃的那份：按退回去存（读档后人不在灶台、饭桌边了）
+  const food = life.foodForSave()
   return {
     v: 1,
     clock: { ...life.clock },
-    stock: { ...life.stock },
+    stock: food.stock,
     money: life.money,
     ammo: life.ammo.n,
     cores: life.cores,
     medkits: life.medkits,
     forageDay: { ...life.forageDay },
-    herbs: life.herbs,
+    herbs: food.herbs,
     bamboo: life.bamboo,
     spikes: life.spikes.map((r) => r.hits),
     pump: [life.pumpDay, life.pumpCount],
@@ -168,8 +170,8 @@ export function snapshot(life: Household): WorldSave {
     ticket: life.ticket ? { ...life.ticket } : null,
     lotteryPrize: life.lotteryPrize,
     lotteryClaimed: life.lotteryClaimed,
-    larder: (life.syncLarder(), { ...life.larder }),
-    fridge: life.fridge.map((p) => ({ ...p })),
+    larder: food.larder,
+    fridge: food.fridge,
     fridgeWarned: life.fridgeWarned,
     invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),

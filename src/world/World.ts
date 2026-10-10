@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
-  AIRCON_IN, AIRCON_OUT, COOP, COURT, FLOOR_H, FRONT_DOOR, GENERATOR_AT, HEARTH, TV, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
+  AIRCON_IN, AIRCON_OUT, COOP, COURT, FLOOR_H, FRONT_DOOR, GENERATOR_AT, HEARTH, TV, STORE_ROOM, FURNITURE, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, wallPieces, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
@@ -24,7 +24,7 @@ import type { NewsView } from './news'
 import { freezer, waterDispenser } from './kitchen'
 import { GardenView } from './gardenView'
 import { extremeOf } from './climate'
-import { CROPS, MAX_PLOTS, cropOf, type CropId } from './garden'
+import { CROPS, MAX_PLOTS, PLOT_SLOTS, cropOf, type CropId } from './garden'
 import { LOTTERY, STOCKS, marketState, pad2, stockPrice } from './money'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
@@ -1043,7 +1043,7 @@ export class World {
         bar.tex.needsUpdate = true
       }
       let at: THREE.Vector3
-      if (p.id === 'garden') at = new THREE.Vector3((GARDEN.x0 + GARDEN.x1) / 2, 1.6, (GARDEN.z0 + GARDEN.z1) / 2)
+      if (p.id === 'garden') { const g = PLOT_SLOTS[Math.max(0, this.life.nextPlot)]; at = new THREE.Vector3((g.x0 + g.x1) / 2, 1.6, (g.z0 + g.z1) / 2) }
       else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
       else {
         const all = wallPieces()
@@ -1643,7 +1643,13 @@ export class World {
     }
     this.tvScreen?.update(dt, l.tvOn ? (l.clock.day < PROLOGUE_DAYS ? 'tv' : 'radio') : 'off')
     this.fireGlow?.update(dt, l.fireLit)
-    for (const o of this.appliances.generator) o.visible = l.generator
+    // 发电机开着（末日后看电视、开空调）：机身一直轻轻地抖
+    const running = l.generator && l.clock.day >= PROLOGUE_DAYS && l.fuel > 0 && (l.tvOn || l.acOn)
+    for (const o of this.appliances.generator) {
+      o.visible = l.generator
+      o.position.y = running ? Math.abs(Math.sin(this.elapsed * 47)) * 0.008 : 0
+      o.rotation.z = running ? Math.sin(this.elapsed * 31) * 0.006 : 0
+    }
     for (const o of this.appliances.aircon) o.visible = l.aircon
   }
 
@@ -1666,6 +1672,7 @@ export class World {
       dishes: DISHES.map((d) => {
         const max = l.maxServings(d.id)
         const need = [
+          ...(d.any ? [{ icon: '🧺', name: '剩下的随便什么', per: d.any, have: INGS.reduce((m, k) => m + l.ingHave(k), 0) }] : []),
           ...INGS.filter((k) => d.use[k]).map((k) => ({ icon: ING_INFO[k].icon, name: ING_INFO[k].name, per: d.use[k]!, have: l.ingHave(k) })),
           ...(d.water ? [{ icon: '💧', name: '水', per: d.water, have: l.available.water }] : []),
         ]
@@ -1729,7 +1736,7 @@ export class World {
           ],
         },
         { title: '钱', items: [{ icon: '💰', name: '存款', n: `${l.money.toLocaleString()} 元` }, { icon: '💎', name: '晶核', n: String(l.cores) }] },
-        { title: `空间里（女主的异能，能放 ${l.spaceCap} 份）`, items: [{ icon: '🍚', name: '吃的', n: f1(l.space.food) }, { icon: '💧', name: '水', n: f1(l.space.water) }] },
+        { title: `空间里（女主的异能，只放主食和水，能放 ${l.spaceCap} 份）`, items: [{ icon: '🍚', name: '吃的', n: f1(l.space.food) }, { icon: '💧', name: '水', n: f1(l.space.water) }] },
       ],
     }
   }

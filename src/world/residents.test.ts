@@ -2770,3 +2770,90 @@ describe('高温、寒潮', () => {
     expect(life.log.some((l) => l.key === 'world.climate.frost')).toBe(true)
   })
 })
+
+describe('审查发现的问题（10-10 夜里）', () => {
+  const run = (life: Household, hours: number, until?: () => boolean) => {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed) && !until?.(); i++) {
+      life.tick(dt, () => false)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('做饭做到一半存档：读档后那锅的食材还在（不会凭空少掉）；手里拿着没吃的那份放回冰柜', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    life.speed = 3
+    life.stock = { food: 0, water: 10 }
+    life.gainFood('grain', 10)
+    const mom = life.actors[1]
+    expect(life.cookPot(mom, 'rice')).toBe('ok')
+    run(life, 1, () => mom.task?.kind === 'cook' && mom.task.phase === 'use')
+    expect(life.stock.food).toBeCloseTo(7, 1)
+    const back = simulate('paradise', 0).life
+    restore(back, snapshot(life))
+    expect(back.stock.food).toBeCloseTo(10, 1)
+    expect(back.ingHave('grain')).toBeCloseTo(10, 1)
+    // 拿了一份去吃，被叫走：放回冰柜；存档也算放回去
+    life.fridge = [{ dish: 'pork', left: 2 }]
+    const hero = life.actors[0]
+    expect(life.eatNow(hero)).toBe('ok')
+    run(life, 1, () => hero.task?.kind === 'eat')
+    expect(life.fridgeLeft).toBe(1)
+    const b2 = simulate('paradise', 0).life
+    restore(b2, snapshot(life))
+    expect(b2.fridgeLeft).toBe(2)
+    life.cancel(hero)
+    expect(life.fridgeLeft).toBe(2)
+  })
+
+  it('空间里只放主食：肉放不进去，主食放进去拿出来肉还是肉', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 0, water: 5 }
+    life.gainFood('meat', 4)
+    expect(life.moveToSpace('food', 2)).toBe(false)
+    life.gainFood('grain', 3)
+    expect(life.moveToSpace('food', 2)).toBe(true)
+    expect(life.ingHave('meat')).toBeCloseTo(4)
+    expect(life.moveToSpace('food', -2)).toBe(true)
+    expect(life.larder.meat).toBeCloseTo(4)
+    expect(life.larder.grain).toBeCloseTo(3)
+  })
+
+  it('剩下一点这一点那的、哪道菜都凑不齐：做大杂烩，不会守着吃的饿死', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 0, water: 5 }
+    life.syncLarder()
+    life.gainFood('grain', 0.4)
+    life.gainFood('meat', 0.6)
+    life.gainFood('veg', 0.8)
+    life.gainFood('egg', 0.7)
+    expect(['rice', 'noodles', 'greens', 'eggrice', 'wildveg', 'scrambled', 'canmeat'].some((d) => life.canCook(d))).toBe(false)
+    expect(life.canEat).toBe(true)
+    expect(life.maxServings('stew')).toBe(2)
+    life.clock = { day: 1, hour: 10 }
+    life.speed = 3
+    const mom = life.actors[1]
+    expect(life.cookPot(mom, 'stew')).toBe('ok')
+    run(life, 3, () => life.fridgeLeft > 0)
+    expect(life.fridge).toEqual([{ dish: 'stew', left: 2 }])
+    expect(life.stock.food).toBeCloseTo(2.5 - 1.8, 1)
+  })
+
+  it('熟了的地点"改种"：先收了再种，菜不会白丢', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 5000
+    life.speed = 3
+    life.buildGarden()
+    life.plots[0] = { ...life.plots[0], crop: 'tomato', growth: 1, last: 'tomato' }
+    life.seeds = { bokchoy: 1 }
+    const veg = life.ingHave('veg')
+    const mom = life.actors[1]
+    expect(life.commandPlot(mom, 0, 'plant', 'bokchoy')).toBe('ok')
+    expect(life.plots[0].crop).toBe('tomato')
+    run(life, 2, () => life.plots[0].crop === 'bokchoy')
+    expect(life.plots[0].crop).toBe('bokchoy')
+    expect(life.ingHave('veg')).toBeCloseTo(veg + 4, 1)
+  })
+})

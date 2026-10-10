@@ -89,6 +89,8 @@ export interface Dish {
   icon: string
   /** 一人份用多少食材（份） */
   use: Partial<Record<Ing, number>>
+  /** 大杂烩：一人份用几份"随便什么食材"（按家里各样的比例扣） */
+  any?: number
   /** 一人份用多少水 */
   water: number
   /** 一锅用几份草药（不管几人份） */
@@ -112,9 +114,11 @@ export const DISHES: Dish[] = [
   { id: 'chicken', icon: '🍲', use: { meat: 0.8, veg: 0.3 }, water: 0.3, herbs: 0, hours: 1.0, hunger: 78, mood: 4, energy: 30, health: 5 },
   { id: 'porridge', icon: '🌿', use: { grain: 0.7 }, water: 0.3, herbs: 1, hours: 0.7, hunger: 70, mood: 0, energy: 5, health: 18 },
   { id: 'feast', icon: '🍱', use: { grain: 0.6, meat: 0.8, veg: 0.5, egg: 0.4 }, water: 0.3, herbs: 0, hours: 1.3, hunger: 95, mood: 22, energy: 12, health: 6 },
+  // 剩下一点这个一点那个、哪道菜都凑不齐：一锅乱炖（家里有一份吃的就能凑一份）
+  { id: 'stew', icon: '🥣', use: {}, any: 0.9, water: 0.2, herbs: 0, hours: 0.6, hunger: 70, mood: 1, energy: 0, health: 0 },
 ]
 /** 一人份一共用几份食材 */
-export const dishFood = (d: Dish): number => INGS.reduce((s, k) => s + (d.use[k] ?? 0), 0)
+export const dishFood = (d: Dish): number => d.any ?? INGS.reduce((s, k) => s + (d.use[k] ?? 0), 0)
 export const dishOf = (id: string | undefined): Dish => DISHES.find((d) => d.id === id) ?? DISHES[0]
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
