@@ -94,3 +94,59 @@ export function waterDispenser(): THREE.Group {
   g.add(jug, shoulder, cap)
   return shadows(g)
 }
+
+/** 厨房柜子上的两个竹篮：一篮鸡蛋、一篮青菜，多少跟着家里的蛋和菜变（看得见鸡下的蛋被用掉） */
+export class KitchenBaskets {
+  readonly group = new THREE.Group()
+  private readonly eggs: THREE.Mesh[] = []
+  private readonly greens: THREE.Mesh[] = []
+  private shown = ''
+
+  constructor() {
+    const wicker = std('#b58a52', 0.85)
+    const eggMat = std('#f3e6cf', 0.6)
+    const leaf = std('#5f9e3c', 0.8)
+    const basket = (x: number) => {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.09, 14, 1, true), wicker)
+      b.material.side = THREE.DoubleSide
+      b.position.set(x, 0.045, 0)
+      const bottom = new THREE.Mesh(new THREE.CircleGeometry(0.11, 14), wicker)
+      bottom.rotation.x = -Math.PI / 2
+      bottom.position.set(x, 0.005, 0)
+      this.group.add(b, bottom)
+    }
+    basket(-0.17)
+    basket(0.17)
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2
+      const r = k < 6 ? 0.07 : 0.02
+      const egg = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), eggMat)
+      egg.scale.set(1, 1.3, 1)
+      egg.position.set(-0.17 + Math.cos(a) * r, 0.04 + (k >= 6 ? 0.04 : 0), Math.sin(a) * r)
+      egg.castShadow = true
+      this.eggs.push(egg)
+      this.group.add(egg)
+    }
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2
+      const g = new THREE.Mesh(new THREE.SphereGeometry(0.05, 7, 5), leaf)
+      g.scale.set(1, 0.7, 1.5)
+      g.position.set(0.17 + Math.cos(a) * 0.05, 0.07, Math.sin(a) * 0.05)
+      g.rotation.y = a
+      g.castShadow = true
+      this.greens.push(g)
+      this.group.add(g)
+    }
+  }
+
+  /** egg / veg：家里有几份蛋、几份菜 */
+  sync(egg: number, veg: number): void {
+    const ne = Math.min(this.eggs.length, Math.round(egg * 4))
+    const nv = Math.min(this.greens.length, Math.round(veg * 2))
+    const key = `${ne}|${nv}`
+    if (key === this.shown) return
+    this.shown = key
+    this.eggs.forEach((e, k) => { e.visible = k < ne })
+    this.greens.forEach((g, k) => { g.visible = k < nv })
+  }
+}

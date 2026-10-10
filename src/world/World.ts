@@ -21,7 +21,7 @@ import { TONE } from './ui'
 import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
 import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ironStove, stool, tvStand } from './hearth'
 import type { NewsView } from './news'
-import { freezer, waterDispenser } from './kitchen'
+import { KitchenBaskets, freezer, waterDispenser } from './kitchen'
 import { GardenView } from './gardenView'
 import { extremeOf } from './climate'
 import { CROPS, MAX_PLOTS, PLOT_SLOTS, cropOf, type CropId } from './garden'
@@ -1653,6 +1653,9 @@ export class World {
       this.scene.add(g)
       this.mineObjs.push(g)
     }
+    // 厨房：碗柜（卡通画风是灶台）顶上放鸡蛋篮、青菜篮
+    this.baskets.group.position.set(1.3, real ? 1.19 : 0.92, -2.5)
+    this.scene.add(this.baskets.group)
     // 探照灯：阳台东头栏杆上一个灯头（装了才露出来）；夜里打仗时亮起来，光柱在院子里左右扫
     const lamp = new THREE.Group()
     const metal = new THREE.MeshStandardMaterial({ color: '#2f3336', roughness: 0.45, metalness: 0.7 })
@@ -1688,10 +1691,13 @@ export class World {
   private lidOpen = 0
 
   private readonly mineObjs: THREE.Object3D[] = []
+  /** 厨房柜子上的鸡蛋篮、青菜篮 */
+  private readonly baskets = new KitchenBaskets()
   private searchlight: { root: THREE.Object3D; head: THREE.Object3D; beamMat: THREE.MeshBasicMaterial; light: THREE.SpotLight } | null = null
 
   private updateHearth(dt: number): void {
     const l = this.life
+    this.baskets.sync(l.larder.egg, l.larder.veg)
     const sl = this.searchlight
     if (sl) {
       sl.root.visible = l.light
