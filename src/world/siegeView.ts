@@ -280,6 +280,16 @@ export class SiegeView {
       puff.position.set(e.at.x, 0.8, e.at.z)
       this.add(puff, 0.8, (k) => { puff.scale.setScalar(0.3 + k * 1.9); (puff.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - k) })
       for (let k = 0; k < 20; k++) this.ember(e.at.x + (Math.random() - 0.5) * 1.6, 0.4, e.at.z + (Math.random() - 0.5) * 1.6, 0.8)
+    } else if (e.kind === 'burst') {
+      // 机枪：枪口一闪，一道道曳光弹扫过去
+      const from = new THREE.Vector3(e.from.x, e.from.y, e.from.z)
+      this.flash.position.copy(from)
+      this.flashT = 0.12
+      e.at.forEach((p, k) => {
+        const to = new THREE.Vector3(p.x, 1.1, p.z)
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: '#ffd27a', transparent: true }))
+        this.add(line, 0.12 + k * 0.03, (k1) => { (line.material as THREE.LineBasicMaterial).opacity = 1 - k1 })
+      })
     } else if (e.kind === 'hit') this.blood(e.at)
     else if (e.kind === 'kill') this.core(e.at)
     else if (e.kind === 'broken') this.shake = 0.5

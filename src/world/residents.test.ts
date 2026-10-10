@@ -2323,3 +2323,37 @@ describe('审查发现的问题（10-09 晚）', () => {
     expect(life.stock.food).toBeCloseTo(5, 1)
   })
 })
+
+describe('阳台机枪', () => {
+  it('派人架好机枪；打仗时扫一梭子打好几只、用 3 发子弹，要等枪管凉', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 8 }
+    life.speed = 3
+    life.money = 20000
+    const dad = life.actors[2]
+    expect(life.startBuild('mg', dad)).toBe('ok')
+    for (let i = 0; i < 8000 && !life.mg; i++) {
+      life.tick(0.05, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(0.15, 2.2); a.updateSettle(0.15) }
+    }
+    expect(life.mg).toBe(true)
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.speed = 1
+    life.startSiege(5, false)
+    const s = life.siege!
+    for (let i = 0; i < 4000 && s.zombies.filter((z) => z.state === 'bash').length < 3; i++) {
+      for (const z of s.zombies) z.hp = Math.max(z.hp, 200)
+      life.tick(0.05, () => false)
+      for (const z of s.zombies) z.follow(0.05, z.speed)
+      for (const a of life.actors) a.follow(0.05, 2.2)
+    }
+    const ammo = life.ammo.n
+    const hp = s.zombies.filter((z) => z.alive).map((z) => z.hp)
+    expect(s.machineGun().r).toBe('ok')
+    expect(life.ammo.n).toBe(ammo - 3)
+    const hit = s.zombies.filter((z, k) => z.alive && z.hp < hp[k]).length
+    expect(hit).toBeGreaterThanOrEqual(3)
+    expect(s.machineGun().r).toBe('cool')
+  })
+})

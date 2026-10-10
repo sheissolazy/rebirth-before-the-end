@@ -53,12 +53,14 @@ export interface WorldSave {
   phoneReminded?: number
   /** 今天请过谁、请的人什么时候到 */
   inviteDay?: number
+  /** 阳台机枪 */
+  mg?: boolean
   /** 今天的菜 */
   menu?: string
   invited?: { id: string; at: number } | null
   /** 干到一半的工程（旧存档是一项 project，新的是 projects） */
-  project?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string } | null
-  projects?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string }[]
+  project?: { id: 'trap' | 'wall' | 'garden' | 'mg'; done: number; worker: string } | null
+  projects?: { id: 'trap' | 'wall' | 'garden' | 'mg'; done: number; worker: string }[]
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -131,6 +133,7 @@ export function snapshot(life: Household): WorldSave {
     calls: { ...life.calls },
     phoneReminded: life.phoneReminded,
     inviteDay: life.inviteDay,
+    mg: life.mg,
     menu: life.menu,
     invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),
@@ -207,6 +210,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.calls = { ...(s.calls ?? {}) }
   life.phoneReminded = s.phoneReminded ?? -1
   life.inviteDay = s.inviteDay ?? -1
+  life.mg = !!s.mg
   life.menu = s.menu ?? 'rice'
   // 请的人在门口时存的档：读档后马上再来一次
   life.invited = s.invited ? { id: s.invited.id, at: Number.isFinite(s.invited.at) && s.invited.at !== null ? s.invited.at : life.absHour } : null

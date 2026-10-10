@@ -102,6 +102,8 @@ export const ZOMBIE_KINDS: Record<ZombieKind, { hp: number; speed: number; bash:
 export const SPIT = { range: 6, cool: 3, dmg: 6 }
 /** 胀鼓鼓的被打死：多大一圈、炸伤人多少、炸坏防线多少、炸伤别的丧尸多少 */
 export const BLOAT = { radius: 1.9, hurt: 12, barrier: 15, zombies: 30 }
+/** 阳台机枪：架在哪（枪口高度）、打多远、一次打几只、每只多少、用几发子弹、几秒一梭子 */
+export const MG = { x: 4.0, y: 3.9, z: 7.55, range: 9, targets: 6, dmg: 26, ammo: 3, cool: 6 }
 
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
@@ -180,6 +182,7 @@ export type SiegeEvent =
   | { kind: 'fire'; at: Pt }
   | { kind: 'spit'; from: Pt; at: Pt }
   | { kind: 'boom'; at: Pt }
+  | { kind: 'burst'; from: { x: number; y: number; z: number }; at: Pt[] }
   | { kind: 'newKind'; zombie: ZombieKind }
   | { kind: 'down'; who: string }
   | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[]; ambush: boolean }
@@ -195,6 +198,8 @@ export interface SiegeOpts {
   hard?: boolean
   /** 末日后第几个月（0 起）：越往后丧尸种类越多 */
   month?: number
+  /** 二楼阳台架了机枪 */
+  mg?: boolean
   /** 在街上搜东西时遇到的：不分防线，从这些位置冒出来直接扑人 */
   ambushAt?: Pt[]
   navs: Record<Floor, NavGrid>
@@ -333,6 +338,7 @@ export class Siege {
     }
     for (const z of this.zombies) this.zombieTick(z, dt)
     for (const [a, c] of this.fireCool) this.fireCool.set(a, c - dt)
+    this.mgCool -= dt
     if (!this.done) for (const a of this.o.defenders) this.defenderTick(a, dt)
     // 尸体沉下去以后移除
     for (let k = this.zombies.length - 1; k >= 0; k--) {
@@ -647,6 +653,36 @@ export class Siege {
       return { r: 'ok', who: a.name }
     }
     return { r: 'far', who: ready[0].name }
+  }
+
+  /** 阳台机枪：扫一梭子打 9 米内最近的 6 只（每只 26），用 3 发子弹，6 秒才能再扫 */
+  private mgCool = 0
+  machineGun(): { r: 'ok' | 'none' | 'noammo' | 'cool' | 'far' | 'done' | 'nobody' } {
+    if (this.done) return { r: 'done' }
+    if (!this.o.mg) return { r: 'none' }
+    if (!this.o.defenders.some((a) => !this.downed.has(a))) return { r: 'nobody' }
+    if (this.mgCool > 0) return { r: 'cool' }
+    if (this.o.ammo.n < MG.ammo) return { r: 'noammo' }
+    // 只打得到屋外的（院子里、大门外面）；冲进堂屋的看不见
+    const targets = this.zombies.filter((z) => z.alive && z.state !== 'leave' && z.floor === 0 && z.pos.z > 6.2 && Math.hypot(z.pos.x - MG.x, z.pos.z - MG.z) <= MG.range)
+      .sort((p, q) => Math.hypot(p.pos.x - MG.x, p.pos.z - MG.z) - Math.hypot(q.pos.x - MG.x, q.pos.z - MG.z)).slice(0, MG.targets)
+    if (!targets.length) return { r: 'far' }
+    this.o.ammo.n -= MG.ammo
+    this.mgCool = MG.cool
+    this.o.emit({ kind: 'burst', from: { x: MG.x, y: MG.y, z: MG.z }, at: targets.map((z) => ({ x: z.pos.x, z: z.pos.z })) })
+    for (const z of targets) {
+      if (!z.alive) continue
+      z.hp -= MG.dmg
+      z.hitT = 0.2
+      this.o.emit({ kind: 'hit', at: z.pos })
+      if (z.hp <= 0) this.kill(z, 'mg')
+    }
+    return { r: 'ok' }
+  }
+
+  /** 机枪还要等几秒（没有机枪是 null） */
+  mgState(): number | null {
+    return this.o.mg ? Math.max(0, this.mgCool) : null
   }
 
   /** 谁拿着枪 / 弩、还要等几秒（界面显示用） */

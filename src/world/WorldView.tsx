@@ -398,7 +398,7 @@ export default function WorldView() {
                       <div className="h-full rounded-full" style={{ width: `${Math.max(3, b.p)}%`, background: TONE[toneOf(b.p, 34, 67)] }} />
                     </div>
                     {!b.working && (
-                      <button onClick={() => world.current?.continueBuild(b.id as 'trap' | 'wall' | 'garden')} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
+                      <button onClick={() => world.current?.continueBuild(b.id as 'trap' | 'wall' | 'garden' | 'mg')} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
                         {t('world.build.resume', { who: hud.selected })}
                       </button>
                     )}
@@ -423,6 +423,12 @@ export default function WorldView() {
                 ) : (
                   <div className={BUILD_DONE}>{t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}</div>
                 )}
+                {!hud.mg && !hud.build.some((b) => b.id === 'mg') && (
+                  <button onClick={() => world.current?.buildMachineGun()} disabled={hud.prologue ? hud.money < 8000 : hud.cores < 8} className={BUILD} title={t('world.build.hours', { h: 3 })}>
+                    {t(hud.prologue ? 'world.mg.build' : 'world.mg.buildCores')}
+                  </button>
+                )}
+                {hud.mg && <div className={BUILD_DONE}>{t('world.mg.done')}</div>}
                 {hud.spikeNext >= 0 ? (
                   <button onClick={() => world.current?.craftSpikes()} disabled={hud.bamboo < 3} className={BUILD} title={t('world.spikes.tip')}>
                     {t('world.spikes.build', { n: hud.spikeNext + 1, have: hud.bamboo })}
@@ -593,6 +599,13 @@ export default function WorldView() {
                 <span className="relative">{t(hud.siege.shooter.weapon === 'shotgun' ? 'world.line.shoot' : 'world.line.bolt', { who: hud.siege.shooter.name, n: hud.ammo })}</span>
               </button>
             ) : <div className="text-[11px] text-[#a99d88]">{t('world.line.noGun')}</div>}
+            {hud.siege.mg !== null && (
+              <button onClick={() => world.current?.machineGun()} disabled={hud.siege.mg > 0 || hud.ammo < 3}
+                className="relative overflow-hidden rounded-sm bg-[#5a3a1c] px-2 py-1.5 text-left text-[12px] font-semibold ring-1 ring-white/10 hover:bg-[#6e4823] disabled:opacity-60">
+                {hud.siege.mg > 0 && <span className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${Math.min(100, (hud.siege.mg / 6) * 100)}%` }} />}
+                <span className="relative">{t('world.mg.fire', { n: hud.ammo })}</span>
+              </button>
+            )}
             <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
               className="rounded-sm bg-[#c2551f] px-2 py-1.5 text-left text-[12px] font-semibold ring-1 ring-white/10 hover:bg-[#d8652b] disabled:opacity-40">
               {t('world.molotov', { n: hud.molotovs })}

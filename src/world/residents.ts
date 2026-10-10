@@ -31,10 +31,10 @@ export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | '
   | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run'
 
 /** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
-export type BuildId = 'trap' | 'wall' | 'garden'
-export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden: 2 }
+export type BuildId = 'trap' | 'wall' | 'garden' | 'mg'
+export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden: 2, mg: 3 }
 /** 价钱：末日前 [元]，末日后 [晶核] */
-export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2] }
+export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2], mg: [8000, 8] }
 
 /** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
 export type InteractKind = 'chat' | 'comfort' | 'hug' | 'joke' | 'tea'
@@ -390,6 +390,8 @@ export class Household {
   xielinNotes = 0
   /** 院子砌了石头院墙：铁门更结实，隔着栏杆被抓伤的事也没了 */
   wall = false
+  /** 二楼阳台架了一挺机枪（沙袋围着）：打仗时在防线面板里下令扫射 */
+  mg = false
   /** 铁门外的钉板（耐久 0~100；0 = 没铺或者踩烂了） */
   readonly trap = { hp: 0 }
   /** 第一个尸潮危机夜街尽头那个人（阿寂的伏笔），看过就不再出现 */
@@ -2035,7 +2037,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, crisis, trapKills: 0, fireKills: 0, bruteKills: 0,
     }
     this.siege = new Siege({
-      count, crisis, raid, solidWall: this.wall, hard: this.hard, month: Math.max(0, Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)),
+      count, crisis, raid, solidWall: this.wall, mg: this.mg, hard: this.hard, month: Math.max(0, Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)),
       navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a) && !this.isInjured(a)), barriers: this.barriers, ammo: this.ammo,
       maxOf: (id) => this.maxOf(id), trap: this.trap, spikes: this.spikes,
       spawn: this.spawnZombie,
@@ -2290,7 +2292,7 @@ export class Household {
   startBuild(id: BuildId, who: Actor): 'ok' | 'money' | 'cores' | 'busy' | 'done' | 'fight' | 'van' | 'nobody' {
     if (this.siege && !this.siege.done) return 'fight'
     if (this.projects.some((p) => p.id === id)) return 'busy'
-    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.garden.built)) return 'done'
+    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.garden.built) || (id === 'mg' && this.mg)) return 'done'
     const v = this.vanAt
     if (id === 'garden' && v && v.x > GARDEN.x0 - 2 && v.x < GARDEN.x1 + 2 && v.z > GARDEN.z0 - 1.2 && v.z < GARDEN.z1 + 1.2) return 'van'
     // 选中的人有空就派 TA；TA 在干别的工程（或者干不了）就找家里别的有空的人，会修东西的优先
@@ -2346,6 +2348,8 @@ export class Household {
     let spot: Spot
     let piece: number | undefined
     if (p.id === 'garden') spot = GARDEN_SPOT
+    // 机枪位：二楼阳台上，面朝院子
+    else if (p.id === 'mg') spot = { kind: 'stroll', x: 3.2, z: 7.1, floor: 1, face: 0, pose: 'work' }
     else if (p.id === 'trap') spot = { kind: 'stroll', x: 3.6 + Math.floor(p.done * 3) * 0.7, z: 13.75, floor: 0, face: 0, pose: 'work' }
     else {
       // 一次站在一个地方砌 4 段（4 米），砌完再挪：不然每砌一米都要走一趟，大半天都花在走路上
@@ -2418,6 +2422,7 @@ export class Household {
       this.note('world.log.wall')
     }
     if (p.id === 'garden') { this.garden = { built: true, growth: 0, watered: -1 }; this.note('world.log.gardenBuilt') }
+    if (p.id === 'mg') { this.mg = true; this.note('world.log.mgBuilt', { who: p.worker }) }
     this.onRemind?.(`world.build.done.${p.id}` as UiKey)
   }
 

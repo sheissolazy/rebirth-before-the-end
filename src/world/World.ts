@@ -25,7 +25,7 @@ import {
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { DISHES, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
-import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
+import { LAYERS, MG, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -79,6 +79,8 @@ export interface Hud {
     downed: string[]
     /** 点中的那只丧尸是什么（开枪先打它） */
     target: ZombieKind | null
+    /** 阳台机枪还要等几秒（没有机枪是 null） */
+    mg: number | null
   } | null
   log: LogEntry[]
   muted: boolean
@@ -123,6 +125,8 @@ export interface Hud {
   fishing: { active: boolean; near: boolean; caught: number }
   /** 全家都睡着了，时间在快进 */
   sleepSkip: boolean
+  /** 阳台机枪架好了没有 */
+  mg: boolean
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 全新开局的片头正在放 */
@@ -224,7 +228,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -232,7 +236,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false,
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false,
 }
 
 export class World {
@@ -585,6 +589,7 @@ export class World {
       else if (e.kind === 'newKind') { this.toast(`world.toast.newKind.${e.zombie}`, 5); this.sound.groan(1, 0.8) }
       else if (e.kind === 'spit') this.sound.squelch()
       else if (e.kind === 'boom') { this.sound.crash(); this.sound.squelch() }
+      else if (e.kind === 'burst') { for (let k = 0; k < 3; k++) setTimeout(() => this.sound.shot(0.8), k * 90) }
       else if (e.kind === 'end') { this.onLinePanel?.(false); this.lineTarget = null }
       else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
       // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
@@ -1120,6 +1125,16 @@ export class World {
   buildGateTrap(): void { this.startBuild('trap') }
   buildYardWall(): void { this.startBuild('wall') }
   buildGardenPlot(): void { this.startBuild('garden') }
+  buildMachineGun(): void { this.startBuild('mg') }
+
+  /** 防线面板里点"机枪扫射" */
+  machineGun(): void {
+    const s = this.life.siege
+    if (!s || s.done) return
+    const r = s.machineGun()
+    if (r.r !== 'ok') this.toast(`world.mg.r.${r.r}`, 2.5)
+    this.pushLifeHud()
+  }
 
   /** 额外模型加载好以后：给住进来的人换上真人模型，再预热一帧（武器、丧尸、特效） */
   private afterExtraModels(): void {
@@ -1913,6 +1928,7 @@ export class World {
     }
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     this.updateConstruction()
+    this.updateMgNest()
     this.updateTargetRing()
     this.updatePops(dt)
     const g = this.life.garden
@@ -2803,6 +2819,58 @@ export class World {
     }
   }
 
+  /** 阳台机枪位：一圈沙袋 + 三脚架上一挺机枪（架的时候沙袋一个个垒起来，最后放枪） */
+  private mgNest: THREE.Group | null = null
+  private updateMgNest(): void {
+    const job = this.life.projects.find((p) => p.id === 'mg')
+    if (!this.life.mg && !job) { if (this.mgNest) this.mgNest.visible = false; return }
+    if (!this.mgNest) this.mgNest = this.makeMgNest()
+    this.mgNest.visible = true
+    const kids = this.mgNest.children
+    const done = this.life.mg ? 1 : job!.done
+    kids.forEach((c, k) => { c.visible = done >= 1 || (c.userData.bag ? done >= (k + 1) / (kids.length + 1) : false) })
+  }
+
+  private makeMgNest(): THREE.Group {
+    const g = new THREE.Group()
+    const bag = new THREE.MeshStandardMaterial({ color: '#b39a6c', roughness: 0.95 })
+    const metal = new THREE.MeshStandardMaterial({ color: '#2f3230', roughness: 0.45, metalness: 0.7 })
+    // 半圈沙袋，开口朝屋里
+    for (let row = 0; row < 2; row++) {
+      for (let k = 0; k < 7; k++) {
+        const a = Math.PI * (0.1 + (k / 6) * 0.8)
+        const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.36, 4, 8), bag)
+        m.rotation.z = Math.PI / 2
+        m.rotation.y = -a + Math.PI / 2
+        m.position.set(Math.cos(a) * 0.75, 0.14 + row * 0.24, Math.sin(a) * 0.55)
+        m.castShadow = true
+        m.userData.bag = true
+        g.add(m)
+      }
+    }
+    // 三脚架和枪身、枪管，枪口朝南（院子、铁门那边）
+    const gun = new THREE.Group()
+    for (const a of [0, 2.1, 4.2]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.62, 6), metal)
+      leg.position.set(Math.cos(a) * 0.16, 0.28, Math.sin(a) * 0.16 - 0.05)
+      leg.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3)
+      gun.add(leg)
+    }
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.6), metal)
+    body.position.set(0, 0.62, 0.05)
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.7, 8), metal)
+    barrel.rotation.x = Math.PI / 2
+    barrel.position.set(0, 0.64, 0.6)
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.18), new THREE.MeshStandardMaterial({ color: '#4d5a3a', roughness: 0.8 }))
+    box.position.set(0.14, 0.58, -0.05)
+    gun.add(body, barrel, box)
+    gun.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true })
+    g.add(gun)
+    g.position.set(MG.x, FLOOR_H, MG.z - 0.25)
+    this.floor2.add(g)
+    return g
+  }
+
   /** 盯住的丧尸脚下一圈红圈 */
   private updateTargetRing(): void {
     const z = this.lineTarget
@@ -3335,6 +3403,7 @@ export class World {
       molotovs: this.life.molotovs,
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
+      mg: this.life.mg,
       build: this.life.projects.map((p) => ({
         id: p.id, p: Math.floor(p.done * 100), worker: p.worker,
         working: this.actors.some((a) => a.name === p.worker && a.task?.kind === 'build'),
@@ -3367,6 +3436,7 @@ export class World {
       max: layer ? this.life.maxOf(layer.id) : LAYERS[0].max, ambush: s.ambush,
       kinds, shooter: s.shooter(), downed: this.actors.filter((a) => s.isDown(a)).map((a) => a.name),
       target: this.lineTarget?.kind ?? null,
+      mg: s.mgState(),
     }
   }
 
