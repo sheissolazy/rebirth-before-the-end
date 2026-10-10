@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lt, t, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
-import { EMPTY_HUD, World, type FurnitureMenu, type Hud, type PhoneView } from './World'
+import { EMPTY_HUD, World, type CookView, type FurnitureMenu, type Holdings, type Hud, type PhoneView } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel } from './life'
 import type { PersonHud } from './residents'
@@ -10,6 +10,8 @@ import { MapPanel, type AwayTrip, type MapMember } from './MapPanel'
 import { TradePanel, type ShopView } from './TradePanel'
 import { PhonePanel } from './PhonePanel'
 import { NewsPanel } from './NewsPanel'
+import { CookPanel } from './CookPanel'
+import { HoldingsPanel } from './HoldingsPanel'
 import type { NewsView } from './news'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
@@ -194,6 +196,8 @@ export default function WorldView() {
   // 手机开着时的画面数据（下单、打电话以后重新取一次）
   const [phone, setPhone] = useState<PhoneView | null>(null)
   const [news, setNews] = useState<NewsView | null>(null)
+  const [cook, setCook] = useState<CookView | null>(null)
+  const [hold, setHold] = useState<Holdings | null>(null)
   // 打丧尸时点防线 / 丧尸弹出的面板（开枪、燃烧瓶、救人）
   const [linePanel, setLinePanel] = useState(false)
   const setDiary = (open: boolean) => {
@@ -228,6 +232,7 @@ export default function WorldView() {
       if (uiPaused.current) w.setSpeed(0)
       else if (keptSpeed.current !== null) w.setSpeed(keptSpeed.current)
       w.onDiary = () => setDiary(true)
+      w.onStock = () => setHold(world.current?.holdings() ?? null)
       w.onMap = () => setMap(true)
       w.onFurnitureMenu = (m) => setFurn(m)
       w.onLinePanel = (open) => setLinePanel(open)
@@ -247,7 +252,7 @@ export default function WorldView() {
   const visitId = hud.visit?.id ?? null
   // 家里几张嘴（存货够几天按人头算，一人一天大约一份吃的、一份水）
   const mouths = Math.max(1, hud.people.filter((p) => !p.gone).length)
-  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone || !!news
+  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone || !!news || !!cook || !!hold
   // 面板一出现就停（layout effect 跟渲染同步，中间不会漏掉一次按空格或调速）
   useLayoutEffect(() => {
     const w = world.current
@@ -876,10 +881,13 @@ export default function WorldView() {
         onPick={(o) => {
           if (o.act && furn.target) world.current?.interactWith(furn.target, o.act)
           else if (o.cmd === 'news') setNews(world.current?.newsView() ?? null)
+          else if (o.cmd === 'cook') setCook(world.current?.cookView() ?? null)
           else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target)
-          else if (o.spot) world.current?.useFurniture(o.spot, o.dish)
+          else if (o.spot) world.current?.useFurniture(o.spot)
         }} />}
       {news && <NewsPanel view={news} onClose={() => setNews(null)} />}
+      {hold && <HoldingsPanel view={hold} onClose={() => setHold(null)} />}
+      {cook && <CookPanel view={cook} onClose={() => setCook(null)} onCook={(id) => world.current?.cookAction(id) ?? 'busy'} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

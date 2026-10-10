@@ -107,6 +107,8 @@ export const WALLS: WallSeg[] = [
 
 /** 堂屋的电视（电视柜正中）、火炉（铁皮炉子正中） */
 export const TV = { x: 5.42, z: -0.27 }
+/** 厨房西墙的卧式大冰柜（正中），长边贴着墙、正面朝东；吃的都放在里面 */
+export const FRIDGE = { x: 0.4, z: 0.75 }
 export const HEARTH = { x: 7.5, z: -0.02 }
 /** 买了以后摆在哪：发电机放在储藏室东墙外、空调外机贴着东墙，室内机挂在堂屋东墙上 */
 export const GENERATOR_AT = { x: 12.6, z: 4.3 }
@@ -133,9 +135,10 @@ export const FURNITURE: Placement[] = [
   { piece: 'crate', x: 11.4, z: 1.2, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
   { piece: 'crate', x: 11.4, z: 0.5, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
   { piece: 'shelf', x: 11.6, z: -1.6, rot: -90, floor: 0, toonOnly: true },
-  // 厨房：灶台靠北墙、碗柜（冰箱）靠楼梯间那面墙
+  // 厨房：灶台靠北墙；大冰柜、饮水机靠西墙（矮，镜头从东南看过来不挡灶台）
   { piece: 'counter', x: 2.0, z: -2.55, rot: 0, floor: 0, block: [1.5, 0.35] },
-  { piece: 'fridge', x: 3.6, z: -1.3, rot: -90, floor: 0, block: [0.4, 0.4] },
+  { piece: 'fridge', x: FRIDGE.x, z: FRIDGE.z, rot: 90, floor: 0, block: [0.32, 0.6] },
+  { piece: 'dispenser', x: 0.3, z: -0.25, rot: 90, floor: 0, block: [0.18, 0.18] },
   // 楼梯：楼梯间里西头上、东头到二楼
   { piece: 'stairs', x: 6.5, z: -1.75, rot: 0, floor: 0, block: [1.4, 0.6] },
   // 一楼爸妈卧室两张床
@@ -273,7 +276,7 @@ export const STAIR_PATH: StairPoint[] = [
 /** 二楼楼板上楼梯那一块是空的（不能走、也不铺地板） */
 export const STAIR_HOLE: Rect = { x0: 5, z0: -2.25, x1: 8, z1: -1.25 }
 
-export type SpotKind = 'cook' | 'drink' | 'dine' | 'relax' | 'stroll' | 'sleep' | 'run'
+export type SpotKind = 'cook' | 'drink' | 'dine' | 'relax' | 'stroll' | 'sleep' | 'run' | 'fridge'
 export type SpotPose = 'idle' | 'sit' | 'sleep' | 'work' | 'walk'
 export interface Spot {
   kind: SpotKind
@@ -297,10 +300,11 @@ export interface Spot {
 export const TREADMILL_SPOT: Spot = { kind: 'run', x: 4.65, z: 5.05, floor: 1, face: 180, pose: 'walk', y: 0.13, ax: 5.3, az: 4.95 }
 
 export const SPOTS: Spot[] = [
-  // 厨房：灶台两个位置、碗柜边上拿水
+  // 厨房：灶台两个位置、饮水机前接水、冰柜前拿饭
   { kind: 'cook', x: 2.4, z: -1.85, floor: 0, face: 180, pose: 'work' },
   { kind: 'cook', x: 1.5, z: -1.85, floor: 0, face: 180, pose: 'work' },
-  { kind: 'drink', x: 2.75, z: -1.3, floor: 0, face: 90, pose: 'work' },
+  { kind: 'drink', x: 0.85, z: -0.25, floor: 0, face: -90, pose: 'work' },
+  { kind: 'fridge', x: 1.05, z: 0.75, floor: 0, face: -90, pose: 'work' },
   // 八仙桌四把椅子
   { kind: 'dine', x: 6, z: 1.9, floor: 0, face: 0, pose: 'sit' },
   { kind: 'dine', x: 6, z: 3.3, floor: 0, face: 180, pose: 'sit' },

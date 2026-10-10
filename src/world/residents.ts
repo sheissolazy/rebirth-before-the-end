@@ -7,8 +7,8 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  BEAT, DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, SUNSET, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
-  type Activity, type Clock, type Needs, type Stock,
+  BEAT, DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DISHES, DRINK, INGS, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, SUNSET, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
+  type Activity, type Clock, type Ing, type Needs, type Stock,
 } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type SpikeRow, type Zombie, type ZombieKind } from './siege'
 import { TRIPS, canGo, settleTrip, tripCost, tripHours, vanAllowed, type TripDef } from './expedition'
@@ -23,13 +23,13 @@ import { buildNews, type NewsView } from './news'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
-import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
+import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageKind, type ForageSpot, type ForageYield } from './forage'
 import { lt, t, t as t_, type UiKey } from '../i18n'
 
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run' | 'tv'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run' | 'tv' | 'plate'
 
 /** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
 export type BuildId = 'trap' | 'wall' | 'garden' | 'mg'
@@ -38,6 +38,16 @@ export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden:
 export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2], mg: [8000, 8] }
 
 /** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
+/** 闲着的人自己去采的：篱笆外几米以内、不危险的几样（蜂窝会蜇人、红伞伞有毒，要玩家点） */
+export const NEAR_FORAGE = 4
+const AUTO_FORAGE: ForageKind[] = ['greens', 'flowers', 'herb', 'berries']
+/** 一个点在院子外面多远（在院子里是 0） */
+export function outsideYard(p: { x: number; z: number }): number {
+  const dx = Math.max(YARD.x0 - p.x, 0, p.x - YARD.x1)
+  const dz = Math.max(YARD.z0 - p.z, 0, p.z - YARD.z1)
+  return Math.hypot(dx, dz)
+}
+
 /** 烤火、看电视每小时多涨多少心情；末日后开着电视发电机每小时烧多少油 */
 export const FIRE_MOOD = 12
 export const TV_MOOD = 5
@@ -79,6 +89,8 @@ interface Task {
   piece?: number
   /** 做饭 / 吃饭：哪道菜 */
   dish?: string
+  /** 做饭：这一锅做几人份 */
+  servings?: number
   /** 玩家亲口下令接着干的工程：天黑也干，只有快累垮、快渴死、快饿死才停 */
   forced?: boolean
   /** 做饭：已经从家里拿了料（被叫走时还回去） */
@@ -327,6 +339,12 @@ export class Household {
   clock: Clock = { day: 0, hour: 7.5 }
   speed = 1
   stock: Stock = { food: 12, water: 12 }
+  /** 冰柜里的生食材（加起来就是 stock.food；别处直接改了 stock.food 的，对账时多的算主食、少的按比例扣） */
+  larder: Record<Ing, number> = { grain: 9, meat: 2, veg: 0.5, egg: 0.5 }
+  /** 冰柜里做好的饭菜：一锅一锅的，先吃早做的 */
+  fridge: { dish: string; left: number }[] = []
+  /** 冰柜空了提醒过没有（做了新的一锅就重新算） */
+  fridgeWarned = false
   /** 霰弹枪子弹 */
   readonly ammo = { n: 24 }
   /** 打丧尸掉的晶核 */
@@ -502,6 +520,7 @@ export class Household {
       this.onDoomsday?.()
     }
     const hours = (dt * this.speed * 24) / DAY_SECONDS
+    this.syncLarder()
     this.siegeTick(dt * this.speed)
     const fighting = !!this.siege && !this.siege.done
     const nurse = this.hasTrait('trait_nurse')
@@ -1012,7 +1031,7 @@ export class Household {
     if (f.left > 0) return
     f.left = this.biteWait()
     if (this.rand() < 0.65) {
-      this.stock = { ...this.stock, food: this.stock.food + 0.5 }
+      this.gainFood('meat', 0.5)
       this.fishCaught++
       this.onFish?.(true)
       if (this.fishCaught === 1 || this.fishCaught % 4 === 0) this.note('world.log.fish', { n: this.fishCaught })
@@ -1836,6 +1855,10 @@ export class Household {
       what.push(t_(`world.unit.${k}` as UiKey, { n }))
     }
     add('food', g.food)
+    for (const k of ['meat', 'veg', 'egg'] as const) {
+      const n = g[k]
+      if (n) { this.gainFood(k, n); what.push(t_(`world.unit.${k}` as UiKey, { n })) }
+    }
     add('water', g.water)
     add('ammo', g.ammo)
     add('medkits', g.medkits)
@@ -2299,7 +2322,7 @@ export class Household {
     a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 7 / (1 + joy)) }
     if (joy === 0 && this.rand() < 0.5) {
       this.eggs += 1
-      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD }
+      this.gainFood('egg', Household.EGGS_FOOD)
       this.onGain?.('🥚+1', a)
       this.note('world.log.henEgg', { who: a.name })
     }
@@ -2540,7 +2563,7 @@ export class Household {
     const g = this.garden
     if (g.growth >= 1) {
       g.growth = 0
-      this.stock = { ...this.stock, food: this.stock.food + 3 }
+      this.gainFood('veg', 3)
       this.onGain?.('🥬+3', null, { x: (GARDEN.x0 + GARDEN.x1) / 2, z: (GARDEN.z0 + GARDEN.z1) / 2 })
       this.note('world.log.harvest')
     } else if (g.watered !== this.clock.day) {
@@ -2572,7 +2595,7 @@ export class Household {
     // 陪聊算歇着，收拾屋子是轻活（不像做饭那么累）
     if (t.kind === 'company' || t.kind === 'interact') return 'relax'
     if (t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet') return 'relax'
-    if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch') return 'idle'
+    if (t.kind === 'help' || t.kind === 'hang' || t.kind === 'fetch' || t.kind === 'plate') return 'idle'
     if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'craft') return 'cook'
     if (t.kind === 'build') return 'cook'
@@ -2602,7 +2625,8 @@ export class Household {
   }
 
   private think(a: Actor): void {
-    const want = chooseWant(a.needs, this.clock, this.available, this.rand())
+    // 有没有饭吃看冰柜和能不能做一锅（不只是看生粮）
+    const want = chooseWant(a.needs, this.clock, { water: this.available.water, food: this.canEat ? Math.max(MEAL.food, this.available.food) : 0 }, this.rand())
     // 下雨天和夜里一样，不去院子里
     const night = isNight(this.clock.hour) || this.rain > 0.1
     // 重伤：除了吃饭喝水，都躺在床上养着
@@ -2610,7 +2634,6 @@ export class Household {
       this.assign(a, this.sleepTask(a, false) ?? { kind: 'idle', spot: null, phase: 'use', hours: 0.5, manual: false })
       return
     }
-    const indoor = (s: Spot) => inRect(HOUSE, s.x, s.z)
     let task: Task | null = null
     // 白天爸爸有空就去修被丧尸砸坏的门
     // 会修门的人（爸爸）不在了，就换一个大人（不是女主、不是客人）来修
@@ -2645,25 +2668,80 @@ export class Household {
     if (!task && freeish && a !== this.actors[0] && !a.guest && this.laundryOut && this.clock.hour >= 17 && this.clock.hour < 22 && a.needs.energy > 15) task = this.laundryTask('fetch')
     // 改装面包车的材料带回来了：会修东西的人（爸爸）一有空就去改装，比歇着、溜达优先
     if (!task && !late && !night && fixer && this.vanKit && !this.vanArmor && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.modVanTask()
-    if (!task && !late && a !== this.actors[0] && (want === 'idle' || (want === 'stroll' && night) || (want === 'relax' && this.rand() < 0.35))) {
-      const r = this.rand()
-      if (r < 0.5) task = this.companyTask(a)
-      // 爸爸闲了爱去擦擦那辆面包车
-      if (!task && r < 0.68 && !night && a === this.actors[2]) task = this.washTask()
-      if (!task && r < 0.85) task = this.tidyTask(a)
-    }
     if (task) { /* 修门 / 种地 */ } else if (want === 'sleep') task = this.sleepTask(a, false)
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
     else if (want === 'eat') task = this.eatTask(a)
-    else if (want === 'relax' || (want === 'stroll' && night)) {
-      // 有空爱看会儿电视；晚上爱凑到火炉边烤烤火
-      if (!late && !a.guest && this.rand() < 0.3 && this.watchTv(a, false) === 'ok') return
-      const fire = this.freeSpots('relax', (s) => s.near === 'fire')
-      const warm = isNight(this.clock.hour) && fire.length > 0 && this.rand() < 0.6
-      task = this.spotTask(a, this.pick(warm ? fire : this.freeSpots('relax', night ? indoor : undefined)), 'relax', 1 + this.rand())
-    } else if (want === 'stroll') task = this.spotTask(a, this.pick(this.freeSpots('stroll')), 'stroll', 0.5 + this.rand() * 0.5)
+    else {
+      // 闲下来了：别发呆（看电视的话 watchTv 里已经派好了）
+      const free = this.freeTime(a, want, night, late)
+      if (free === 'tv') return
+      task = free
+    }
     if (!task) task = { kind: 'idle', spot: null, phase: 'use', hours: 0.25 + this.rand() * 0.4, manual: false }
     this.assign(a, task)
+  }
+
+  /** 闲下来干什么。老板：尽量别发呆——要么干活、要么运动、要么在周围采集、要么看电视（烤火），要么睡觉 */
+  private freeTime(a: Actor, want: string, night: boolean, late: boolean): Task | 'tv' | null {
+    const h = this.clock.hour
+    const n = a.needs
+    // 累了：白天也回床上眯一会儿（傍晚以后就等着正经睡觉）
+    if (n.energy < 40 && h >= 9 && h < 17) {
+      const nap = this.sleepTask(a, false)
+      if (nap) return nap
+    }
+    const opts: { w: number; make: () => Task | 'tv' | null }[] = []
+    const add = (w: number, make: () => Task | 'tv' | null) => { opts.push({ w, make }) }
+    const evening = h >= SUNSET || h < 1
+    // 心情不好（chooseWant 给的是"歇会儿"）：更想看电视、烤火、逗小鸡
+    const low = want === 'relax'
+    if (!a.guest && this.tvPowered && !isMealTime(h) && h >= 7 && h < 23) add(evening ? 2.5 : low ? 1.6 : 1.1, () => (this.watchTv(a, false) === 'ok' ? 'tv' : null))
+    const fire = this.freeSpots('relax', (x) => x.near === 'fire')
+    if (fire.length) add(evening ? 2.5 : low ? 1 : 0.3, () => this.spotTask(a, this.pick(fire), 'relax', 0.8 + this.rand() * 0.6))
+    if (!late) {
+      // 跑步机：白天、有力气、今天还没练满
+      const g = this.runGain.get(a.name)
+      const ran = g && g.day === this.clock.day ? g.got : 0
+      const tm = this.freeSpots('run')[0]
+      if (tm && !night && !this.isInjured(a) && n.energy > 50 && n.thirst > 45 && ran < Household.RUN_MAX - 0.5) add(1.2, () => this.spotTask(a, tm, 'run', 0.5))
+      // 院子周围长好了的野菜、野花、草药、野果
+      // （女主是玩家在操控，采完不会自己走回来，所以不让她自己出去）
+      if (!night && !a.guest && a !== this.actors[0] && !this.isInjured(a)) {
+        const f = this.nearForage()
+        if (f) add(1.5, () => f)
+      }
+      // 逗小鸡：白天、今天还没逗腻
+      if (!night && !a.guest && (this.henJoy.day !== this.clock.day || this.henJoy.n < 2) && !this.taken.has(COOP_SPOT)) add(low ? 1.2 : 0.7, () => ({ kind: 'hens', spot: COOP_SPOT, phase: 'go', hours: 0.3, manual: false }))
+      // 收拾屋子、凑过去跟家人说说话、爸爸擦车
+      if (a !== this.actors[0] && !a.guest) add(1, () => this.tidyTask(a))
+      add(a === this.actors[0] ? 0.6 : 1, () => this.companyTask(a))
+      if (a === this.actors[2] && !night) add(0.5, () => this.washTask())
+    }
+    // 沙发、摇椅上坐一会儿（权重小：坐着不动也有点像发呆）
+    add(low ? 0.6 : 0.25, () => this.spotTask(a, this.pick(this.freeSpots('relax', night ? (x) => inRect(HOUSE, x.x, x.z) : undefined)), 'relax', 0.8 + this.rand() * 0.6))
+    // 按权重挑一个；没成的（位置被占了）换下一个
+    while (opts.length) {
+      const total = opts.reduce((m, o) => m + o.w, 0)
+      let r = this.rand() * total
+      let i = opts.findIndex((o) => (r -= o.w) < 0)
+      if (i < 0) i = opts.length - 1
+      const [o] = opts.splice(i, 1)
+      const t = o.make()
+      if (t) return t
+    }
+    return null
+  }
+
+  /** 院子周围（篱笆外几步路）长好了的野菜、野花、草药、野果：末日前白天闲着的人自己去采，采完自己回来。末日后外面有丧尸，要玩家下令 */
+  private nearForage(): Task | null {
+    const h = this.clock.hour
+    if (this.clock.day >= PROLOGUE_DAYS || this.rain > 0.05 || h < 7 || h > 17.5 || (this.siege && !this.siege.done)) return null
+    const near = FORAGE.filter((f) => AUTO_FORAGE.includes(f.kind) && ripe(f, this.forageDay, this.clock.day) && outsideYard(f.at) <= NEAR_FORAGE
+      && !this.actors.some((o) => o.task?.forage === f.id))
+    const f = this.pick(near)
+    if (!f) return null
+    const at = standAt(f)
+    return { kind: 'forage', spot: { kind: 'stroll', x: at.x, z: at.z, floor: 0, face: at.face, pose: 'work' }, phase: 'go', hours: FORAGE_HOURS[f.kind], manual: false, forage: f.id }
   }
 
   /** 凑到一个正在歇着 / 吃饭 / 干活的家人身边，面对面说说话 */
@@ -2894,52 +2972,155 @@ export class Household {
     return this.spotTask(a, bed, 'sleep', manual ? 1 : 0, manual)
   }
 
-  /** 做饭再吃：先去灶台，做好了找把椅子坐下吃 */
-  /** 今天的菜（灶台边选的）；家里人自己做饭都做这个，东西不够就退回白米饭 */
+  // --- 冰柜和做饭 ---------------------------------------------------------------
+
+  /** 对账：别处直接加减了 stock.food（买的、送的、被抢的、泡水的），多出来的算主食，少了按比例扣 */
+  syncLarder(): void {
+    const sum = INGS.reduce((n, k) => n + this.larder[k], 0)
+    const diff = this.stock.food - sum
+    if (Math.abs(diff) < 1e-6) return
+    if (diff > 0) this.larder = { ...this.larder, grain: this.larder.grain + diff }
+    else {
+      const k = sum > 0 ? Math.max(0, this.stock.food) / sum : 0
+      this.larder = { grain: this.larder.grain * k, meat: this.larder.meat * k, veg: this.larder.veg * k, egg: this.larder.egg * k }
+    }
+  }
+
+  /** 进了哪样食材（钓的鱼、鸡下的蛋、院子里的菜、买的肉和蛋） */
+  gainFood(ing: Ing, n: number): void {
+    this.syncLarder()
+    this.larder = { ...this.larder, [ing]: this.larder[ing] + n }
+    this.stock = { ...this.stock, food: this.stock.food + n }
+  }
+
+  /** 这样食材家里有多少（空间里收着的吃的都算主食） */
+  ingHave(ing: Ing): number {
+    this.syncLarder()
+    return this.larder[ing] + (ing === 'grain' ? this.space.food : 0)
+  }
+
+  private useIng(ing: Ing, n: number): void {
+    this.syncLarder()
+    const own = Math.min(this.larder[ing], n)
+    this.larder = { ...this.larder, [ing]: this.larder[ing] - own }
+    this.stock = { ...this.stock, food: Math.max(0, this.stock.food - own) }
+    const rest = n - own
+    if (rest > 1e-9) this.space = { ...this.space, food: Math.max(0, this.space.food - rest) }
+  }
+
+  /** 冰柜里还有几份做好的 */
+  get fridgeLeft(): number {
+    return this.fridge.reduce((n, p) => n + p.left, 0)
+  }
+
+  /** 一锅做几人份：家里几口人（出门在外的回来也要吃） */
+  get mouths(): number {
+    return Math.max(1, this.actors.filter((a) => !a.dead && !a.lost && !a.runaway).length)
+  }
+
+  /** 这道菜家里的东西够做几人份 */
+  maxServings(id: string): number {
+    const d = dishOf(id)
+    if (this.herbs < d.herbs) return 0
+    let n = Infinity
+    for (const k of INGS) {
+      const u = d.use[k]
+      if (u) n = Math.min(n, Math.floor((this.ingHave(k) + 1e-6) / u))
+    }
+    if (d.water > 0) n = Math.min(n, Math.floor((this.available.water + 1e-6) / d.water))
+    return n === Infinity ? 0 : n
+  }
+
+  canCook(id: string): boolean {
+    return this.maxServings(id) >= 1
+  }
+
+  /** 正在做饭的人 */
+  get cooking(): Actor | undefined {
+    return this.actors.find((a) => a.task?.kind === 'cook' && !a.dead)
+  }
+
+  /** 有没有饭吃：冰柜里有、有人在做、或者家里的东西还够做一锅 */
+  get canEat(): boolean {
+    return this.fridgeLeft > 0 || !!this.cooking || !!this.fallbackDish()
+  }
+
+  /** 上回选的菜：家里人自己做饭也做这个，东西不够就做最省的 */
   menu = 'rice'
 
-  /** 这道菜家里的东西够不够做一份 */
-  canCook(id: string): boolean {
-    const d = dishOf(id)
-    return this.available.food >= d.food && this.available.water >= d.water && this.herbs >= d.herbs
+  /** 没人拿主意时做什么：上回选的菜 → 白米饭、面这种省的 → 家里剩什么做什么（只剩肉、只剩蛋、只剩菜也能凑一锅） */
+  private fallbackDish(): string | null {
+    for (const id of [this.menu, 'rice', 'noodles', 'greens', 'eggrice', 'wildveg', 'scrambled', 'canmeat', ...DISHES.map((d) => d.id)]) if (this.canCook(id)) return id
+    return null
   }
 
-  private eatTask(a: Actor, manual = false, at?: Spot, dishId?: string): Task | null {
-    const want = dishId ?? this.menu
-    const dish = this.canCook(want) ? dishOf(want) : this.canCook('rice') ? dishOf('rice') : null
-    if (!dish) return null
+  /** 去灶台做一锅（全家的份），做好了放进冰柜 */
+  private potTask(a: Actor, id: string, manual: boolean, at?: Spot): Task | null {
     const stove = at ?? this.nearest(a, this.freeSpots('cook'))
-    if (!stove) return null
-    const cook = this.spotTask(a, stove, 'cook', dish.hours, manual)
-    if (!cook) return null
-    cook.dish = dish.id
-    // 椅子都有人坐就站在灶台边吃
-    cook.then = () => {
-      const eat = this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'eat', 0.5, manual) ?? { kind: 'eat' as const, spot: null, phase: 'use' as const, hours: 0.5, manual }
-      eat.dish = dish.id
-      return eat
-    }
-    return cook
+    const task = this.spotTask(a, stove, 'cook', dishOf(id).hours, manual)
+    if (!task) return null
+    task.dish = id
+    task.servings = this.mouths
+    return task
   }
 
-  /** 灶台菜单里选了一道菜：选中的人去做（做完自己吃），以后家里人做饭也做这个 */
-  cookDish(a: Actor, spot: Spot, id: string): 'ok' | 'short' | 'busy' {
+  /** 饿了：冰柜里有就去拿一份、找把椅子坐下吃；冰柜空了有人在做就坐着等；没人做就自己去做一锅 */
+  private eatTask(a: Actor, manual = false): Task | null {
+    if (this.fridgeLeft > 0) {
+      const at = this.freeSpots('fridge')[0] ?? this.spots.find((x) => x.kind === 'fridge')
+      return at ? { kind: 'plate', spot: at, phase: 'go', hours: 0.04, manual } : null
+    }
+    if (this.cooking) return this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'sit', 0.3, manual)
+    const id = this.fallbackDish()
+    return id ? this.potTask(a, id, manual) : null
+  }
+
+  /** 从冰柜拿一份（先拿早做的那锅）；拿完了提醒一句 */
+  private takePortion(): string | null {
+    const p = this.fridge.find((x) => x.left > 0)
+    if (!p) return null
+    p.left -= 1
+    this.fridge = this.fridge.filter((x) => x.left > 0.001)
+    if (!this.fridge.length && !this.fridgeWarned) {
+      this.fridgeWarned = true
+      this.note('world.fridge.empty')
+      this.onRemind?.('world.fridge.emptyToast')
+    }
+    return p.dish
+  }
+
+  /** 做饭界面点"开始做"：选中的人去做一锅（TA 不在家、受了伤，就换个有空的人；女主最后才轮到） */
+  cookPot(a: Actor | null, id: string): 'ok' | 'short' | 'busy' | 'cooking' | 'fighting' {
+    if (this.siege && !this.siege.done) return 'fighting'
     if (!this.canCook(id)) return 'short'
-    if (this.isOut(a) || this.isInjured(a)) return 'busy'
-    const who = this.taken.get(spot)
-    if (who && who !== a) return 'busy'
+    if (this.cooking) return 'cooking'
+    const ok = (x: Actor) => !x.dead && !x.lost && !x.runaway && !x.away && !this.isOut(x) && !this.isInjured(x) && !x.guest
+    const free = (x: Actor) => ok(x) && (!x.task || !x.task.manual)
+    const who = (a && ok(a) ? a : undefined) ?? this.actors.find((x) => x !== this.actors[0] && free(x)) ?? this.actors.find(free)
+    if (!who) return 'busy'
     this.menu = id
-    this.cancel(a)
-    const task = this.eatTask(a, true, spot, id)
+    this.cancel(who)
+    const task = this.potTask(who, id, true)
     if (!task) return 'busy'
-    this.assign(a, task)
+    this.assign(who, task)
+    return 'ok'
+  }
+
+  /** 点冰柜"拿一份吃" */
+  eatNow(a: Actor): 'ok' | 'empty' | 'busy' {
+    if (this.fridgeLeft <= 0) return 'empty'
+    if (this.isOut(a) || a.away || a.dead) return 'busy'
+    this.cancel(a)
+    const t = this.eatTask(a, true)
+    if (!t) return 'busy'
+    this.assign(a, t)
     return 'ok'
   }
 
   private assign(a: Actor, task: Task): void {
     // 没人下命令就不出院子（自己找的事只在家里和院子里；守夜打丧尸不算）
     const at = task.spot
-    if (at && !task.manual && task.kind !== 'guard' && at.floor === 0 && !inRect(YARD, at.ax ?? at.x, at.az ?? at.z)) {
+    if (at && !task.manual && task.kind !== 'guard' && !(task.kind === 'forage' && outsideYard(at) <= NEAR_FORAGE + 1) && at.floor === 0 && !inRect(YARD, at.ax ?? at.x, at.az ?? at.z)) {
       task = { kind: 'idle', spot: null, phase: 'use', hours: 0.3, manual: false }
     }
     a.task = task
@@ -3001,14 +3182,34 @@ export class Household {
       if (t.kind === 'pet' || t.kind === 'hens') a.pose = 'pet'
       if (t.kind === 'run') a.pose = 'walk'
       if (t.kind === 'cook') {
-        // 开火前再看一眼：东西被别人先用掉了就改做白米饭，白米饭也不够就不做了
-        if (!this.canCook(t.dish ?? 'rice')) t.dish = this.canCook('rice') ? 'rice' : undefined
-        if (!t.dish) { t.then = undefined; t.hours = 0 } else {
-          const d = dishOf(t.dish)
-          this.take('food', d.food)
-          if (d.water) this.take('water', d.water)
+        // 开火前再看一眼：东西被用掉了就少做几份；一份都不够就改做最省的，再不够就不做了
+        let id = t.dish ?? 'rice'
+        if (!this.canCook(id)) id = this.fallbackDish() ?? ''
+        if (!id) { t.then = undefined; t.hours = 0 } else {
+          const d = dishOf(id)
+          const n = Math.max(1, Math.min(t.servings ?? this.mouths, this.maxServings(id)))
+          for (const k of INGS) {
+            const u = d.use[k]
+            if (u) this.useIng(k, u * n)
+          }
+          if (d.water) this.take('water', d.water * n)
           if (d.herbs) this.herbs = Math.max(0, this.herbs - d.herbs)
+          t.dish = id
+          t.servings = n
+          // 人多一点做得稍微久一点
+          t.hours = d.hours * (0.7 + 0.1 * n)
           t.paid = true
+        }
+      }
+      if (t.kind === 'plate') {
+        const dish = this.takePortion()
+        if (!dish) { t.hours = 0; t.then = undefined } else {
+          t.dish = dish
+          t.then = () => {
+            const eat = this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'eat', 0.5, t.manual) ?? { kind: 'eat' as const, spot: null, phase: 'use' as const, hours: 0.5, manual: t.manual }
+            eat.dish = dish
+            return eat
+          }
         }
       }
       if (t.kind === 'drink') this.take('water', DRINK.water)
@@ -3053,8 +3254,8 @@ export class Household {
     if (!t.manual && t.kind === 'tv' && isMealTime(this.clock.hour)) return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet' || t.kind === 'tv')) {
       // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
-      if (isMealTime(this.clock.hour) && n.hunger < 60 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
-      return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
+      if (isMealTime(this.clock.hour) && n.hunger < 60 && this.canEat && t.kind !== 'greet') return true
+      return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.canEat)
     }
     return false
   }
@@ -3079,6 +3280,18 @@ export class Household {
     if (t.kind === 'sleep' && this.clock.hour >= 5 && this.clock.hour < 11 && others && (this.saidMorning !== this.clock.day || this.rand() < 0.35)) {
       this.say(a, 'morning')
       this.saidMorning = this.clock.day
+    }
+    // 一锅做好了：放进冰柜（几人份），谁饿了谁去拿
+    if (t.kind === 'cook' && t.paid && t.hours <= 0 && t.dish) {
+      const n = t.servings ?? 1
+      const pot = this.fridge.find((p) => p.dish === t.dish)
+      if (pot) pot.left += n
+      else this.fridge.push({ dish: t.dish, left: n })
+      this.fridgeWarned = false
+      t.paid = false
+      const d = dishOf(t.dish)
+      this.onGain?.(`${d.icon} ${t_(`world.dish.${d.id}` as UiKey)} ×${n}`, a)
+      this.note('world.fridge.cooked', { who: a.name, dish: t_(`world.dish.${d.id}` as UiKey), n })
     }
     // 吃饭：按吃的哪道菜加饱腹、心情、精力、健康
     if (t.kind === 'eat') {
@@ -3112,7 +3325,7 @@ export class Household {
       // 今天逗过小鸡：小鸡高兴，多下一两个蛋
       const bonus = this.henJoy.day === this.clock.day ? Math.min(2, this.henJoy.n) : 0
       this.eggs += 1 + bonus
-      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD * (1 + bonus) }
+      this.gainFood('egg', Household.EGGS_FOOD * (1 + bonus))
       this.onGain?.(`🥚+${1 + bonus}`, a)
       if (!this.log.some((l) => l.key === 'world.log.eggs') || this.rand() < 0.25) this.note('world.log.eggs', { who: a.name })
     }
@@ -3155,8 +3368,14 @@ export class Household {
     const t = a.task
     if (t?.kind === 'cook' && t.paid && t.hours > 0) {
       const d = dishOf(t.dish)
-      this.stock = { food: this.stock.food + d.food, water: this.stock.water + d.water }
+      const n = t.servings ?? 1
+      for (const k of INGS) {
+        const u = d.use[k]
+        if (u) this.gainFood(k, u * n)
+      }
+      this.stock = { ...this.stock, water: this.stock.water + d.water * n }
       this.herbs += d.herbs
+      t.paid = false
     }
     this.release(a)
     a.task = null
@@ -3195,7 +3414,8 @@ export class Household {
     if (!s || !ripe(s, this.forageDay, this.clock.day)) return
     this.forageDay[s.id] = this.clock.day
     const y = harvest(s.kind, () => this.rand())
-    this.stock.food += y.food
+    // 野菜、蘑菇算菜
+    if (y.food) this.gainFood('veg', y.food)
     a.needs = { ...a.needs, mood: Math.max(0, Math.min(100, a.needs.mood + y.mood)) }
     if (y.family) for (const b of this.actors) if (b !== a && !b.dead && !this.isOut(b)) b.needs = { ...b.needs, mood: Math.min(100, b.needs.mood + y.family) }
     if (y.sting) a.health = Math.max(1, a.health - y.sting)
@@ -3226,7 +3446,10 @@ export class Household {
     if (who && who !== a) return false
     this.cancel(a)
     let task: Task | null = null
-    if (spot.kind === 'cook') task = this.eatTask(a, true, spot)
+    if (spot.kind === 'cook') {
+      const id = this.fallbackDish()
+      task = id && !this.cooking ? this.potTask(a, id, true, spot) : null
+    } else if (spot.kind === 'fridge') task = this.fridgeLeft > 0 ? this.eatTask(a, true) : null
     else if (spot.kind === 'drink') task = this.available.water >= DRINK.water ? this.spotTask(a, spot, 'drink', 0.12, true) : null
     else if (spot.kind === 'sleep') task = this.spotTask(a, spot, 'sleep', 1, true)
     else if (spot.kind === 'dine') task = this.spotTask(a, spot, 'sit', 1, true)

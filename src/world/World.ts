@@ -21,12 +21,13 @@ import { TONE } from './ui'
 import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
 import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ironStove, stool, tvStand } from './hearth'
 import type { NewsView } from './news'
+import { freezer, waterDispenser } from './kitchen'
 import {
-  COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
+  COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
-import { DISHES, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
+import { DISHES, ING_INFO, INGS, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, dishOf, isCrisisNight, isNight } from './life'
 import { LAYERS, MG, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
@@ -202,14 +203,45 @@ export interface FurnitureMenu {
   options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: MenuCmd; dish?: string; text?: string; disabled?: boolean }[]
 }
 
-export type MenuCmd = 'feed' | 'hens' | 'bandage' | 'tv' | 'news'
+/** 做饭界面（冰柜 | 这一锅 | 菜谱） */
+export interface CookView {
+  mouths: number
+  ings: { id: string; icon: string; name: string; n: number }[]
+  water: number
+  herbs: number
+  leftovers: { id: string; icon: string; name: string; left: number }[]
+  cooking: { who: string; dish: string; p: number } | null
+  menu: string
+  who: string
+  dishes: {
+    id: string; icon: string; name: string; hours: number; herbs: number
+    need: { icon: string; name: string; per: number; have: number }[]
+    fx: { hunger: number; mood: number; energy: number; health: number }
+    /** 这一锅能做几人份（不超过家里的人数）；0 = 做不了 */
+    servings: number
+    short: string[]
+  }[]
+}
+
+export type MenuCmd = 'feed' | 'hens' | 'bandage' | 'tv' | 'news' | 'cook' | 'eat'
+/** 点了能看家当的东西：储藏室的铁架子、木箱、书架（卡通画风） */
+function isStorage(o: THREE.Object3D): boolean {
+  const id = String(o.userData.slug ?? o.userData.piece ?? '')
+  if (/steel_frame_shelves|crate/.test(id)) return true
+  return id === 'shelf' && o.position.x > STORE_ROOM.x0 && o.position.z < STORE_ROOM.z1
+}
+
+/** 储藏室的家当（点架子弹出来）：一组一组列出来 */
+export interface HoldItem { icon: string; name: string; n: string; note?: string; tone?: 'bad' | 'warn' | 'good' }
+export interface Holdings { groups: { title: string; items: HoldItem[] }[]; foodDays: number; waterDays: number; mouths: number }
+
 /** 世外桃源画风的火炉（Poly Haven 的芬兰铁皮炉，原大 2.36 米高）缩到多大 */
 const HEATER_SCALE = 0.62
 
 /** 家具在菜单标题上叫什么 */
 const FURNITURE_NAMES: [RegExp, string][] = [
   [/fire_stove|heater/i, '火炉'], [/^tv$|television/i, '电视'], [/stool/i, '小板凳'],
-  [/sofa/i, '沙发'], [/bed/i, '床'], [/stove|counter/i, '灶台'], [/kettle|fridge/i, '水壶'], [/cabinet/i, '柜子'],
+  [/sofa/i, '沙发'], [/bed/i, '床'], [/stove|counter/i, '灶台'], [/fridge/i, '大冰柜'], [/dispenser/i, '饮水机'], [/kettle/i, '水壶'], [/cabinet/i, '柜子'],
   [/rocking/i, '摇椅'], [/bench/i, '长椅'], [/chair/i, '椅子'], [/table/i, '桌子'], [/crate/i, '储物箱'],
 ]
 function furnitureName(o: THREE.Object3D): string {
@@ -235,7 +267,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.tv.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -1303,8 +1335,8 @@ export class World {
       return o
     }
     const made: Record<string, () => THREE.Object3D> = {
-      sofa, counter, fridge, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H), treadmill,
-      fire_stove: ironStove, stool,
+      sofa, counter, fridge: freezer, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H), treadmill,
+      fire_stove: ironStove, stool, dispenser: waterDispenser,
       tv: () => {
         const g = new THREE.Group()
         const crt = crtTv()
@@ -1316,6 +1348,7 @@ export class World {
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
     obj.userData.piece = p.piece
+    if (obj.userData.lid) this.freezerLid = obj.userData.lid as THREE.Object3D
     if (obj.userData.belt) this.treadmillBelt = obj.userData.belt as THREE.Texture
     if (p.toonOnly) obj.userData.toonOnly = true
     obj.position.set(p.x, y, p.z)
@@ -1395,8 +1428,6 @@ export class World {
       chair: { slug: 'painted_wooden_chair_01', rot: 180 },
       desk: { slug: 'wooden_table_02' },
       shelf: { slug: 'wooden_bookshelf_worn', scale: 0.95 },
-      // 冰箱换成囤货的老柜子
-      fridge: { slug: 'chinese_cabinet', rot: 0, scale: 0.85 },
     }
     const doomed: THREE.Object3D[] = []
     let crate = 0
@@ -1604,12 +1635,117 @@ export class World {
     this.appliances.aircon.push(out, inner)
   }
 
+  /** 大冰柜的盖子：有人在冰柜前拿东西时掀开 */
+  private freezerLid: THREE.Object3D | null = null
+  private lidOpen = 0
+
   private updateHearth(dt: number): void {
     const l = this.life
+    if (this.freezerLid) {
+      const using = this.actors.some((a) => a.task?.kind === 'plate' && a.task.phase !== 'go')
+      this.lidOpen = THREE.MathUtils.damp(this.lidOpen, using ? 1 : 0, 6, dt)
+      this.freezerLid.rotation.x = -this.lidOpen * 1.15
+    }
     this.tvScreen?.update(dt, l.tvOn ? (l.clock.day < PROLOGUE_DAYS ? 'tv' : 'radio') : 'off')
     this.fireGlow?.update(dt, l.fireLit)
     for (const o of this.appliances.generator) o.visible = l.generator
     for (const o of this.appliances.aircon) o.visible = l.aircon
+  }
+
+  /** 做饭界面要的东西：冰柜里的食材和做好的饭菜、菜谱（每道够做几份、缺什么）、谁在做 */
+  cookView(): CookView {
+    this.onFurnitureMenu?.(null)
+    const l = this.life
+    const mouths = l.mouths
+    const cook = l.cooking
+    const dname = (id: string) => t(`world.dish.${id}` as UiKey)
+    return {
+      mouths,
+      ings: INGS.map((k) => ({ id: k, icon: ING_INFO[k].icon, name: ING_INFO[k].name, n: l.ingHave(k) })),
+      water: l.available.water,
+      herbs: l.herbs,
+      leftovers: l.fridge.map((p) => ({ id: p.dish, icon: dishOf(p.dish).icon, name: dname(p.dish), left: p.left })),
+      cooking: cook ? { who: cook.name, dish: dname(cook.task?.dish ?? 'rice'), p: cook.task?.phase === 'use' ? 1 - Math.max(0, cook.task.hours) / Math.max(0.01, dishOf(cook.task.dish).hours * (0.7 + 0.1 * (cook.task.servings ?? mouths))) : 0 } : null,
+      menu: l.menu,
+      who: this.selected.name,
+      dishes: DISHES.map((d) => {
+        const max = l.maxServings(d.id)
+        const need = [
+          ...INGS.filter((k) => d.use[k]).map((k) => ({ icon: ING_INFO[k].icon, name: ING_INFO[k].name, per: d.use[k]!, have: l.ingHave(k) })),
+          ...(d.water ? [{ icon: '💧', name: '水', per: d.water, have: l.available.water }] : []),
+        ]
+        const short = need.filter((x) => x.have + 1e-6 < x.per).map((x) => x.name)
+        if (d.herbs && l.herbs < d.herbs) short.push('草药')
+        return {
+          id: d.id, icon: d.icon, name: dname(d.id), need, herbs: d.herbs, hours: +(d.hours * (0.7 + 0.1 * Math.min(mouths, Math.max(1, max)))).toFixed(1),
+          fx: { hunger: d.hunger, mood: d.mood, energy: d.energy, health: d.health },
+          servings: Math.min(mouths, max), short,
+        }
+      }),
+    }
+  }
+
+  /** 储藏室里都有什么（点铁架子看） */
+  holdings(): Holdings {
+    const l = this.life
+    const f1 = (n: number) => (Math.round(n * 10) / 10).toString()
+    const mouths = l.mouths
+    const foodDays = (l.stock.food + l.fridgeLeft + l.space.food) / mouths
+    const waterDays = (l.stock.water + l.space.water) / mouths
+    const tone = (d: number): HoldItem['tone'] => (d < 3 ? 'bad' : d < 7 ? 'warn' : 'good')
+    const own = (has: boolean, icon: string, name: string, note: string): HoldItem[] => (has ? [{ icon, name, n: '✓', note }] : [])
+    l.syncLarder()
+    return {
+      mouths, foodDays, waterDays,
+      groups: [
+        {
+          title: `吃的（大冰柜）· 够全家吃 ${Math.floor(foodDays)} 天`,
+          items: [
+            ...INGS.map((k) => ({ icon: ING_INFO[k].icon, name: ING_INFO[k].name, n: f1(l.larder[k]) })),
+            ...l.fridge.map((p) => ({ icon: dishOf(p.dish).icon, name: `做好的${t(`world.dish.${p.dish}` as UiKey)}`, n: `${Math.floor(p.left)} 份` })),
+          ],
+        },
+        { title: `喝的 · 够全家喝 ${Math.floor(waterDays)} 天`, items: [{ icon: '💧', name: '饮用水（水桶、水缸）', n: f1(l.stock.water), tone: tone(waterDays) }] },
+        {
+          title: '药',
+          items: [
+            { icon: '🩹', name: '急救包', n: String(l.medkits), tone: l.medkits < 1 ? 'bad' : l.medkits < 2 ? 'warn' : 'good' },
+            { icon: '🌿', name: '草药', n: String(l.herbs), note: '3 份草药能做一个急救包' },
+          ],
+        },
+        {
+          title: '防身',
+          items: [
+            { icon: '🔫', name: '霰弹', n: `${l.ammo.n} 发`, tone: l.ammo.n < 6 ? 'bad' : l.ammo.n < 12 ? 'warn' : 'good' },
+            { icon: '🍾', name: '燃烧瓶', n: String(l.molotovs) },
+            { icon: '🎋', name: '竹竿', n: String(l.bamboo), note: '爸爸能削成竹尖刺' },
+            ...own(l.crossbow, '🏹', '复合弩', '没声音，箭能捡回来'),
+            ...own(l.helmet, '⛑️', '防暴头盔', '被咬少掉一半血'),
+            ...own(l.trap.hp > 0, '🪤', '铁门外的钉板', `还剩 ${Math.round(l.trap.hp)}%`),
+            ...own(l.mg, '🔥', '阳台机枪', '打仗时点防线扫射'),
+          ],
+        },
+        {
+          title: '车和家电',
+          items: [
+            { icon: '⛽', name: '汽油', n: `${f1(l.fuel)} 桶`, note: '开车出门一趟 0.2 桶', tone: l.fuel < 0.2 ? 'bad' : l.fuel < 1 ? 'warn' : 'good' },
+            ...own(l.generator, '🔌', '汽油发电机', '末日后电视、空调靠它'),
+            ...own(l.aircon, '❄️', '空调', '高温天用'),
+          ],
+        },
+        { title: '钱', items: [{ icon: '💰', name: '存款', n: `${l.money.toLocaleString()} 元` }, { icon: '💎', name: '晶核', n: String(l.cores) }] },
+        { title: `空间里（女主的异能，能放 ${l.spaceCap} 份）`, items: [{ icon: '🍚', name: '吃的', n: f1(l.space.food) }, { icon: '💧', name: '水', n: f1(l.space.water) }] },
+      ],
+    }
+  }
+
+  /** 做饭界面点了"开始做" */
+  cookAction(id: string): string {
+    const r = this.life.cookPot(this.mode === 'home' ? this.selected : this.heroine, id)
+    const who = this.life.cooking
+    if (r === 'ok' && who) this.toast(`world.cook.r.${r}`, 3, { who: who.name, dish: t(`world.dish.${id}` as UiKey) })
+    this.pushLifeHud()
+    return r
   }
 
   /** 电视里在说什么（点电视选"听新闻"） */
@@ -2515,6 +2651,8 @@ export class World {
       const hit = this.furnitureUnder(floor)
       if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
       if (hit && hit.userData.piece === 'wall_map') { this.onMap?.(); return }
+      // 储藏室的铁架子、木箱：看看家里有什么
+      if (hit && isStorage(hit)) { this.onStock?.(); return }
       if (hit && (hit.userData.slug === 'large_iron_gate' || hit.userData.gate)) { this.onMap?.(); return }
       // 点家具：弹出一个小菜单（坐着歇会儿 / 做饭吃 / 喝口水 / 睡一觉…），选了以后让选中的人去
       const options = hit ? this.furnitureOptions(hit, floor) : []
@@ -3025,22 +3163,22 @@ export class World {
       const cur = best.get(s.kind)
       if (!cur || (free && !cur.free) || (free === cur.free && d < cur.d)) best.set(s.kind, { spot: s, d, free })
     }
-    const order: Spot['kind'][] = ['cook', 'drink', 'dine', 'relax', 'sleep', 'run']
+    const order: Spot['kind'][] = ['cook', 'fridge', 'drink', 'dine', 'relax', 'sleep', 'run']
     const out: FurnitureMenu['options'] = []
+    // 灶台、冰箱：打开做饭界面（选这一锅做什么）；冰箱里有做好的就能直接去拿一份吃
+    let kitchen = /fridge/.test(id)
     for (const k of order) {
       if (!best.has(k)) continue
       const spot = best.get(k)!.spot
-      // 灶台：一道道菜列出来（用什么、加什么），家里东西不够的灰掉
-      if (k === 'cook') {
-        for (const d of DISHES) {
-          const cost = [`粮${d.food}`, d.water ? `水${d.water}` : '', d.herbs ? `草药${d.herbs}` : ''].filter(Boolean).join(' ')
-          const fx = [`饱+${d.hunger}`, d.mood ? `心情+${d.mood}` : '', d.energy ? `精力+${d.energy}` : '', d.health ? `健康+${d.health}` : ''].filter(Boolean).join(' ')
-          const mark = d.id === this.life.menu ? ' ✓' : ''
-          out.push({ label: 'world.use.cook', spot, dish: d.id, text: `${d.icon} ${t(`world.dish.${d.id}` as UiKey)}${mark}\n${cost} · ${fx}`, disabled: !this.life.canCook(d.id) })
-        }
-        continue
-      }
+      if (k === 'cook' || k === 'fridge') { kitchen = true; continue }
       out.push({ label: spot.near === 'fire' ? 'world.use.fire' : `world.use.${k}` as UiKey, spot })
+    }
+    if (kitchen) {
+      const left = this.life.fridgeLeft
+      out.unshift(
+        { label: 'world.use.cookpanel', cmd: 'cook' },
+        ...(left > 0 ? [{ label: 'world.use.eatnow' as UiKey, cmd: 'eat' as const, text: `${t('world.use.eatnow')}（还有 ${Math.floor(left)} 份）` }] : []),
+      )
     }
     return out
   }
@@ -3085,7 +3223,12 @@ export class World {
   menuCommand(cmd: MenuCmd, target?: string): void {
     this.onFurnitureMenu?.(null)
     const who = this.mode === 'home' ? this.selected : this.heroine
-    if (cmd === 'news') return
+    if (cmd === 'news' || cmd === 'cook') return
+    if (cmd === 'eat') {
+      const r = this.life.eatNow(who)
+      if (r !== 'ok') this.toast(`world.eat.r.${r}`, 3, { who: who.name })
+      return
+    }
     if (cmd === 'tv') {
       const r = this.life.watchTv(who)
       if (r !== 'ok') this.toast(`world.tv.${r}`, 3, { who: who.name })
@@ -3123,22 +3266,17 @@ export class World {
     if (r !== 'ok') this.toast(`world.act.r.${r}`, 3, { who: this.selected.name, whom: target.name })
   }
 
-  /** 菜单里选了一项：让选中的人去用（灶台选的是一道菜） */
-  useFurniture(spot: Spot, dish?: string): void {
+  /** 菜单里选了一项：让选中的人去用 */
+  useFurniture(spot: Spot): void {
     this.onFurnitureMenu?.(null)
     if (this.life.siege && !this.life.siege.done) return
-    if (dish) {
-      const r = this.life.cookDish(this.selected, spot, dish)
-      if (r === 'ok') this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
-      this.toast(`world.dish.r.${r}`, 3, { who: this.selected.name, what: t(`world.dish.${dish}` as UiKey) })
-      return
-    }
     if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
     else this.toast(this.life.whoUses(spot) ? 'world.toast.taken' : 'world.toast.busy')
   }
 
-  /** 界面设置：点了日记本 / 墙上的地图 */
+  /** 界面设置：点了日记本 / 墙上的地图 / 储藏室的架子 */
   onDiary: (() => void) | null = null
+  onStock: (() => void) | null = null
   onMap: (() => void) | null = null
   /** 有人到了店里：弹出交易界面 */
   onShop: ((v: ShopView) => void) | null = null
@@ -3510,7 +3648,8 @@ export class World {
       crisis: isCrisisNight(c),
       crisisKind: Household.crisisKind(c),
       speed: this.life.speed,
-      food: this.life.stock.food,
+      // 冰箱里做好的饭也算吃的（一份顶一份粮）
+      food: this.life.stock.food + this.life.fridgeLeft,
       water: this.life.stock.water,
       people: this.life.hud(),
       muted: this.sound.muted,

@@ -17,7 +17,7 @@ export interface ShopItem {
   /** 这家店一趟最多卖几份 */
   stock: number
   /** 买一份得到什么 */
-  give: Partial<TripStock> & { gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean; generator?: boolean; aircon?: boolean }
+  give: Partial<TripStock> & { meat?: number; veg?: number; egg?: number; gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean; generator?: boolean; aircon?: boolean }
   /** 只能买一次（家里有了就不卖了） */
   once?: boolean
 }
@@ -49,7 +49,9 @@ export const SHOPS: ShopDef[] = [
     id: 'supermarket', currency: 'money', phase: 'prologue', items: [
       { id: 'rice', name: '大米（10 斤一袋）', icon: '🌾', cat: 'food', desc: '一袋够一个人吃三天。生米放得住，就是费水费柴。', price: 150, weight: 2, stock: 12, give: { food: 3 } },
       { id: 'noodles', name: '方便面（一箱）', icon: '🍜', cat: 'food', desc: '泡一泡就能吃，停气停电也不怕。', price: 90, weight: 1, stock: 10, give: { food: 1.5 } },
-      { id: 'cans', name: '肉罐头（一箱）', icon: '🥫', cat: 'food', desc: '放几年都不坏，还顶饿，末日后最硬的硬通货。', price: 180, weight: 1, stock: 8, give: { food: 2 } },
+      { id: 'cans', name: '肉罐头（一箱）', icon: '🥫', cat: 'food', desc: '放几年都不坏，还顶饿，末日后最硬的硬通货。做红烧肉、炖汤要用肉。', price: 180, weight: 1, stock: 8, give: { meat: 2 } },
+      { id: 'eggs', name: '鸡蛋（一板 30 个）', icon: '🥚', cat: 'food', desc: '蛋炒饭、一桌好菜要用蛋。院子里的鸡也会下。', price: 45, weight: 1, stock: 6, give: { egg: 2 } },
+      { id: 'veggies', name: '新鲜蔬菜（一筐）', icon: '🥬', cat: 'food', desc: '青菜、白菜、土豆。做青菜汤面、炖汤要用菜，吃了身体好。', price: 60, weight: 2, stock: 6, give: { veg: 2 } },
       { id: 'water', name: '矿泉水（一箱 24 瓶）', icon: '💧', cat: 'water', desc: '一箱够一个人喝两天。', price: 60, weight: 2, stock: 15, give: { water: 2 } },
       { id: 'barrel', name: '桶装水（18.9 升）', icon: '🛢️', cat: 'water', desc: '重，但一桶顶一箱半。', price: 80, weight: 3, stock: 10, give: { water: 3 } },
     ],
@@ -179,7 +181,7 @@ export interface HomeSnapshot {
 /** 交易界面左边的提示：家里缺什么、买完以后够几天 */
 export function shopHints(h: HomeSnapshot, gives: ShopItem['give']): { text: string; level: 'bad' | 'warn' | 'ok' }[] {
   const out: { text: string; level: 'bad' | 'warn' | 'ok' }[] = []
-  const food = h.food + (gives.food ?? 0)
+  const food = h.food + (gives.food ?? 0) + (gives.meat ?? 0) + (gives.veg ?? 0) + (gives.egg ?? 0)
   const water = h.water + (gives.water ?? 0)
   const days = (v: number) => Math.floor(v / Math.max(1, h.people))
   const fd = days(food)
@@ -220,7 +222,7 @@ const pick = (ids: string[]) => ids.map((id) => {
 export const ONLINE_SHOP: ShopDef = {
   id: 'online', currency: 'money', phase: 'prologue',
   items: [
-    ...pick(['rice', 'noodles', 'cans', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire', 'generator']),
+    ...pick(['rice', 'noodles', 'cans', 'eggs', 'veggies', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire', 'generator']),
     // 家电只在网上买（店里搬不回来）
     { id: 'aircon', name: '空调（一拖一）', icon: '❄️', cat: 'other', desc: '前世第七个月高温四十多度。末日后停电，要配发电机才开得起来。', price: 3800, weight: 4, stock: 1, give: { aircon: true }, once: true },
   ],

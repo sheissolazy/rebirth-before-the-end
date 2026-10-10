@@ -73,15 +73,27 @@ export const RATES = {
 export const MEAL = { hunger: 75, food: 1 }
 export const DRINK = { thirst: 72, water: 0.6 }
 
-/** 做饭可以选菜：不同的菜用不同的东西、加不同的状态（一人份）。做饭的人在灶台边选，选了就是"今天的菜"，家里人做饭都做这个 */
+/** 冰柜里的食材：主食（米面、饼干）、肉（罐头、鱼）、菜（院子里种的、野菜）、蛋（鸡下的） */
+export type Ing = 'grain' | 'meat' | 'veg' | 'egg'
+export const INGS: Ing[] = ['grain', 'meat', 'veg', 'egg']
+export const ING_INFO: Record<Ing, { icon: string; name: string }> = {
+  grain: { icon: '🌾', name: '主食' },
+  meat: { icon: '🥩', name: '肉' },
+  veg: { icon: '🥬', name: '菜' },
+  egg: { icon: '🥚', name: '蛋' },
+}
+
+/** 做饭：一锅做全家的份，做好了放进冰柜，谁饿了谁去拿一份。不同的菜用不同的食材、加不同的状态 */
 export interface Dish {
   id: string
   icon: string
-  /** 一人份用几份粮、几份水、几份草药 */
-  food: number
+  /** 一人份用多少食材（份） */
+  use: Partial<Record<Ing, number>>
+  /** 一人份用多少水 */
   water: number
+  /** 一锅用几份草药（不管几人份） */
   herbs: number
-  /** 做多久（游戏小时） */
+  /** 做一锅多久（游戏小时，三个人的量；人多一点稍微久一点） */
   hours: number
   hunger: number
   mood: number
@@ -89,13 +101,20 @@ export interface Dish {
   health: number
 }
 export const DISHES: Dish[] = [
-  { id: 'rice', icon: '🍚', food: 1, water: 0, herbs: 0, hours: 0.45, hunger: 75, mood: 0, energy: 0, health: 0 },
-  { id: 'noodles', icon: '🍜', food: 0.8, water: 0.15, herbs: 0, hours: 0.2, hunger: 65, mood: 2, energy: 0, health: 0 },
-  { id: 'pork', icon: '🥘', food: 1.5, water: 0, herbs: 0, hours: 0.8, hunger: 85, mood: 14, energy: 0, health: 0 },
-  { id: 'chicken', icon: '🍲', food: 1.3, water: 0.3, herbs: 0, hours: 0.9, hunger: 78, mood: 4, energy: 30, health: 5 },
-  { id: 'porridge', icon: '🌿', food: 0.9, water: 0.3, herbs: 1, hours: 0.6, hunger: 70, mood: 0, energy: 5, health: 18 },
-  { id: 'feast', icon: '🍱', food: 2.2, water: 0.3, herbs: 0, hours: 1.2, hunger: 95, mood: 22, energy: 12, health: 6 },
+  { id: 'rice', icon: '🍚', use: { grain: 1 }, water: 0, herbs: 0, hours: 0.5, hunger: 75, mood: 0, energy: 0, health: 0 },
+  { id: 'noodles', icon: '🍜', use: { grain: 0.8 }, water: 0.15, herbs: 0, hours: 0.3, hunger: 65, mood: 2, energy: 0, health: 0 },
+  { id: 'eggrice', icon: '🍛', use: { grain: 0.7, egg: 0.5 }, water: 0, herbs: 0, hours: 0.5, hunger: 80, mood: 6, energy: 4, health: 0 },
+  { id: 'greens', icon: '🥬', use: { grain: 0.5, veg: 0.6 }, water: 0.2, herbs: 0, hours: 0.5, hunger: 70, mood: 3, energy: 0, health: 8 },
+  { id: 'wildveg', icon: '🥗', use: { veg: 0.9 }, water: 0.1, herbs: 0, hours: 0.3, hunger: 55, mood: 2, energy: 0, health: 6 },
+  { id: 'scrambled', icon: '🍳', use: { egg: 0.8 }, water: 0, herbs: 0, hours: 0.25, hunger: 60, mood: 4, energy: 3, health: 0 },
+  { id: 'canmeat', icon: '🥫', use: { meat: 0.7 }, water: 0, herbs: 0, hours: 0.3, hunger: 70, mood: 6, energy: 0, health: 0 },
+  { id: 'pork', icon: '🥘', use: { grain: 0.5, meat: 0.8 }, water: 0, herbs: 0, hours: 0.9, hunger: 85, mood: 14, energy: 0, health: 0 },
+  { id: 'chicken', icon: '🍲', use: { meat: 0.8, veg: 0.3 }, water: 0.3, herbs: 0, hours: 1.0, hunger: 78, mood: 4, energy: 30, health: 5 },
+  { id: 'porridge', icon: '🌿', use: { grain: 0.7 }, water: 0.3, herbs: 1, hours: 0.7, hunger: 70, mood: 0, energy: 5, health: 18 },
+  { id: 'feast', icon: '🍱', use: { grain: 0.6, meat: 0.8, veg: 0.5, egg: 0.4 }, water: 0.3, herbs: 0, hours: 1.3, hunger: 95, mood: 22, energy: 12, health: 6 },
 ]
+/** 一人份一共用几份食材 */
+export const dishFood = (d: Dish): number => INGS.reduce((s, k) => s + (d.use[k] ?? 0), 0)
 export const dishOf = (id: string | undefined): Dish => DISHES.find((d) => d.id === id) ?? DISHES[0]
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
@@ -150,7 +169,8 @@ export function chooseWant(n: Needs, c: Clock, stock: Stock, roll: number): Want
   if (n.energy < 18 || (late && n.energy < 90)) {
     // 还撑得住的话，睡前先喝口水、垫点东西，不然半夜渴醒
     if (n.energy >= 10 && n.thirst < 35 && water) return 'drink'
-    if (n.energy >= 10 && n.hunger < 30 && food) return 'eat'
+    // 晚饭没赶上（等饭的时候困了）：睡前吃一口，不然半夜饿醒
+    if (n.energy >= 10 && n.hunger < 45 && food) return 'eat'
     return 'sleep'
   }
   // 一天喝一次：渴了才喝；一天吃一顿：晚饭时间饿了就吃，实在饿得不行了才另外吃

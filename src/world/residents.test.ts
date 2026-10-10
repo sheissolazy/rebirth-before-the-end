@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { navFloors } from './nav'
-import { Actor, Household } from './residents'
+import { Actor, Household, NEAR_FORAGE, outsideYard } from './residents'
 import { DAY_SECONDS, PROLOGUE_DAYS, isNight } from './life'
 import { Zombie } from './siege'
 import { restore, snapshot } from './save'
@@ -1926,20 +1926,28 @@ describe('闲着的时候找点事', () => {
 })
 
 describe('没人下命令就不出门', () => {
-  it('一家人自己过三天：谁也不会走出院子（采野菜、出门都得点了才去）', () => {
+  it('一家人自己过三天：谁也不走远（出门得点了才去；末日前闲着会去篱笆外几步路采野菜，采完自己回来；女主不自己出去）', () => {
     const { life } = simulate('paradise', 0)
     const dt = 0.1
     life.speed = 3
     const out: string[] = []
-    for (let i = 0; i < Math.round((3 * DAY_SECONDS) / (dt * life.speed)); i++) {
+    let foraged = 0
+    const steps = Math.round((3 * DAY_SECONDS) / (dt * 3))
+    for (let i = 0; i < steps && life.speed > 0; i++) {
       life.tick(dt, (a) => life.isHomeBody(a))
       for (const a of life.actors) {
-        a.follow(dt * life.speed, 2.2)
-        a.updateSettle(dt * life.speed)
-        if (a.floor === 0 && !inRect(YARD, a.pos.x, a.pos.z) && out.length < 5) out.push(`${a.name} ${a.task?.kind} @${a.pos.x.toFixed(1)},${a.pos.z.toFixed(1)} d${life.clock.day} ${life.clock.hour.toFixed(1)}h`)
+        a.follow(dt * 3, 2.2)
+        a.updateSettle(dt * 3)
+        if (a.task?.kind === 'forage' && a.task.phase === 'use') foraged++
+        const far = outsideYard(a.pos) > NEAR_FORAGE + 2 || (a === life.actors[0] && !inRect(YARD, a.pos.x, a.pos.z))
+        if (a.floor === 0 && far && out.length < 5) out.push(`${a.name} ${a.task?.kind} @${a.pos.x.toFixed(1)},${a.pos.z.toFixed(1)} d${life.clock.day} ${life.clock.hour.toFixed(1)}h`)
       }
     }
+    expect(life.over).toBeNull()
     expect(out).toEqual([])
+    expect(foraged).toBeGreaterThan(0)
+    // 三天过完都回到院子里了
+    expect(life.actors.filter((a) => a.floor === 0 && !inRect(YARD, a.pos.x, a.pos.z) && a.task?.kind !== 'forage' && !a.path.length).map((a) => a.name)).toEqual([])
   })
 
   it('猫溜达到院子外面：没人跟出去撸猫', () => {
@@ -2309,18 +2317,21 @@ describe('审查发现的问题（10-09 晚）', () => {
     expect(life.siege?.done).toBe(false)
   })
 
-  it('做饭做到一半被叫走：用掉的粮食还回来', () => {
+  it('做饭做到一半被叫走：用掉的食材还回来', () => {
     const { life } = simulate('paradise', 0)
     life.clock = { day: 0, hour: 18 }
     life.speed = 1
-    life.stock = { food: 5, water: 5 }
+    life.stock = { food: 0, water: 5 }
+    life.gainFood('grain', 4)
+    life.gainFood('meat', 3)
     const mom = life.actors[1]
-    const stove = life.allSpots.find((x) => x.kind === 'cook')!
-    expect(life.cookDish(mom, stove, 'feast')).toBe('ok')
+    expect(life.cookPot(mom, 'pork')).toBe('ok')
     for (let i = 0; i < 2000 && !(mom.task?.kind === 'cook' && mom.task.phase === 'use'); i++) step(life, 1, false)
-    expect(life.stock.food).toBeLessThan(5)
+    expect(life.ingHave('meat')).toBeLessThan(3)
     life.cancel(mom)
-    expect(life.stock.food).toBeCloseTo(5, 1)
+    expect(life.ingHave('meat')).toBeCloseTo(3, 1)
+    expect(life.ingHave('grain')).toBeCloseTo(4, 1)
+    expect(life.stock.food).toBeCloseTo(7, 1)
   })
 })
 
@@ -2460,5 +2471,93 @@ describe('电视和火炉', () => {
     expect(r.lines.some((l) => l.text.includes('下一个大夜在 2 天后：尸潮'))).toBe(true)
     life.clock = { day: PROLOGUE_DAYS + 4, hour: 9 }
     expect(life.news().headline).toContain('快速奔跑')
+  })
+})
+
+describe('冰箱和做饭', () => {
+  const run = (life: Household, hours: number, auto: (a: Actor) => boolean = () => false, until?: () => boolean) => {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed) && !until?.(); i++) {
+      life.tick(dt, auto)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('一锅做全家的份放进冰箱；饿了去冰箱拿一份坐下吃；吃完了提醒一句，再饿了照上回的菜再做一锅', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    life.speed = 3
+    life.stock = { food: 0, water: 20 }
+    life.gainFood('grain', 10)
+    life.gainFood('meat', 5)
+    const [hero, mom, dad] = life.actors
+    for (const a of life.actors) a.needs = { ...a.needs, hunger: 95, energy: 95 }
+    let reminded = ''
+    life.onRemind = (k) => { reminded = k }
+    // 女主选的菜，先派别人去做（女主是玩家在操控）
+    expect(life.cookPot(null, 'pork')).toBe('ok')
+    expect(life.cooking).toBe(mom)
+    expect(life.cookPot(null, 'rice')).toBe('cooking')
+    run(life, 3, () => false, () => life.fridgeLeft > 0)
+    expect(life.fridge).toEqual([{ dish: 'pork', left: 3 }])
+    expect(life.ingHave('meat')).toBeCloseTo(5 - 0.8 * 3, 1)
+    expect(life.ingHave('grain')).toBeCloseTo(10 - 0.5 * 3, 1)
+    // 爸爸饿了：自己去冰箱拿一份，坐下吃
+    dad.needs = { ...dad.needs, hunger: 20 }
+    const mood = dad.needs.mood
+    let plated = false
+    run(life, 2, (a) => a === dad, () => { plated ||= dad.task?.kind === 'plate'; return dad.needs.hunger > 80 })
+    expect(plated).toBe(true)
+    expect(dad.needs.hunger).toBeGreaterThan(80)
+    expect(dad.needs.mood).toBeGreaterThan(mood + 10)
+    expect(life.fridgeLeft).toBe(2)
+    // 剩下两份：女主和妈妈各拿一份
+    expect(life.eatNow(hero)).toBe('ok')
+    expect(life.eatNow(mom)).toBe('ok')
+    run(life, 2, () => false, () => life.fridgeLeft === 0 && !hero.task && !mom.task)
+    expect(life.fridgeLeft).toBe(0)
+    expect(reminded).toBe('world.fridge.emptyToast')
+    expect(life.eatNow(hero)).toBe('empty')
+    // 冰箱空了又饿了：照上回选的菜（红烧肉）再做一锅
+    dad.needs = { ...dad.needs, hunger: 20 }
+    run(life, 3, (a) => a === dad, () => life.fridgeLeft > 0 || dad.needs.hunger > 80)
+    expect(life.fridge[0]?.dish ?? (dad.needs.hunger > 80 ? 'pork' : '')).toBe('pork')
+  })
+
+  it('食材分开算：鱼是肉、鸡蛋是蛋、院子里的菜是菜；没有肉做不了红烧肉；直接加减的粮算主食', () => {
+    const { life } = simulate('paradise', 0)
+    life.stock = { food: 0, water: 10 }
+    life.syncLarder()
+    expect(life.canCook('rice')).toBe(false)
+    life.stock = { ...life.stock, food: 3 }
+    expect(life.ingHave('grain')).toBeCloseTo(3)
+    expect(life.canCook('pork')).toBe(false)
+    expect(life.maxServings('rice')).toBe(3)
+    life.gainFood('meat', 1)
+    life.gainFood('egg', 1)
+    expect(life.stock.food).toBeCloseTo(5)
+    expect(life.maxServings('pork')).toBe(1)
+    expect(life.maxServings('eggrice')).toBe(2)
+    // 被抢走一半：各样按比例少
+    life.stock = { ...life.stock, food: 2.5 }
+    expect(life.ingHave('grain')).toBeCloseTo(1.5)
+    expect(life.ingHave('meat')).toBeCloseTo(0.5)
+    // 存档读档以后还在
+    const back = simulate('paradise', 0).life
+    life.fridge = [{ dish: 'greens', left: 2 }]
+    restore(back, snapshot(life))
+    expect(back.ingHave('meat')).toBeCloseTo(0.5)
+    expect(back.fridge).toEqual([{ dish: 'greens', left: 2 }])
+  })
+
+  it('喝水去饮水机', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 10 }
+    life.speed = 3
+    const mom = life.actors[1]
+    mom.needs = { ...mom.needs, thirst: 20, hunger: 95, energy: 95 }
+    let at = ''
+    run(life, 1, (a) => a === mom, () => { if (mom.task?.kind === 'drink') at = `${mom.task.spot?.x},${mom.task.spot?.z}`; return mom.needs.thirst > 80 })
+    expect(at).toBe('0.85,-0.25')
   })
 })

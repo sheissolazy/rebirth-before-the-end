@@ -6,7 +6,7 @@ import { TRIPS, tripHours } from './expedition'
 import { shopFor } from './shop'
 import { PROLOGUE_DAYS } from './life'
 import type { Barriers } from './siege'
-import type { Clock, Needs, Stock } from './life'
+import type { Clock, Ing, Needs, Stock } from './life'
 
 const PREFIX = (import.meta.env.VITE_SAVE_PREFIX as string | undefined) ?? 'rbte'
 const KEY = `${PREFIX}-world-v1`
@@ -61,6 +61,9 @@ export interface WorldSave {
   interactions?: Record<string, { day: number; n: number }>
   /** 今天的菜 */
   menu?: string
+  larder?: Record<Ing, number>
+  fridge?: { dish: string; left: number }[]
+  fridgeWarned?: boolean
   invited?: { id: string; at: number } | null
   /** 干到一半的工程（旧存档是一项 project，新的是 projects） */
   project?: { id: 'trap' | 'wall' | 'garden' | 'mg'; done: number; worker: string } | null
@@ -144,6 +147,9 @@ export function snapshot(life: Household): WorldSave {
     runGain: Object.fromEntries(life.runGain),
     interactions: Object.fromEntries(life.interactions),
     menu: life.menu,
+    larder: (life.syncLarder(), { ...life.larder }),
+    fridge: life.fridge.map((p) => ({ ...p })),
+    fridgeWarned: life.fridgeWarned,
     invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),
     gateBonus: life.gateBonus,
@@ -226,6 +232,11 @@ export function restore(life: Household, s: WorldSave): void {
   life.runGain = new Map(Object.entries(s.runGain ?? {}))
   life.interactions = new Map(Object.entries(s.interactions ?? {}))
   life.menu = s.menu ?? 'rice'
+  // 老存档没有分食材：全算主食（对账时自动补）
+  life.larder = s.larder ? { ...s.larder } : { grain: 0, meat: 0, veg: 0, egg: 0 }
+  life.fridge = (s.fridge ?? []).map((p) => ({ ...p }))
+  life.fridgeWarned = !!s.fridgeWarned
+  life.syncLarder()
   // 请的人在门口时存的档：读档后马上再来一次
   life.invited = s.invited ? { id: s.invited.id, at: Number.isFinite(s.invited.at) && s.invited.at !== null ? s.invited.at : life.absHour } : null
   life.projects = (s.projects ?? (s.project ? [s.project] : [])).map((p) => ({ ...p }))
