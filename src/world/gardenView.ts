@@ -226,12 +226,18 @@ export class GardenView {
       root.visible = false
       const soilMat = M(DRY, 1)
       const soil = mesh(new THREE.BoxGeometry(w - 0.12, 0.16, d - 0.12), soilMat, 0, 0.08, 0)
-      const frame = new THREE.Group()
+      // 木板框：四块板 + 四根角桩，按材质合并成两块网格（省绘制次数）
+      const planks: THREE.BufferGeometry[] = []
+      const posts: THREE.BufferGeometry[] = []
+      const at = (g: THREE.BufferGeometry, x: number, y: number, z: number) => g.translate(x, y, z)
       for (const s of [-1, 1]) {
-        frame.add(mesh(new THREE.BoxGeometry(w, 0.22, 0.07), MAT.wood, 0, 0.11, s * (d / 2 - 0.035)))
-        frame.add(mesh(new THREE.BoxGeometry(0.07, 0.22, d - 0.14), MAT.wood, s * (w / 2 - 0.035), 0.11, 0))
-        for (const t of [-1, 1]) frame.add(mesh(new THREE.BoxGeometry(0.09, 0.28, 0.09), MAT.woodDark, s * (w / 2 - 0.045), 0.14, t * (d / 2 - 0.045)))
+        planks.push(at(new THREE.BoxGeometry(w, 0.22, 0.07), 0, 0.11, s * (d / 2 - 0.035)))
+        planks.push(at(new THREE.BoxGeometry(0.07, 0.22, d - 0.14), s * (w / 2 - 0.035), 0.11, 0))
+        for (const t of [-1, 1]) posts.push(at(new THREE.BoxGeometry(0.09, 0.28, 0.09), s * (w / 2 - 0.045), 0.14, t * (d / 2 - 0.045)))
       }
+      const frame = new THREE.Group()
+      frame.add(mesh(mergeGeometries(planks)!, MAT.wood), mesh(mergeGeometries(posts)!, MAT.woodDark))
+      for (const g of [...planks, ...posts]) g.dispose()
       const furrows = new THREE.Group()
       for (const z of [-d / 2 + 0.5, d / 2 - 0.5]) furrows.add(mesh(new THREE.BoxGeometry(w - 0.4, 0.05, 0.32), soilMat, 0, 0.18, z))
       const plants = new THREE.Group()
