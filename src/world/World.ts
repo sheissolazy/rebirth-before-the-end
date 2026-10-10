@@ -671,6 +671,8 @@ export class World {
         // 装饰出问题也不能挡住后面加载人物
         console.warn('decor', e)
       }
+      // 江面倒影只画江边的东西（场景都搭好了再标）
+      this.river?.limitReflection(this.scene)
       if (people) {
         people.forEach((m, k) => this.actors[k].setModel(m))
         // 女主霰弹枪、妈妈擀面杖、爸爸撬棍：只在打丧尸时拿出来

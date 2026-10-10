@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
+import { Reflector } from 'three/addons/objects/Reflector.js'
 import { HOUSE, STREET, WORLD, YARD, GATE, PROPS, GARDEN, COURT, PORCH } from './layout'
 
 export type ArtStyle = 'toon' | 'paradise'
@@ -481,7 +482,16 @@ export class River {
     // 以前用透射材质（?water=glass 还能切回去），但它每帧要把整个场景多画一遍，一帧慢 5 倍左右，看起来也差不多
     this.normal = rippleTexture()
     this.normal.repeat.set(len / 9, (RIVER.south - RIVER.north) / 9)
-    const glass = typeof location !== 'undefined' && new URLSearchParams(location.search).get('water') === 'glass'
+    const mode = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('water') : null
+    // 默认：镜面倒影的水（参考小红书"Harbour Town"：倒影 + 涟漪扭曲 + 青绿底色 + 雾）。?water=simple 回到半透明的旧水面
+    if (mode !== 'simple' && mode !== 'glass') {
+      const mirror = mirrorWater(len, RIVER.south - RIVER.north - 0.4, this.normal)
+      mirror.position.set(5, RIVER.water, mid)
+      this.mirror = mirror
+      this.group.add(mirror)
+      return
+    }
+    const glass = mode === 'glass'
     const water = glass
       ? new THREE.MeshPhysicalMaterial({
         color: '#f2fbfa', roughness: 0.02, metalness: 0, transmission: 1, ior: 1.33, thickness: 0.5,
@@ -498,9 +508,136 @@ export class River {
     this.group.add(surface)
   }
 
+  /** 镜面水（默认）；旧的半透明水面时为 null */
+  private mirror: Reflector | null = null
+
+  /** 倒影那一遍只画这一层 */
+  static readonly LAYER = 3
+
+  /** 倒影只画江边和江北的东西（山、岸、石头、树、地面、天空）：房子、人、院子里的东西都看不见，不用画——倒影那一遍省一大半 */
+  limitReflection(scene: THREE.Object3D): void {
+    if (!this.mirror) return
+    const box = new THREE.Box3()
+    scene.traverse((o) => {
+      if ((o as THREE.Light).isLight) { o.layers.enable(River.LAYER); return }
+      const m = o as THREE.Mesh
+      if (!m.isMesh || (m as unknown as THREE.SkinnedMesh).isSkinnedMesh) return
+      box.setFromObject(m)
+      if (box.min.z < RIVER.south + 3) m.layers.enable(River.LAYER)
+    })
+    const get = this.mirror.getReflectionCamera.bind(this.mirror)
+    this.mirror.getReflectionCamera = (cam: THREE.Camera) => {
+      const rc = get(cam)
+      rc.layers.set(River.LAYER)
+      return rc
+    }
+  }
+
   update(t: number): void {
     this.normal.offset.set(t * 0.025, t * 0.006)
+    if (this.mirror) (this.mirror.material as THREE.ShaderMaterial).uniforms.time.value = t
   }
+}
+
+/**
+ * 镜面水：把场景按水面翻过来再画一遍（Reflector，半分辨率），水面上读这张倒影图。
+ * - 两层流动的涟漪法线把倒影扭一扭：竖着扭得多、横着扭得少，远处的灯、树、山的倒影就拉成一条条竖的光带
+ * - 底色是青绿的；看得越斜（远处）倒影越多（菲涅尔）
+ * - 接场景的雾：远处的水和天空、远山融在一起，看不出水平线
+ */
+function mirrorWater(w: number, d: number, normal: THREE.Texture): Reflector {
+  const px = typeof window !== 'undefined' ? Math.min(1024, Math.max(256, Math.round(window.innerWidth * window.devicePixelRatio * 0.5))) : 512
+  const shader = {
+    name: 'MirrorWater',
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      color: { value: null },
+      tDiffuse: { value: null },
+      textureMatrix: { value: null },
+      tNormal: { value: null },
+      time: { value: 0 },
+      deep: { value: new THREE.Color('#2f7a74') },
+      shallow: { value: new THREE.Color('#8fd0c2') },
+      north: { value: 0 },
+      south: { value: 0 },
+    }]),
+    vertexShader: /* glsl */ `
+      uniform mat4 textureMatrix;
+      varying vec4 vUv;
+      varying vec3 vWorld;
+      #include <common>
+      #include <fog_pars_vertex>
+      #include <logdepthbuf_pars_vertex>
+      void main() {
+        vUv = textureMatrix * vec4(position, 1.0);
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <logdepthbuf_vertex>
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 color;
+      uniform vec3 deep;
+      uniform vec3 shallow;
+      uniform float north;
+      uniform float south;
+      uniform sampler2D tDiffuse;
+      uniform sampler2D tNormal;
+      uniform float time;
+      varying vec4 vUv;
+      varying vec3 vWorld;
+      #include <common>
+      #include <fog_pars_fragment>
+      #include <logdepthbuf_pars_fragment>
+      void main() {
+        #include <logdepthbuf_fragment>
+        vec2 p = vWorld.xz;
+        // 两层不同方向、不同速度的涟漪（沿水流方向拉长）
+        vec2 n1 = texture2D(tNormal, p * vec2(0.06, 0.2) + vec2(time * 0.02, time * 0.005)).xy * 2.0 - 1.0;
+        vec2 n2 = texture2D(tNormal, p * vec2(0.14, 0.42) + vec2(-time * 0.012, time * 0.015)).xy * 2.0 - 1.0;
+        vec2 n = n1 + n2 * 0.55;
+        vec4 uv = vUv;
+        // 竖着扭得多：倒影里的灯和树拉成竖的光带
+        uv.xy += n * vec2(0.018, 0.055) * uv.w;
+        vec3 refl = texture2DProj(tDiffuse, uv).rgb;
+        vec3 V = normalize(cameraPosition - vWorld);
+        float fres = 0.3 + 0.32 * pow(1.0 - clamp(V.y, 0.0, 1.0), 2.0);
+        // 离岸边近的地方浅一点、亮一点（看得出水是浅的），还能隐约看见河底的卵石
+        float edge = min(vWorld.z - north, south - vWorld.z);
+        float shallowK = 1.0 - smoothstep(0.0, 1.8, edge);
+        vec3 base = mix(deep, shallow, shallowK * 0.7);
+        // 倒影染成青绿、压暗一点（天空的倒影不是一片白），涟漪亮面暗面交错
+        vec3 col = mix(base, refl * vec3(0.62, 0.86, 0.84), fres);
+        col *= 0.8 + 0.4 * (n.y * 0.3 + 0.5);
+        // 靠岸一圈细细的白沫
+        col = mix(col, vec3(0.92, 0.97, 0.95), (1.0 - smoothstep(0.0, 0.2, edge)) * 0.5);
+        col += vec3(0.95, 1.0, 1.0) * pow(max(0.0, n.x * 0.6 + n.y * 0.4), 5.0) * 0.16;
+        gl_FragColor = vec4(col, mix(0.62, 1.0, smoothstep(0.1, 1.4, edge)));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        // 雾只上一半：远处的水还是青绿的，不会被雾刷成沙子的颜色
+        #ifdef USE_FOG
+          #ifdef FOG_EXP2
+            float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+          #else
+            float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+          #endif
+          gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor * 0.45 );
+        #endif
+      }`,
+  }
+  const mirror = new Reflector(new THREE.PlaneGeometry(w, d), {
+    color: '#6fb8ae', textureWidth: px, textureHeight: Math.round(px * 0.6), clipBias: 0.003, multisample: 0, shader,
+  })
+  mirror.rotation.x = -Math.PI / 2
+  const mat = mirror.material as THREE.ShaderMaterial
+  mat.uniforms.tNormal.value = normal
+  mat.uniforms.north.value = RIVER.north + 0.2
+  mat.uniforms.south.value = RIVER.south - 0.2
+  mat.fog = true
+  mat.transparent = true
+  return mirror
 }
 
 /** 可平铺的水波法线贴图：几组不同方向、频率的波叠在一起 */
