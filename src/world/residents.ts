@@ -3603,7 +3603,8 @@ export class Household {
 
   private isDone(a: Actor, t: Task): boolean {
     const n = a.needs
-    if (t.kind === 'sleep' && !t.spot) return n.energy >= 40
+    // 累倒在地上：缓过来了再起；渴得、饿得快不行了（家里有水有饭）也撑着起来
+    if (t.kind === 'sleep' && !t.spot) return n.energy >= 40 || (n.thirst < 6 && this.available.water >= DRINK.water) || (n.hunger < 6 && this.canEat)
     if (t.kind === 'sleep') return (t.hours <= 0 && shouldWake(n, this.clock)) || n.hunger < 6 || n.thirst < 6
     if (t.hours <= 0) return true
     // 陪着说话的人走开了（或者不歇了），就散了

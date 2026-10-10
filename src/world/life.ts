@@ -170,6 +170,9 @@ export function chooseWant(n: Needs, c: Clock, stock: Stock, roll: number): Want
   const late = c.hour >= 22 || c.hour < SUNRISE
   const water = stock.water >= DRINK.water
   const food = stock.food >= MEAL.food
+  // 渴得、饿得快不行了：再累也先去喝口水、吃口饭（不然累倒了就渴死在家里，水缸还是满的）
+  if (n.thirst < 12 && water) return 'drink'
+  if (n.hunger < 8 && food) return 'eat'
   if (n.energy < 18 || (late && n.energy < 90)) {
     // 还撑得住的话，睡前先喝口水、垫点东西，不然半夜渴醒
     if (n.energy >= 10 && n.thirst < 35 && water) return 'drink'
