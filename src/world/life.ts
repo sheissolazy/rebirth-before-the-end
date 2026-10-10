@@ -53,35 +53,49 @@ export type Needs = Record<NeedKey, number>
 
 export type Activity = 'idle' | 'walk' | 'eat' | 'drink' | 'sleep' | 'relax' | 'stroll' | 'cook'
 
-/** 每个游戏小时的变化 */
+/** 每个游戏小时的变化。2026-10-09 老板："食水掉太快，每天光喝水了，什么都干不了"——饿和渴都放慢到一半左右 */
 export const RATES = {
-  hunger: -4.2,
-  thirst: -5.5,
+  hunger: -3.0,
+  thirst: -2.9,
   energyAwake: -4.5,
   energySleep: 13,
-  moodDrift: 6,
+  /** 心情往上靠的速度（歇着、干完活有成就感） */
+  moodUp: 3.5,
+  /** 正常过日子心情往下掉得很慢 */
+  moodDown: 0.8,
+  /** 饿着、渴着、累垮了、受了重伤：心情掉得快 */
+  moodCrash: 6,
 }
 
-export const MEAL = { hunger: 32, food: 1 / 3 }
-export const DRINK = { thirst: 45, water: 1 / 3 }
+/** 一顿饭、一次喝水：吃一顿顶得久了，一顿用的粮食也多一点（不然囤的东西吃不完） */
+export const MEAL = { hunger: 28, food: 0.38 }
+export const DRINK = { thirst: 45, water: 0.45 }
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 
-/** 心情会慢慢靠近一个目标值：需求越差目标越低，在放松就高一些 */
-export function moodTarget(n: Needs, activity: Activity): number {
-  let t = 62
+/** 心情会慢慢靠近一个目标值：需求越差目标越低，在放松就高一些；受了重伤更低 */
+export function moodTarget(n: Needs, activity: Activity, injured = false): number {
+  let t = 60
   if (n.hunger < 30) t -= 22
   if (n.thirst < 30) t -= 22
   if (n.energy < 20) t -= 15
+  if (injured) t -= 25
   if (activity === 'relax' || activity === 'stroll') t += 25
   if (activity === 'sleep') t += 5
   return clamp(t)
 }
 
-export function decayNeeds(n: Needs, hours: number, activity: Activity): Needs {
+/** 现在是不是在"受罪"（饿、渴、累垮、重伤）：这时心情才掉得快 */
+function suffering(n: Needs, injured: boolean): boolean {
+  return n.hunger < 30 || n.thirst < 30 || n.energy < 20 || injured
+}
+
+export function decayNeeds(n: Needs, hours: number, activity: Activity, injured = false): Needs {
   const sleeping = activity === 'sleep'
-  const target = moodTarget(n, activity)
-  const drift = Math.sign(target - n.mood) * Math.min(Math.abs(target - n.mood), RATES.moodDrift * hours)
+  const target = moodTarget(n, activity, injured)
+  // 往上靠得慢慢的；正常日子往下掉得更慢；只有受罪的时候才掉得快
+  const rate = target > n.mood ? RATES.moodUp : suffering(n, injured) ? RATES.moodCrash : RATES.moodDown
+  const drift = Math.sign(target - n.mood) * Math.min(Math.abs(target - n.mood), rate * hours)
   return {
     hunger: clamp(n.hunger + RATES.hunger * hours * (sleeping ? 0.5 : 1)),
     thirst: clamp(n.thirst + RATES.thirst * hours * (sleeping ? 0.5 : 1)),

@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { FLOOR_H, FRONT_DOOR } from './layout'
 import type { Pt } from './nav'
-import { LAYERS, Zombie, type LayerId, type SiegeEvent } from './siege'
+import { LAYERS, Zombie, type LayerId, type SiegeEvent, type ZombieKind } from './siege'
 import type { Household } from './residents'
 import { loadPerson, peopleStyle } from './people'
 import { crowbar } from './meshes'
@@ -52,6 +52,24 @@ const BAR_AT: Record<LayerId, THREE.Vector3> = {
   gate: new THREE.Vector3(4, 2.7, 13),
   door: new THREE.Vector3(6, 2.9, 6.05),
   stairs: new THREE.Vector3(4.75, 1.7, -0.5),
+}
+
+/** 给丧尸模型染一层色（复制一份材质，不影响别的丧尸） */
+function tint(root: THREE.Object3D, color: string): void {
+  const c = new THREE.Color(color)
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    const dye = (mat: THREE.Material) => {
+      const x = mat.clone() as THREE.MeshStandardMaterial
+      // clone() 不会带上血迹着色器，要自己接上
+      x.onBeforeCompile = mat.onBeforeCompile
+      x.customProgramCacheKey = mat.customProgramCacheKey
+      if (x.color) x.color.multiply(c)
+      return x
+    }
+    m.material = Array.isArray(m.material) ? m.material.map(dye) : dye(m.material)
+  })
 }
 
 export class SiegeView {
@@ -205,11 +223,16 @@ export class SiegeView {
   }
 
   /** 生成一只丧尸（或者一个黑鸦的人）放进场景 */
-  spawn(at: Pt, raider = false, brute = false): Zombie {
+  spawn(at: Pt, raider = false, brute = false, kind: ZombieKind = 'walker'): Zombie {
     // 大块头固定用干活的大叔（第一个模板）放大，不然会冒出个巨人小姑娘
-    const t = raider ? this.npcs.get('stranger') : brute ? this.templates[0] : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
-    const z = new Zombie(at, t ? cloneSkinned(t) : undefined)
+    const t = raider ? this.npcs.get('stranger') : brute || kind === 'bloater' ? this.templates[0] : this.templates[this.spawned++ % Math.max(1, this.templates.length)]
+    const model = t ? cloneSkinned(t) : undefined
+    const z = new Zombie(at, model)
     z.root.scale.setScalar(brute ? 1.36 : 0.94 + ((this.spawned * 13) % 10) / 80)
+    // 不同种类的丧尸一眼看得出来：跑得快的瘦小、发红；吐酸水的发绿；会炸的胀成一圈、黄绿色
+    if (kind === 'runner') { z.root.scale.multiply(new THREE.Vector3(0.88, 0.96, 0.88)); tint(z.root, '#c46a5a') }
+    if (kind === 'spitter') tint(z.root, '#7fcf5a')
+    if (kind === 'bloater') { z.root.scale.multiply(new THREE.Vector3(1.45, 1.02, 1.45)); tint(z.root, '#c8c45a') }
     // 黑鸦的人手里拎着钢管
     if (raider) z.driver?.attach(crowbar(), 'RightHand')
     this.scene.add(z.root)
@@ -244,6 +267,19 @@ export class SiegeView {
       const to = new THREE.Vector3(e.at.x, 1.1, e.at.z)
       const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: '#cfc8b8', transparent: true }))
       this.add(line, 0.14, (k1) => { (line.material as THREE.LineBasicMaterial).opacity = 1 - k1 })
+    } else if (e.kind === 'spit') {
+      // 一团绿色的酸水划个弧飞过去
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: '#8fe05a' }))
+      const a = new THREE.Vector3(e.from.x, 1.4, e.from.z)
+      const b = new THREE.Vector3(e.at.x, 1.1, e.at.z)
+      this.add(blob, 0.45, (k) => { blob.position.lerpVectors(a, b, k); blob.position.y += Math.sin(k * Math.PI) * 0.9 })
+    } else if (e.kind === 'boom') {
+      // 胀鼓鼓的炸开：一圈黄绿色的雾、震一下
+      this.shake = 0.45
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: '#b8c95a', transparent: true, opacity: 0.6, depthWrite: false }))
+      puff.position.set(e.at.x, 0.8, e.at.z)
+      this.add(puff, 0.8, (k) => { puff.scale.setScalar(0.3 + k * 1.9); (puff.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - k) })
+      for (let k = 0; k < 20; k++) this.ember(e.at.x + (Math.random() - 0.5) * 1.6, 0.4, e.at.z + (Math.random() - 0.5) * 1.6, 0.8)
     } else if (e.kind === 'hit') this.blood(e.at)
     else if (e.kind === 'kill') this.core(e.at)
     else if (e.kind === 'broken') this.shake = 0.5

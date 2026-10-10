@@ -36,6 +36,7 @@ const FACE_MASK = 'radial-gradient(ellipse 90% 80% at 75% 30%, black 35%, transp
 function statusWords(p: PersonHud): [string, Tone][] {
   const out: [string, Tone][] = []
   const n = p.needs
+  if (p.injured > 0) out.push([t('world.st.injured', { h: p.injured }), 'bad'])
   if (p.health < 30) out.push([t('world.st.badlyHurt'), 'bad'])
   else if (p.health < 70) out.push([t('world.st.hurt'), 'warn'])
   if (n.hunger < 20) out.push([t('world.st.starving'), 'bad'])
@@ -183,6 +184,8 @@ export default function WorldView() {
   const [shop, setShop] = useState<ShopView | null>(null)
   // 手机开着时的画面数据（下单、打电话以后重新取一次）
   const [phone, setPhone] = useState<PhoneView | null>(null)
+  // 打丧尸时点防线 / 丧尸弹出的面板（开枪、燃烧瓶、救人）
+  const [linePanel, setLinePanel] = useState(false)
   const setDiary = (open: boolean) => {
     const w = world.current
     if (w && open) { setDiaryLog(w.diaryLog()); setDiaryPeople(w.diaryPeople()); setLogSeen(w.latestLogKey()) }
@@ -217,6 +220,7 @@ export default function WorldView() {
       w.onDiary = () => setDiary(true)
       w.onMap = () => setMap(true)
       w.onFurnitureMenu = (m) => setFurn(m)
+      w.onLinePanel = (open) => setLinePanel(open)
       w.onShop = (v) => { setMap(false); setShop(v) }
       world.current = w
     } catch (e) {
@@ -377,36 +381,36 @@ export default function WorldView() {
             {pop === 'build' && (
               <div className="relative flex flex-col gap-1">
                 <div className="mb-0.5 text-[13px] font-bold tracking-wide text-[#e8c98a]" style={{ fontFamily: SERIF }}>{t('world.build.title')}</div>
-                {/* 正在干的工程：进度条、谁在干；停工了可以让选中的人接着干 */}
-                {hud.build && (
-                  <div className="rounded-sm bg-white/5 px-2 py-1.5 ring-1 ring-[#e8c98a]/30">
+                {/* 正在干的工程（可以几项同时干）：进度条、谁在干；停工了可以让选中的人接着干 */}
+                {hud.build.map((b) => (
+                  <div key={b.id} className="rounded-sm bg-white/5 px-2 py-1.5 ring-1 ring-[#e8c98a]/30">
                     <div className="text-[11px] text-[#efe4d0]">
-                      {t(hud.build.working ? 'world.build.doing' : 'world.build.paused', { what: t(`world.build.name.${hud.build.id}` as UiKey), who: hud.build.worker, p: hud.build.p })}
+                      {t(b.working ? 'world.build.doing' : 'world.build.paused', { what: t(`world.build.name.${b.id}` as UiKey), who: b.worker, p: b.p })}
                     </div>
                     <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
-                      <div className="h-full rounded-full" style={{ width: `${Math.max(3, hud.build.p)}%`, background: TONE[toneOf(hud.build.p, 34, 67)] }} />
+                      <div className="h-full rounded-full" style={{ width: `${Math.max(3, b.p)}%`, background: TONE[toneOf(b.p, 34, 67)] }} />
                     </div>
-                    {!hud.build.working && (
-                      <button onClick={() => world.current?.continueBuild()} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
+                    {!b.working && (
+                      <button onClick={() => world.current?.continueBuild(b.id as 'trap' | 'wall' | 'garden')} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
                         {t('world.build.resume', { who: hud.selected })}
                       </button>
                     )}
                   </div>
-                )}
+                ))}
                 {hud.trap > 0 ? (
                   <div className={BUILD_DONE}>{t('world.trap.left', { n: hud.trap })}</div>
                 ) : (
-                  <button onClick={() => world.current?.buildGateTrap()} disabled={!!hud.build || (hud.prologue ? hud.money < 1500 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
+                  <button onClick={() => world.current?.buildGateTrap()} disabled={hud.build.some((b) => b.id === 'trap') || (hud.prologue ? hud.money < 1500 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
                     {t(hud.prologue ? 'world.trap.build' : 'world.trap.buildCores')}
                   </button>
                 )}
-                {!hud.wall && hud.build?.id !== 'wall' && (
-                  <button onClick={() => world.current?.buildYardWall()} disabled={!!hud.build || (hud.prologue ? hud.money < 6000 : hud.cores < 6)} className={BUILD} title={t('world.build.hours', { h: 9 })}>
+                {!hud.wall && !hud.build.some((b) => b.id === 'wall') && (
+                  <button onClick={() => world.current?.buildYardWall()} disabled={hud.prologue ? hud.money < 6000 : hud.cores < 6} className={BUILD} title={t('world.build.hours', { h: 9 })}>
                     {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
                   </button>
                 )}
                 {!hud.garden.built ? (
-                  <button onClick={() => world.current?.buildGardenPlot()} disabled={!!hud.build || (hud.prologue ? hud.money < 800 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 2 })}>
+                  <button onClick={() => world.current?.buildGardenPlot()} disabled={hud.build.some((b) => b.id === 'garden') || (hud.prologue ? hud.money < 800 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 2 })}>
                     {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
                   </button>
                 ) : (
@@ -543,22 +547,52 @@ export default function WorldView() {
       {hud.siege && (
         <div className="absolute left-1/2 top-14 w-80 -translate-x-1/2 overflow-hidden rounded-md bg-[#2a0f0c]/90 px-4 py-2 text-[#f4ecdc] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-[#e2553f]/40">
           <Grain />
-          <div className="relative flex items-center justify-between gap-2">
-            <div className="text-[15px] font-bold tracking-wide" style={{ fontFamily: SERIF }}>🧟 {t(hud.siege.ambush ? 'world.ambush' : 'world.siege', { n: hud.siege.left })}</div>
-            <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
-              className="rounded-sm bg-[#c2551f] px-2 py-0.5 text-xs font-semibold ring-1 ring-white/15 hover:bg-[#d8652b] disabled:opacity-40">
-              {t('world.molotov', { n: hud.molotovs })}
-            </button>
-          </div>
+          <div className="relative text-[15px] font-bold tracking-wide" style={{ fontFamily: SERIF }}>🧟 {t(hud.siege.ambush ? 'world.ambush' : 'world.siege', { n: hud.siege.left })}</div>
           {hud.siege.layer && (
             <div className="relative mt-1 flex items-center gap-2 text-xs">
               <span className="w-12 shrink-0">{t(`world.layer.${hud.siege.layer}` as UiKey)}</span>
-              <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-white/15">
-                <div className="h-full rounded-full bg-[#e8c98a]" style={{ width: `${Math.round((hud.siege.hp / hud.siege.max) * 100)}%` }} />
+              <div className="h-[6px] flex-1 overflow-hidden rounded-full bg-black/40">
+                <div className="h-full rounded-full" style={{ width: `${Math.round((hud.siege.hp / hud.siege.max) * 100)}%`, background: TONE[toneOf((hud.siege.hp / hud.siege.max) * 100)] }} />
               </div>
               <span className="tabular-nums">{Math.ceil(hud.siege.hp)}</span>
             </div>
           )}
+          {!linePanel && <div className="relative mt-1 text-[11px] text-[#e9c9b9]">{t('world.line.hint')}</div>}
+        </div>
+      )}
+      {/* 防线面板：点防线或者丧尸才弹出来；家里人平时只用手上的家伙，开枪、扔燃烧瓶、救人都在这里下令 */}
+      {hud.siege && linePanel && (
+        <div className="absolute left-1/2 top-[8.6rem] w-80 -translate-x-1/2 overflow-hidden rounded-md bg-[#1d1915]/95 px-3 py-2.5 text-[#f4ecdc] shadow-[0_10px_28px_rgba(0,0,0,0.55)] ring-1 ring-[#e8c98a]/40">
+          <Grain />
+          <div className="relative flex items-center justify-between">
+            <div className="text-[14px] font-bold tracking-wide" style={{ fontFamily: SERIF }}>🛡 {hud.siege.layer ? t(`world.layer.${hud.siege.layer}` as UiKey) : t('world.line.inside')}</div>
+            <button onClick={() => setLinePanel(false)} className="px-1 text-[13px] text-[#a99d88] hover:text-[#f4ecdc]">✕</button>
+          </div>
+          <div className="relative mt-1 text-[11px] leading-snug text-[#d9ccb4]">
+            {(Object.entries(hud.siege.kinds) as [string, number][]).map(([k, n]) => `${t(`world.zkind.${k}` as UiKey)}×${n}`).join(' · ') || t('world.line.none')}
+          </div>
+          {hud.siege.target && <div className="relative mt-0.5 text-[11px] font-semibold text-[#ff8f7a]">🎯 {t('world.line.target', { what: t(`world.zkind.${hud.siege.target}` as UiKey) })}</div>}
+          <div className="relative mt-2 flex flex-col gap-1.5">
+            {hud.siege.shooter ? (
+              <button onClick={() => world.current?.fire()}
+                disabled={hud.siege.shooter.cool > 0 || (hud.siege.shooter.weapon === 'shotgun' && hud.ammo <= 0)}
+                className="relative overflow-hidden rounded-sm bg-[#7c2d24] px-2 py-1.5 text-left text-[12px] font-semibold ring-1 ring-white/10 hover:bg-[#93372c] disabled:opacity-60">
+                {hud.siege.shooter.cool > 0 && <span className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${Math.min(100, (hud.siege.shooter.cool / 2.4) * 100)}%` }} />}
+                <span className="relative">{t(hud.siege.shooter.weapon === 'shotgun' ? 'world.line.shoot' : 'world.line.bolt', { who: hud.siege.shooter.name, n: hud.ammo })}</span>
+              </button>
+            ) : <div className="text-[11px] text-[#a99d88]">{t('world.line.noGun')}</div>}
+            <button disabled={hud.molotovs <= 0} onClick={() => world.current?.throwMolotov()}
+              className="rounded-sm bg-[#c2551f] px-2 py-1.5 text-left text-[12px] font-semibold ring-1 ring-white/10 hover:bg-[#d8652b] disabled:opacity-40">
+              {t('world.molotov', { n: hud.molotovs })}
+            </button>
+            {hud.siege.downed.map((name) => (
+              <button key={name} disabled={hud.medkits <= 0} onClick={() => world.current?.rescueByName(name)}
+                className="rounded-sm bg-[#2f5d3a] px-2 py-1.5 text-left text-[12px] font-semibold ring-1 ring-white/10 hover:bg-[#3a7048] disabled:opacity-40">
+                {t('world.line.rescue', { who: name, n: hud.medkits })}
+              </button>
+            ))}
+          </div>
+          <div className="relative mt-1.5 text-[10px] text-[#a99d88]">{t('world.line.tip')}</div>
         </div>
       )}
 
@@ -810,7 +844,7 @@ export default function WorldView() {
         onOrder={(cart) => { const r = world.current?.placeOrder(cart) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
         onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }} />}
       {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
-        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
+        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

@@ -29,14 +29,18 @@ describe('时钟', () => {
 })
 
 describe('需求', () => {
-  it('一天大约吃三顿、喝三次，正好一人一天一份食物一份水', () => {
+  it('饿和渴都掉得慢：醒着 16 小时，两三顿饭、一两次水就补得回来（一人一天大约一份吃的、半份多水）', () => {
     let n = { ...full }
     for (let h = 0; h < 16; h++) n = decayNeeds(n, 1, 'idle')
-    // 醒着 16 小时，三顿饭三次水能补回来
-    expect(100 - n.hunger).toBeLessThanOrEqual(MEAL.hunger * 3 + 5)
-    expect(100 - n.thirst).toBeLessThanOrEqual(DRINK.thirst * 3)
-    expect(MEAL.food * 3).toBeCloseTo(1)
-    expect(DRINK.water * 3).toBeCloseTo(1)
+    expect(100 - n.hunger).toBeLessThanOrEqual(MEAL.hunger * 2 + 5)
+    expect(100 - n.thirst).toBeLessThanOrEqual(DRINK.thirst * 1.1)
+    expect(MEAL.food * 2.5).toBeCloseTo(1, 0)
+  })
+
+  it('正常过日子心情掉得很慢；饿着渴着才掉得快', () => {
+    let n: Needs = { ...full, mood: 70 }
+    for (let h = 0; h < 8; h++) n = decayNeeds(n, 1, 'idle')
+    expect(n.mood).toBeGreaterThan(62)
   })
 
   it('睡八小时能把精神补满', () => {
@@ -51,7 +55,8 @@ describe('需求', () => {
     expect(n.mood).toBeLessThan(40)
     let m: Needs = { ...full, mood: 30 }
     for (let h = 0; h < 4; h++) m = decayNeeds(m, 1, 'relax')
-    expect(m.mood).toBeGreaterThan(50)
+    // 歇着慢慢回升（四个小时涨十几点）
+    expect(m.mood).toBeGreaterThan(42)
   })
 })
 

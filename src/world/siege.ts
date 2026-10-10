@@ -66,6 +66,11 @@ const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 
 
 /** 体能（跑步机练的）：近战每一下多打几点（体能 30 是普通人，100 多打 7 点）；被咬时躲得开一点（最多少掉四分之一） */
 export const fitBonus = (fitness: number) => Math.max(-2, Math.min(7, Math.round((fitness - 30) / 10)))
+/** 自己打时用的家伙：拿枪 / 弩的人用随身的刀（或斧头），别人用自己的 */
+export function meleeOf(a: Actor): 'crowbar' | 'pin' | 'knife' | 'machete' | 'axe' {
+  if (a.weapon === 'shotgun' || a.weapon === 'crossbow') return a.sidearm
+  return a.weapon as 'crowbar' | 'pin' | 'knife' | 'machete' | 'axe'
+}
 export const fitGuard = (fitness: number) => 1 - Math.max(-0.07, Math.min(0.25, (fitness - 30) / 280))
 
 /** 铁门外铺的钉板和铁丝网：踩进去走得慢、一直掉血；每有一只丧尸在上面待一秒就磨损一点 */
@@ -82,8 +87,25 @@ export const SPIKE_ROWS: Omit<SpikeRow, 'hits'>[] = [
 ]
 export const inRow = (r: Omit<SpikeRow, 'hits'>, p: Pt) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1
 
+/** 丧尸的种类：越往后种类越多（见 Siege.pickKind）
+ * - walker 普通的；runner 跑得飞快、皮薄（第 2 个月起）；spitter 站在后面吐酸水、隔着门伤人（第 3 个月起）；
+ * - bloater 胀鼓鼓的，打死会炸——炸伤门边的人、炸坏门，最好远远开枪打（第 4 个月起）；brute 大块头（危机夜，第 4 个月起平时也有） */
+export type ZombieKind = 'walker' | 'runner' | 'spitter' | 'bloater' | 'brute'
+export const ZOMBIE_KINDS: Record<ZombieKind, { hp: number; speed: number; bash: number }> = {
+  walker: { hp: 60, speed: 0.95, bash: 1 },
+  runner: { hp: 40, speed: 1.7, bash: 0.8 },
+  spitter: { hp: 50, speed: 0.85, bash: 0 },
+  bloater: { hp: 70, speed: 0.7, bash: 1.2 },
+  brute: { hp: 200, speed: 0.72, bash: 2.5 },
+}
+/** 吐酸水：多远能吐到、几秒一口、一口掉多少血 */
+export const SPIT = { range: 6, cool: 3, dmg: 6 }
+/** 胀鼓鼓的被打死：多大一圈、炸伤人多少、炸坏防线多少、炸伤别的丧尸多少 */
+export const BLOAT = { radius: 1.9, hurt: 12, barrier: 15, zombies: 30 }
+
 export class Zombie extends Walker {
   hp = ZOMBIE.hp
+  kind: ZombieKind = 'walker'
   /** 危机夜里的大块头：高大、皮厚、走得慢，砸门砸得狠 */
   brute = false
   /** 黑鸦的人（不是丧尸）：走得快、皮厚、打不过会跑 */
@@ -154,6 +176,9 @@ export type SiegeEvent =
   | { kind: 'hit'; at: Pt }
   | { kind: 'bash'; layer: LayerId; at: Pt }
   | { kind: 'fire'; at: Pt }
+  | { kind: 'spit'; from: Pt; at: Pt }
+  | { kind: 'boom'; at: Pt }
+  | { kind: 'newKind'; zombie: ZombieKind }
   | { kind: 'down'; who: string }
   | { kind: 'end'; won: boolean; kills: number; broken: LayerId[]; downed: string[]; ambush: boolean }
 
@@ -166,6 +191,8 @@ export interface SiegeOpts {
   solidWall?: boolean
   /** 困难模式：咬人、砸门更狠，大块头更多 */
   hard?: boolean
+  /** 末日后第几个月（0 起）：越往后丧尸种类越多 */
+  month?: number
   /** 在街上搜东西时遇到的：不分防线，从这些位置冒出来直接扑人 */
   ambushAt?: Pt[]
   navs: Record<Floor, NavGrid>
@@ -178,7 +205,7 @@ export interface SiegeOpts {
   trap?: { hp: number }
   /** 院子里的竹尖刺（和 Household 共用） */
   spikes?: SpikeRow[]
-  spawn: (at: Pt, raider: boolean, brute?: boolean) => Zombie
+  spawn: (at: Pt, raider: boolean, brute?: boolean, kind?: ZombieKind) => Zombie
   emit: (e: SiegeEvent) => void
 }
 
@@ -195,6 +222,21 @@ export class Siege {
   private readonly broken: LayerId[] = []
   private readonly downed = new Set<Actor>()
   private bruteSeen = false
+  private readonly seenKinds = new Set<ZombieKind>()
+  /** 玩家下令开枪的冷却（人 → 还要几秒） */
+  private readonly fireCool = new Map<Actor, number>()
+  /** 这只丧尸是什么种类：月底危机夜每五只一只大块头；越往后跑得快的、吐酸水的、会炸的越多 */
+  private pickKind(k: number): ZombieKind {
+    if (this.o.raid || this.o.ambushAt) return 'walker'
+    const m = this.o.month ?? 0
+    if (this.o.crisis && k % (this.o.hard ? 3 : 5) === (this.o.hard ? 2 : 4)) return 'brute'
+    if (!this.o.crisis && m >= 3 && k === 1) return 'brute'
+    const r = this.rand()
+    if (m >= 3 && r < 0.15) return 'bloater'
+    if (m >= 2 && r < 0.3) return 'spitter'
+    if (m >= 1 && r < 0.5) return 'runner'
+    return 'walker'
+  }
   private nextId = 0
   private seed = 7
 
@@ -239,9 +281,9 @@ export class Siege {
   post(a: Actor): number {
     const fixed = this.postOf.get(a)
     if (fixed !== undefined) return fixed
-    if (a.weapon === 'shotgun') return 0
-    const melee = this.o.defenders.filter((d) => d.weapon !== 'shotgun')
-    return Math.min(4, 1 + melee.indexOf(a))
+    // 默认大家都拿手上的家伙贴门打（开枪要玩家点防线下令）；第五个人站后排
+    const k = this.o.defenders.indexOf(a)
+    return k < 4 ? 1 + k : 0
   }
 
   /** 玩家把某人换到某个站位，原来站那里的人换到他的位置 */
@@ -268,22 +310,27 @@ export class Siege {
     this.t += dt
     while (!this.done && this.queue.length && this.queue[0].t <= this.t) {
       const q = this.queue.shift()!
-      // 月底危机夜（不是黑鸦、不是街上遇袭）：每五只里有一只大块头
-      const brute = this.o.crisis && !this.o.raid && !this.o.ambushAt && this.nextId % (this.o.hard ? 3 : 5) === (this.o.hard ? 2 : 4)
-      const z = this.o.spawn(q.at, !!this.o.raid, brute)
+      const kind = this.pickKind(this.nextId)
+      const brute = kind === 'brute'
+      const z = this.o.spawn(q.at, !!this.o.raid, brute, kind)
       z.cool = this.rand() * ZOMBIE.cool
+      z.kind = kind
+      z.hp = ZOMBIE_KINDS[kind].hp
+      z.speed = ZOMBIE_KINDS[kind].speed
       if (this.o.raid) { z.raider = true; z.hp = 75; z.speed = 1.35 }
       z.id = this.nextId++
       if (brute) {
         z.brute = true
-        z.hp = 200
-        z.speed = 0.72
         if (!this.bruteSeen) { this.bruteSeen = true; this.o.emit({ kind: 'brute' }) }
+      } else if (kind !== 'walker' && !this.seenKinds.has(kind)) {
+        this.seenKinds.add(kind)
+        this.o.emit({ kind: 'newKind', zombie: kind })
       }
       this.zombies.push(z)
       this.sendZombie(z)
     }
     for (const z of this.zombies) this.zombieTick(z, dt)
+    for (const [a, c] of this.fireCool) this.fireCool.set(a, c - dt)
     if (!this.done) for (const a of this.o.defenders) this.defenderTick(a, dt)
     // 尸体沉下去以后移除
     for (let k = this.zombies.length - 1; k >= 0; k--) {
@@ -325,6 +372,18 @@ export class Siege {
     const layer = this.current
     z.slot = -1
     if (!layer) { z.state = 'hunt'; z.repath = 0; return }
+    // 吐酸水的不挤上去砸门，站在后面一点吐
+    if (z.kind === 'spitter') {
+      const base = layer.bash[z.id % layer.bash.length]
+      const post = layer.posts[1]
+      const dx = base.x - post.x
+      const dz = base.z - post.z
+      const d = Math.hypot(dx, dz) || 1
+      const goal = { x: base.x + (dx / d) * 2.2 + (this.rand() - 0.5), z: base.z + (dz / d) * 2.2, floor: base.floor }
+      z.state = 'walk'
+      z.setPath(route(this.o.navs, z.pos, goal) ?? [])
+      return
+    }
     // 一层最多六只同时砸，其他的挤在后面等
     const used = new Set(this.zombies.filter((o) => o !== z && o.alive && o.slot >= 0).map((o) => o.slot))
     const free = layer.bash.findIndex((_, k) => !used.has(k))
@@ -402,8 +461,14 @@ export class Siege {
       if (!z.path.length) z.state = !layer ? 'hunt' : z.slot >= 0 ? 'bash' : 'wait'
       return
     }
+    // 防线都破了：吐酸水的也一样追着人吐（离得远就吐，贴上来了就咬）
+    if (!layer && z.kind === 'spitter' && z.cool <= 0) {
+      const prey = this.nearestDefender(z.pos)
+      if (prey && prey.floor === z.floor && Math.hypot(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z) > ZOMBIE.reach + 0.3) { this.spit(z); return }
+    }
     if (z.state === 'wait') {
-      if (!layer) z.state = 'hunt'
+      if (!layer) { z.state = 'hunt'; return }
+      if (z.kind === 'spitter' && z.cool <= 0) this.spit(z)
       return
     }
     if (z.state === 'bash') {
@@ -423,7 +488,7 @@ export class Siege {
           return
         }
         const id = layer.id
-        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg * (z.brute ? 2.5 : 1) * (this.o.hard ? 1.3 : 1))
+        this.o.barriers[id] = Math.max(0, this.o.barriers[id] - ZOMBIE.bashDmg * ZOMBIE_KINDS[z.kind].bash * (this.o.hard ? 1.3 : 1))
         this.o.emit({ kind: 'bash', layer: id, at: z.pos })
         if (this.o.barriers[id] <= 0) this.breakLayer()
       }
@@ -485,8 +550,8 @@ export class Siege {
   private defenderTick(a: Actor, dt: number): void {
     if (this.downed.has(a)) { a.pose = 'down'; return }
     const layer = this.current
-    // 武器跟着人：女主霰弹枪（没子弹就换菜刀），爸爸撬棍，妈妈擀面杖，住进来的人拿砍刀
-    const weapon = a.weapon === 'shotgun' ? (this.o.ammo.n > 0 ? 'shotgun' : a.sidearm) : a.weapon
+    // 自己打只用手上的家伙（女主菜刀/斧头，爸爸撬棍，妈妈擀面杖，住进来的人砍刀）；枪和弩要玩家点防线下令才开
+    const weapon = meleeOf(a)
     const slot = this.post(a)
     // 回到这一层的站位（最后一层没了就原地打）
     if (layer) {
@@ -520,17 +585,74 @@ export class Siege {
     if (c > 0) { this.cool.set(a, c); return }
     this.cool.set(a, w.cool)
     // 壮实的人打得更狠，胆小的人手软
-    let dmg = w.dmg + (a.trait === 'trait_strong' ? 4 : a.trait === 'trait_coward' ? -4 : 0) + (w.range ? 0 : fitBonus(a.fitness))
-    if (weapon === 'shotgun') {
-      this.o.ammo.n -= 1
-      dmg = bd < 3.5 ? w.dmg * 1.3 : w.dmg
-      a.driver?.recoil()
-      this.o.emit({ kind: 'shot', from: a, at: target.pos })
-    } else if (weapon === 'crossbow') this.o.emit({ kind: 'bolt', from: a, at: target.pos })
+    const dmg = w.dmg + (a.trait === 'trait_strong' ? 4 : a.trait === 'trait_coward' ? -4 : 0) + fitBonus(a.fitness)
     target.hp -= dmg
     target.hitT = 0.15
     this.o.emit({ kind: 'hit', at: target.pos })
     if (target.hp <= 0) this.kill(target, a.name)
+  }
+
+  /** 玩家点防线下令开枪：家里拿枪 / 弩、不在冷却、射程里有丧尸的人打一下（优先打点中的那只）。 */
+  fire(prefer?: Zombie | null): { r: 'ok' | 'noammo' | 'nogun' | 'cool' | 'far' | 'done'; who?: string } {
+    if (this.done) return { r: 'done' }
+    const guns = this.o.defenders.filter((a) => !this.downed.has(a) && (a.weapon === 'shotgun' || a.weapon === 'crossbow'))
+    if (!guns.length) return { r: 'nogun' }
+    const usable = guns.filter((a) => a.weapon === 'crossbow' || this.o.ammo.n > 0)
+    if (!usable.length) return { r: 'noammo' }
+    const ready = usable.filter((a) => (this.fireCool.get(a) ?? 0) <= 0 && !a.path.length)
+    if (!ready.length) return { r: 'cool', who: usable[0].name }
+    for (const a of ready) {
+      const w = WEAPONS[a.weapon as 'shotgun' | 'crossbow']
+      const high = a.floor === 1 && inRect(PORCH, a.pos.x, a.pos.z, -0.1)
+      const reach = w.range + (high ? BALCONY_REACH : 0)
+      const inRange = (z: Zombie) => z.alive && z.state !== 'leave' && Math.hypot(z.pos.x - a.pos.x, z.pos.z - a.pos.z) <= reach
+      let target = prefer && inRange(prefer) ? prefer : null
+      if (!target) {
+        let bd = Infinity
+        for (const z of this.zombies) {
+          if (!inRange(z)) continue
+          const d = Math.hypot(z.pos.x - a.pos.x, z.pos.z - a.pos.z)
+          if (d < bd) { bd = d; target = z }
+        }
+      }
+      if (!target) continue
+      const d = Math.hypot(target.pos.x - a.pos.x, target.pos.z - a.pos.z)
+      a.face(target.pos.x - a.pos.x, target.pos.z - a.pos.z, 1)
+      a.pose = 'shoot'
+      this.fireCool.set(a, w.cool)
+      this.cool.set(a, Math.max(this.cool.get(a) ?? 0, 0.6))
+      let dmg = w.dmg
+      if (a.weapon === 'shotgun') {
+        this.o.ammo.n -= 1
+        if (d < 3.5) dmg *= 1.3
+        a.driver?.recoil()
+        this.o.emit({ kind: 'shot', from: a, at: target.pos })
+      } else this.o.emit({ kind: 'bolt', from: a, at: target.pos })
+      target.hp -= dmg
+      target.hitT = 0.15
+      this.o.emit({ kind: 'hit', at: target.pos })
+      if (target.hp <= 0) this.kill(target, a.name)
+      return { r: 'ok', who: a.name }
+    }
+    return { r: 'far', who: ready[0].name }
+  }
+
+  /** 谁拿着枪 / 弩、还要等几秒（界面显示用） */
+  shooter(): { name: string; weapon: 'shotgun' | 'crossbow'; cool: number } | null {
+    const a = this.o.defenders.find((d) => !this.downed.has(d) && (d.weapon === 'shotgun' || d.weapon === 'crossbow'))
+    return a ? { name: a.name, weapon: a.weapon as 'shotgun' | 'crossbow', cool: Math.max(0, this.fireCool.get(a) ?? 0) } : null
+  }
+
+  /** 吐酸水：吐向离得最近、还站着的人（隔着门也吐得到） */
+  private spit(z: Zombie): void {
+    const prey = this.nearestDefender(z.pos)
+    if (!prey || Math.hypot(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z) > SPIT.range + (prey.floor !== z.floor ? 2 : 0)) return
+    z.cool = SPIT.cool
+    z.face(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z, 1)
+    prey.health = Math.max(0, prey.health - SPIT.dmg * (this.o.hard ? 1.3 : 1) * fitGuard(prey.fitness))
+    this.o.emit({ kind: 'spit', from: z.pos, at: prey.pos })
+    this.o.emit({ kind: 'hit', at: prey.pos })
+    if (prey.health <= 0) this.knockDown(prey)
   }
 
   private kill(z: Zombie, by: string): void {
@@ -540,6 +662,27 @@ export class Siege {
     z.burn = 0
     this.kills++
     this.o.emit({ kind: 'kill', at: z.pos, by, raider: z.raider, brute: z.brute })
+    // 胀鼓鼓的炸开：伤到旁边的丧尸、门边的人，还有门
+    if (z.kind === 'bloater') {
+      this.o.emit({ kind: 'boom', at: z.pos })
+      for (const o of this.zombies) {
+        if (o === z || !o.alive || Math.hypot(o.pos.x - z.pos.x, o.pos.z - z.pos.z) > BLOAT.radius) continue
+        o.hp -= BLOAT.zombies
+        o.hitT = 0.3
+        if (o.hp <= 0) this.kill(o, 'boom')
+      }
+      for (const a of this.o.defenders) {
+        if (this.downed.has(a) || a.floor !== z.floor || Math.hypot(a.pos.x - z.pos.x, a.pos.z - z.pos.z) > BLOAT.radius) continue
+        a.health = Math.max(0, a.health - BLOAT.hurt * fitGuard(a.fitness))
+        this.o.emit({ kind: 'hit', at: a.pos })
+        if (a.health <= 0) this.knockDown(a)
+      }
+      const layer = this.current
+      if (layer && layer.bash.some((b) => Math.hypot(b.x - z.pos.x, b.z - z.pos.z) < 1.5)) {
+        this.o.barriers[layer.id] = Math.max(0, this.o.barriers[layer.id] - BLOAT.barrier)
+        if (this.o.barriers[layer.id] <= 0) this.breakLayer()
+      }
+    }
     this.fillSlots()
     // 黑鸦的人倒下一大半，剩下的就跑了
     if (this.o.raid && this.kills >= Math.ceil(this.o.count * 0.6)) this.finish(true)

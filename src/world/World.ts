@@ -25,7 +25,7 @@ import {
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
-import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId } from './siege'
+import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -69,7 +69,17 @@ export interface Hud {
   ammo: number
   cores: number
   /** 正在打丧尸：还剩几只、守的是哪一层、这一层的耐久 */
-  siege: { left: number; layer: LayerId | null; hp: number; max: number; ambush: boolean } | null
+  siege: {
+    left: number; layer: LayerId | null; hp: number; max: number; ambush: boolean
+    /** 场上各种丧尸各几只 */
+    kinds: Partial<Record<ZombieKind, number>>
+    /** 谁拿着枪 / 弩、还要等几秒（没有人拿就是 null） */
+    shooter: { name: string; weapon: 'shotgun' | 'crossbow'; cool: number } | null
+    /** 倒下了的人（有急救包可以救） */
+    downed: string[]
+    /** 点中的那只丧尸是什么（开枪先打它） */
+    target: ZombieKind | null
+  } | null
   log: LogEntry[]
   muted: boolean
   music: boolean
@@ -108,7 +118,7 @@ export interface Hud {
   /** 菜地：开了没有、长到多少 */
   garden: { built: boolean; growth: number }
   /** 正在干的工程：干到百分之几、谁在干、这会儿在不在干 */
-  build: { id: string; p: number; worker: string; working: boolean } | null
+  build: { id: string; p: number; worker: string; working: boolean }[]
   /** 江边钓鱼：在钓吗、站在钓鱼点旁边吗、今天钓了几条 */
   fishing: { active: boolean; near: boolean; caught: number }
   /** 屋外：女主身边能搜的地方 */
@@ -179,7 +189,7 @@ export interface FurnitureMenu {
   /** 点的是人：TA 的名字和现在的心情 */
   target?: string
   mood?: number
-  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' }[]
+  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' | 'bandage' }[]
 }
 
 /** 家具在菜单标题上叫什么 */
@@ -210,7 +220,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -218,7 +228,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: null, goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 },
 }
 
 export class World {
@@ -478,7 +488,7 @@ export class World {
       else this.toast(`world.forage.${y.key}`, 3.5, vars)
     }
     this.siegeView = new SiegeView(this.scene)
-    this.life.spawnZombie = (at, raider, brute) => this.siegeView.spawn(at, raider, brute)
+    this.life.spawnZombie = (at, raider, brute, kind) => this.siegeView.spawn(at, raider, brute, kind)
     this.life.spawnVisitor = (def, at, model) => {
       const m = this.siegeView.npc(model) ?? this.siegeView.npc(def.model)
       if (m && model === 'xielin') darkCoat(m)
@@ -567,6 +577,10 @@ export class World {
       else if (e.kind === 'trapBroken' || e.kind === 'spikeBroken') this.sound.crash()
       else if (e.kind === 'spike') this.sound.squelch()
       else if (e.kind === 'brute') { this.toast('world.toast.brute', 4); this.sound.groan(1, 0.55) }
+      else if (e.kind === 'newKind') { this.toast(`world.toast.newKind.${e.zombie}`, 5); this.sound.groan(1, 0.8) }
+      else if (e.kind === 'spit') this.sound.squelch()
+      else if (e.kind === 'boom') { this.sound.crash(); this.sound.squelch() }
+      else if (e.kind === 'end') { this.onLinePanel?.(false); this.lineTarget = null }
       else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
       // 守的人在哪一层，镜头就看哪一层（大门破了大家退上二楼守楼梯口；只看一楼的话楼上的人和丧尸都藏起来了）
       // （开打的事件在 Siege 构造时就发了，那时 life.siege 还没赋值，所以看防线耐久）
@@ -942,16 +956,16 @@ export class World {
   /** 正在砌 / 已经砌好的石头院墙：一段 1 米，按 wallPieces 的顺序一段一段出现，砌好一段就拆掉那一段围栏 */
   private wallBits: { mesh: THREE.Object3D; fence: THREE.Object3D | null }[] = []
   private wallShown = -1
-  /** 工地头顶的进度条 */
-  private buildBar: { sprite: THREE.Sprite; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; shown: number } | null = null
+  /** 每个工地头顶一个进度条 */
+  private buildBars = new Map<BuildId, { sprite: THREE.Sprite; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; shown: number }>()
 
   private updateConstruction(): void {
     if (this.hud.loading) return
-    const p = this.life.project
-    const building = p?.id === 'wall'
-    if ((this.life.wall || building) && !this.wallBits.length) this.makeWallPieces()
+    const ps = this.life.projects
+    const wallJob = ps.find((p) => p.id === 'wall')
+    if ((this.life.wall || wallJob) && !this.wallBits.length) this.makeWallPieces()
     if (this.wallBits.length) {
-      const n = this.life.wall ? this.wallBits.length : building ? Math.floor(p!.done * this.wallBits.length) : 0
+      const n = this.life.wall ? this.wallBits.length : wallJob ? Math.floor(wallJob.done * this.wallBits.length) : 0
       if (n !== this.wallShown) {
         this.wallShown = n
         this.wallBits.forEach((w, k) => {
@@ -960,41 +974,42 @@ export class World {
         })
       }
     }
-    // 进度条：跟着工地走（院墙是正在砌的那一段）
-    if (p && !this.buildBar) this.buildBar = this.makeBuildBar()
-    const bar = this.buildBar
-    if (!bar) return
-    bar.sprite.visible = !!p
-    if (!p) return
-    const pct = Math.floor(p.done * 100)
-    if (pct !== bar.shown) {
-      bar.shown = pct
-      const c = bar.ctx
-      c.clearRect(0, 0, 256, 64)
-      c.fillStyle = 'rgba(20,16,12,0.82)'
-      c.beginPath(); c.roundRect(2, 2, 252, 60, 14); c.fill()
-      c.fillStyle = 'rgba(255,255,255,0.15)'
-      c.fillRect(16, 38, 224, 12)
-      c.fillStyle = TONE[pct < 34 ? 'bad' : pct < 67 ? 'warn' : 'good']
-      c.fillRect(16, 38, (224 * pct) / 100, 12)
-      c.fillStyle = '#f4ecdc'
-      c.font = 'bold 22px "Songti SC", serif'
-      c.textAlign = 'center'
-      c.fillText(`${t(`world.build.name.${p.id}` as UiKey)} ${pct}%`, 128, 28)
-      bar.tex.needsUpdate = true
+    // 进度条：每个工地一个，跟着工地走（院墙是正在砌的那一段）
+    for (const [id, bar] of this.buildBars) bar.sprite.visible = ps.some((p) => p.id === id)
+    for (const p of ps) {
+      let bar = this.buildBars.get(p.id)
+      if (!bar) { bar = this.makeBuildBar(); this.buildBars.set(p.id, bar) }
+      bar.sprite.visible = true
+      const pct = Math.floor(p.done * 100)
+      if (pct !== bar.shown) {
+        bar.shown = pct
+        const c = bar.ctx
+        c.clearRect(0, 0, 256, 64)
+        c.fillStyle = 'rgba(20,16,12,0.82)'
+        c.beginPath(); c.roundRect(2, 2, 252, 60, 14); c.fill()
+        c.fillStyle = 'rgba(255,255,255,0.15)'
+        c.fillRect(16, 38, 224, 12)
+        c.fillStyle = TONE[pct < 34 ? 'bad' : pct < 67 ? 'warn' : 'good']
+        c.fillRect(16, 38, (224 * pct) / 100, 12)
+        c.fillStyle = '#f4ecdc'
+        c.font = 'bold 22px "Songti SC", serif'
+        c.textAlign = 'center'
+        c.fillText(`${t(`world.build.name.${p.id}` as UiKey)} ${pct}%`, 128, 28)
+        bar.tex.needsUpdate = true
+      }
+      let at: THREE.Vector3
+      if (p.id === 'garden') at = new THREE.Vector3((GARDEN.x0 + GARDEN.x1) / 2, 1.6, (GARDEN.z0 + GARDEN.z1) / 2)
+      else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
+      else {
+        const all = wallPieces()
+        const w = all[Math.min(all.length - 1, Math.floor(p.done * all.length))]
+        at = new THREE.Vector3(w.x, 2.6, w.z)
+      }
+      bar.sprite.position.copy(at)
     }
-    let at: THREE.Vector3
-    if (p.id === 'garden') at = new THREE.Vector3((GARDEN.x0 + GARDEN.x1) / 2, 1.6, (GARDEN.z0 + GARDEN.z1) / 2)
-    else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
-    else {
-      const all = wallPieces()
-      const w = all[Math.min(all.length - 1, Math.floor(p.done * all.length))]
-      at = new THREE.Vector3(w.x, 2.6, w.z)
-    }
-    bar.sprite.position.copy(at)
   }
 
-  private makeBuildBar(): NonNullable<World['buildBar']> {
+  private makeBuildBar(): { sprite: THREE.Sprite; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; shown: number } {
     const canvas = document.createElement('canvas')
     canvas.width = 256
     canvas.height = 64
@@ -1085,14 +1100,14 @@ export class World {
   /** 建设：付钱、派选中的人（干不了就换家里会修东西的人）走过去真的干活 */
   startBuild(id: BuildId): void {
     const r = this.life.startBuild(id, this.selected)
-    const who = this.life.project?.worker ?? this.selected.name
+    const who = this.life.projects.find((p) => p.id === id)?.worker ?? this.selected.name
     this.toast(`world.build.r.${r}`, 4, { who, what: t(`world.build.name.${id}` as UiKey), h: String(BUILD_WORK[id]) })
     this.pushLifeHud()
   }
 
   /** 工程停了：让选中的人接着干 */
-  continueBuild(): void {
-    const r = this.life.continueBuild(this.selected)
+  continueBuild(id: BuildId): void {
+    const r = this.life.continueBuild(id, this.selected)
     if (r !== 'none') this.toast(`world.build.r.resume.${r}`, 3, { who: this.selected.name })
     this.pushLifeHud()
   }
@@ -1887,8 +1902,9 @@ export class World {
     }
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     this.updateConstruction()
+    this.updateTargetRing()
     const g = this.life.garden
-    const digging = this.life.project?.id === 'garden' ? this.life.project.done : -1
+    const digging = this.life.projects.find((p) => p.id === 'garden')?.done ?? -1
     this.gardenObj.visible = g.built || digging >= 0
     // 开地的时候：先翻出一块土，再起两道垄，菜苗等开好了才种上
     if (!g.built && digging >= 0) {
@@ -1944,7 +1960,7 @@ export class World {
       this.scene.add(g)
     }
     // 钉板：铺了才出现，踩烂了就收起来
-    const laying = this.life.project?.id === 'trap' ? this.life.project.done : -1
+    const laying = this.life.projects.find((p) => p.id === 'trap')?.done ?? -1
     if ((this.life.trap.hp > 0 || laying >= 0) && !this.trapMesh && !this.hud.loading) {
       this.trapMesh = this.makeTrap()
       this.scene.add(this.trapMesh)
@@ -2325,6 +2341,8 @@ export class World {
     const ndc = new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1)
     this.raycaster.setFromCamera(ndc, this.camera)
     const floor: Floor = this.mode === 'home' ? this.viewFloor : 0
+    // 打丧尸时：点丧尸 = 盯住它（开枪先打它）并打开防线面板；点正在被砸的防线也打开面板
+    if (this.tapSiege()) return
     if (this.mode === 'home' && this.tapPost()) return
     // 点大橘：喵一声、呼噜呼噜，身边的人心情好一点
     if (this.cat?.root.visible && this.raycaster.intersectObject(this.cat.inner, true).length) {
@@ -2353,7 +2371,10 @@ export class World {
           if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
           this.onFurnitureMenu?.({
             x: cx, y: cy, title: target.name, who: this.selected.name, target: target.name, mood: target.needs.mood,
-            options: INTERACTIONS.map((d) => ({ label: `world.act.${d.id}` as UiKey, act: d.id })),
+            options: [
+              ...(this.life.isInjured(target) ? [{ label: 'world.act.bandage' as UiKey, cmd: 'bandage' as const }] : []),
+              ...INTERACTIONS.map((d) => ({ label: `world.act.${d.id}` as UiKey, act: d.id })),
+            ],
           })
           return
         }
@@ -2643,6 +2664,71 @@ export class World {
     return true
   }
 
+  /** 防线面板（开枪、扔燃烧瓶、救人）要不要显示 */
+  onLinePanel: ((open: boolean) => void) | null = null
+  /** 玩家点中的丧尸（开枪先打它） */
+  private lineTarget: Zombie | null = null
+  private targetRing: THREE.Mesh | null = null
+
+  private tapSiege(): boolean {
+    const siege = this.life.siege
+    if (!siege || siege.done) return false
+    const roots = siege.zombies.filter((z) => z.alive && z.state !== 'leave' && z.root.visible).map((z) => z.root)
+    const hits = this.raycaster.intersectObjects(roots, true)
+    if (hits.length) {
+      let o: THREE.Object3D | null = hits[0].object
+      while (o && !o.userData.zombie) o = o.parent
+      if (o) {
+        this.lineTarget = o.userData.zombie as Zombie
+        this.onLinePanel?.(true)
+        this.pushLifeHud()
+        return true
+      }
+    }
+    const layer = siege.current
+    if (!layer) return false
+    const floor = layer.bash[0].floor
+    const p = new THREE.Vector3()
+    if (!this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -floor * FLOOR_H), p)) return false
+    const cx = layer.bash.reduce((v, b) => v + b.x, 0) / layer.bash.length
+    const cz = layer.bash.reduce((v, b) => v + b.z, 0) / layer.bash.length
+    if (Math.hypot(p.x - cx, p.z - cz) > 2.6) return false
+    this.onLinePanel?.(true)
+    this.pushLifeHud()
+    return true
+  }
+
+  /** 防线面板里点"开枪"：拿枪 / 弩的人打一下（先打盯住的那只） */
+  fire(): void {
+    const siege = this.life.siege
+    if (!siege || siege.done) return
+    const r = siege.fire(this.lineTarget)
+    if (r.r !== 'ok') this.toast(`world.fire.${r.r}`, 2.5, { who: r.who ?? '' })
+    this.pushLifeHud()
+  }
+
+  /** 防线面板里点"救起 XX" */
+  rescueByName(name: string): void {
+    const a = this.actors.find((x) => x.name === name)
+    if (!a) return
+    if (this.life.rescue(a)) { this.sound.squelch(); this.pushLifeHud() }
+    else this.toast('world.toast.noMedkit')
+  }
+
+  /** 盯住的丧尸脚下一圈红圈 */
+  private updateTargetRing(): void {
+    const z = this.lineTarget
+    if (!this.targetRing) {
+      this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.52, 28), new THREE.MeshBasicMaterial({ color: '#ff4b3a', transparent: true, opacity: 0.85, depthTest: false }))
+      this.targetRing.rotation.x = -Math.PI / 2
+      this.targetRing.renderOrder = 9
+      this.scene.add(this.targetRing)
+    }
+    const show = !!z && z.alive && z.root.visible
+    this.targetRing.visible = show
+    if (show) this.targetRing.position.set(z!.root.position.x, z!.root.position.y + 0.04, z!.root.position.z)
+  }
+
   /** 鼠标下面第一件看得见的家具（只算当前看的这一层） */
   private furnitureUnder(floor: Floor): THREE.Object3D | null {
     const hits = this.raycaster.intersectObjects(this.clickables, true)
@@ -2709,9 +2795,17 @@ export class World {
   }
 
   /** 鸡圈菜单里选了一项 */
-  menuCommand(cmd: 'feed' | 'hens'): void {
+  menuCommand(cmd: 'feed' | 'hens' | 'bandage', target?: string): void {
     this.onFurnitureMenu?.(null)
     const who = this.mode === 'home' ? this.selected : this.heroine
+    if (cmd === 'bandage') {
+      const a = this.actors.find((x) => x.name === target)
+      if (!a) return
+      const r = this.life.bandage(a)
+      this.toast(`world.bandage.${r}`, 3, { who: a.name })
+      this.pushLifeHud()
+      return
+    }
     if (cmd === 'feed') {
       const r = this.life.commandChore(who, 'feed')
       this.toast(`world.chore.feed.${r}`, 3, { who: who.name, n: '0' })
@@ -3123,10 +3217,10 @@ export class World {
       molotovs: this.life.molotovs,
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth },
-      build: this.life.project ? {
-        id: this.life.project.id, p: Math.floor(this.life.project.done * 100), worker: this.life.project.worker,
-        working: this.actors.some((a) => a.name === this.life.project!.worker && a.task?.kind === 'build'),
-      } : null,
+      build: this.life.projects.map((p) => ({
+        id: p.id, p: Math.floor(p.done * 100), worker: p.worker,
+        working: this.actors.some((a) => a.name === p.worker && a.task?.kind === 'build'),
+      })),
       goals: c.day < PROLOGUE_DAYS ? this.goals() : null,
       wall: this.life.wall,
       trap: Math.ceil(this.life.trap.hp),
@@ -3147,9 +3241,14 @@ export class World {
     const s = this.life.siege
     if (!s || s.done) return null
     const layer = s.current
+    const kinds: Partial<Record<ZombieKind, number>> = {}
+    for (const z of s.zombies) if (z.alive && z.state !== 'leave') kinds[z.kind] = (kinds[z.kind] ?? 0) + 1
+    if (this.lineTarget && !this.lineTarget.alive) this.lineTarget = null
     return {
       left: s.alive, layer: layer?.id ?? null, hp: layer ? this.life.barriers[layer.id] : 0,
       max: layer ? this.life.maxOf(layer.id) : LAYERS[0].max, ambush: s.ambush,
+      kinds, shooter: s.shooter(), downed: this.actors.filter((a) => s.isDown(a)).map((a) => a.name),
+      target: this.lineTarget?.kind ?? null,
     }
   }
 

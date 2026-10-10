@@ -29,6 +29,7 @@ interface ActorSave {
   runaway: { back: number } | null
   lowMood: number
   fitness?: number
+  injured?: number
 }
 
 export interface WorldSave {
@@ -49,8 +50,9 @@ export interface WorldSave {
   orders?: { id: number; cart: Record<string, number>; total: number; arrive: number }[]
   calls?: Record<string, number>
   phoneReminded?: number
-  /** 干到一半的工程 */
+  /** 干到一半的工程（旧存档是一项 project，新的是 projects） */
   project?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string } | null
+  projects?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string }[]
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -121,7 +123,7 @@ export function snapshot(life: Household): WorldSave {
     orders: [...life.orders, ...(life.courier?.order ? [{ id: 0, cart: life.courier.order.cart, total: 0, arrive: life.absHour }] : [])],
     calls: { ...life.calls },
     phoneReminded: life.phoneReminded,
-    project: life.project ? { ...life.project } : null,
+    projects: life.projects.map((p) => ({ ...p })),
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
     nightDone: life.nightDone,
@@ -131,7 +133,7 @@ export function snapshot(life: Household): WorldSave {
       : [...life.log],
     actors: life.actors.filter((a) => !a.guest).map((a) => ({
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
-      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood, fitness: a.fitness,
+      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood, fitness: a.fitness, injured: a.injured,
     })),
     trip: null,
     trips: life.trips.map((t) => ({ id: t.def.id, members: t.members.map((m) => m.name), back: t.back, van: t.van, phase: t.phase === 'shop' ? 'shop' as const : 'away' as const, shopAt: t.shopAt, shopped: t.shopped, cargo: t.cargo as Record<string, number | boolean> | undefined, spent: t.spent })),
@@ -193,7 +195,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.orders = (s.orders ?? []).map((o) => ({ ...o, cart: { ...o.cart } }))
   life.calls = { ...(s.calls ?? {}) }
   life.phoneReminded = s.phoneReminded ?? -1
-  life.project = s.project ? { ...s.project } : null
+  life.projects = (s.projects ?? (s.project ? [s.project] : [])).map((p) => ({ ...p }))
   ;(s.spikes ?? []).forEach((h, k) => { if (life.spikes[k]) life.spikes[k].hits = h })
   life.gateBonus = s.gateBonus
   life.barriers = { ...s.barriers }
@@ -261,6 +263,7 @@ export function restore(life: Household, s: WorldSave): void {
     a.runaway = as.runaway
     a.lowMood = as.lowMood
     if (as.fitness !== undefined) a.fitness = as.fitness
+    a.injured = as.injured ?? 0
   }
   // 在外面的几拨人（老存档只有一拨）
   life.trips = []
