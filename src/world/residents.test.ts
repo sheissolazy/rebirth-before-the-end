@@ -2921,3 +2921,34 @@ describe('地雷', () => {
     expect(back.mines.filter((m) => m.armed).length).toBe(3)
   })
 })
+
+describe('探照灯', () => {
+  it('派人装好；夜里打仗时院子里的丧尸被照着（走得慢），白天、没装都不照；存档后还在', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 20000
+    life.speed = 3
+    expect(life.startBuild('light', life.actors[2])).toBe('ok')
+    for (let i = 0; i < 6000 && !life.light; i++) {
+      life.tick(0.1, () => false)
+      for (const a of life.actors) { a.follow(0.3, 2.2); a.updateSettle(0.3) }
+    }
+    expect(life.light).toBe(true)
+    expect(life.startBuild('light', life.actors[2])).toBe('done')
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.startSiege(2, false)
+    const s = life.siege!
+    for (let i = 0; i < 400 && !s.zombies.length; i++) life.tick(0.05, () => false)
+    const z = s.zombies[0]
+    z.root.position.set(5, 0, 10.5)
+    life.tick(0.05, () => false)
+    expect(z.lit).toBe(true)
+    z.root.position.set(5, 0, 5)
+    life.tick(0.05, () => false)
+    expect(z.lit).toBe(false)
+    const back = simulate('paradise', 0).life
+    restore(back, snapshot(life))
+    expect(back.light).toBe(true)
+  })
+})

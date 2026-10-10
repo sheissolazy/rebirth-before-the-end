@@ -35,10 +35,10 @@ export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | '
   | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run' | 'tv' | 'plate'
 
 /** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
-export type BuildId = 'trap' | 'wall' | 'garden' | 'mg' | 'mines'
-export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden: 2, mg: 3, mines: 1.5 }
+export type BuildId = 'trap' | 'wall' | 'garden' | 'mg' | 'mines' | 'light'
+export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden: 2, mg: 3, mines: 1.5, light: 1 }
 /** 价钱：末日前 [元]，末日后 [晶核] */
-export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2], mg: [8000, 8], mines: [3000, 3] }
+export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2], mg: [8000, 8], mines: [3000, 3], light: [2000, 2] }
 
 /** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
 /** 闲着的人自己去采的：篱笆外几米以内、不危险的几样（蜂窝会蜇人、红伞伞有毒，要玩家点） */
@@ -884,6 +884,8 @@ export class Household {
   crossbow = false
   /** 院子里的地雷（埋了才有；炸过的 armed = false） */
   mines: Mine[] = []
+  /** 阳台上装了探照灯 */
+  light = false
   /** 家电：发电机（末日后电视、空调要靠它，烧汽油）、空调（高温天用） */
   generator = false
   aircon = false
@@ -2341,7 +2343,7 @@ export class Household {
     this.siege = new Siege({
       count, crisis, raid, solidWall: this.wall, mg: this.mg, hard: this.hard, month: Math.max(0, Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)),
       navs: this.navs, defenders: this.actors.filter((a) => !this.isOut(a) && !this.isInjured(a)), barriers: this.barriers, ammo: this.ammo,
-      maxOf: (id) => this.maxOf(id), trap: this.trap, spikes: this.spikes, mines: this.mines,
+      maxOf: (id) => this.maxOf(id), trap: this.trap, spikes: this.spikes, mines: this.mines, light: this.light && isNight(this.clock.hour),
       spawn: this.spawnZombie,
       emit: (e) => this.onSiegeEvent(e),
     })
@@ -2594,7 +2596,7 @@ export class Household {
   startBuild(id: BuildId, who: Actor): 'ok' | 'money' | 'cores' | 'busy' | 'done' | 'fight' | 'van' | 'nobody' {
     if (this.siege && !this.siege.done) return 'fight'
     if (this.projects.some((p) => p.id === id)) return 'busy'
-    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.nextPlot < 0) || (id === 'mg' && this.mg) || (id === 'mines' && this.mines.length > 0 && this.mines.every((m) => m.armed))) return 'done'
+    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.nextPlot < 0) || (id === 'mg' && this.mg) || (id === 'mines' && this.mines.length > 0 && this.mines.every((m) => m.armed)) || (id === 'light' && this.light)) return 'done'
     const v = this.vanAt
     const slot = PLOT_SLOTS[Math.max(0, this.nextPlot)]
     if (id === 'garden' && v && v.x > slot.x0 - 2 && v.x < slot.x1 + 2 && v.z > slot.z0 - 1.2 && v.z < slot.z1 + 1.2) return 'van'
@@ -2655,6 +2657,8 @@ export class Household {
     else if (p.id === 'mg') spot = { kind: 'stroll', x: 3.2, z: 7.1, floor: 1, face: 0, pose: 'work' }
     // 埋地雷：蹲在院子中间那条路边上
     else if (p.id === 'mines') spot = { kind: 'stroll', x: 5.6, z: 11.1, floor: 0, face: 0, pose: 'work' }
+    // 探照灯：装在二楼阳台东头的栏杆上
+    else if (p.id === 'light') spot = { kind: 'stroll', x: 9.2, z: 7.1, floor: 1, face: 0, pose: 'work' }
     else if (p.id === 'trap') spot = { kind: 'stroll', x: 3.6 + Math.floor(p.done * 3) * 0.7, z: 13.75, floor: 0, face: 0, pose: 'work' }
     else {
       // 一次站在一个地方砌 4 段（4 米），砌完再挪：不然每砌一米都要走一趟，大半天都花在走路上
@@ -2729,6 +2733,7 @@ export class Household {
     if (p.id === 'garden') this.openPlot()
     if (p.id === 'mg') { this.mg = true; this.note('world.log.mgBuilt', { who: p.worker }) }
     if (p.id === 'mines') { this.mines = MINE_SPOTS.map((m) => ({ ...m, armed: true })); this.note('world.log.minesBuilt', { who: p.worker }) }
+    if (p.id === 'light') { this.light = true; this.note('world.log.lightBuilt', { who: p.worker }) }
     this.onRemind?.(`world.build.done.${p.id}` as UiKey)
   }
 

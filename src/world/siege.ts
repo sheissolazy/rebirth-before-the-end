@@ -89,6 +89,8 @@ export const SPIKE_ROWS: Omit<SpikeRow, 'hits'>[] = [
 export interface Mine { x: number; z: number; armed: boolean }
 export const MINE_SPOTS: Pt[] = [{ x: 4.1, z: 12.5 }, { x: 4.9, z: 10.5 }, { x: 6.4, z: 10.3 }, { x: 5.8, z: 8.0 }]
 export const MINE = { trigger: 0.55, radius: 1.8, dmg: 95, hurt: 15 }
+/** 探照灯：院子里（屋前檐廊以南）和铁门外那一小片，被照着的丧尸走得慢一成半 */
+export const LIGHT = { x0: -6, x1: 18, z0: 7.6, z1: 16, slow: 0.85 }
 
 export const inRow = (r: Omit<SpikeRow, 'hits'>, p: Pt) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1
 
@@ -133,6 +135,8 @@ export class Zombie extends Walker {
   burn = 0
   /** 正踩在钉板上（走得慢） */
   slowed = false
+  /** 被阳台探照灯照着（晃眼、走得慢一点） */
+  lit = false
   /** 正踩在第几排竹尖刺上（-1 = 没有） */
   inSpike = -1
   driver: PoseDriver | null = null
@@ -220,6 +224,8 @@ export interface SiegeOpts {
   spikes?: SpikeRow[]
   /** 院子里的地雷（和 Household 共用） */
   mines?: Mine[]
+  /** 阳台的探照灯开着（夜里打仗时） */
+  light?: boolean
   spawn: (at: Pt, raider: boolean, brute?: boolean, kind?: ZombieKind) => Zombie
   emit: (e: SiegeEvent) => void
 }
@@ -469,6 +475,10 @@ export class Siege {
         if (z.hp <= 0) { this.kill(z, 'trap'); return }
       } else z.inSpike = -1
     }
+    // 探照灯照着院子里的丧尸：晃眼，走得慢
+    // （院子里和铁门外那一小片；街上照不到）
+    z.lit = !!this.o.light && z.floor === 0 && z.state !== 'leave' && !this.o.ambushAt
+      && z.pos.z > LIGHT.z0 && z.pos.z < LIGHT.z1 && z.pos.x > LIGHT.x0 && z.pos.x < LIGHT.x1
     // 踩到地雷：炸（一颗只炸一次）
     const mines = this.o.mines
     if (mines && z.floor === 0 && z.state !== 'leave' && !this.o.ambushAt) {

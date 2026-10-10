@@ -32,7 +32,7 @@ import {
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { DISHES, ING_INFO, INGS, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, dishOf, isCrisisNight, isNight } from './life'
-import { LAYERS, MG, MINE_SPOTS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
+import { LAYERS, LIGHT, MG, MINE_SPOTS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -136,6 +136,7 @@ export interface Hud {
   mg: boolean
   /** 地雷：埋过没有、还剩几颗 */
   mines: { laid: boolean; left: number }
+  light: boolean
   /** 气温：外面、屋里，空调开着没有、火炉在取暖没有 */
   temp: { out: number; in: number; ac: boolean; stove: boolean }
   /** 屋外：女主身边能搜的地方 */
@@ -305,7 +306,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0 }, temp: { out: 20, in: 20, ac: false, stove: false },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0 }, light: false, temp: { out: 20, in: 20, ac: false, stove: false },
 }
 
 export class World {
@@ -1050,6 +1051,7 @@ export class World {
       else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
       else if (p.id === 'mg') at = new THREE.Vector3(3.2, FLOOR_H + 1.9, 7.1)
       else if (p.id === 'mines') at = new THREE.Vector3(5.2, 1.5, 10.5)
+      else if (p.id === 'light') at = new THREE.Vector3(9.2, FLOOR_H + 1.9, 7.3)
       else {
         const all = wallPieces()
         const w = all[Math.min(all.length - 1, Math.floor(p.done * all.length))]
@@ -1167,6 +1169,7 @@ export class World {
   buildGardenPlot(): void { this.startBuild('garden') }
   buildMachineGun(): void { this.startBuild('mg') }
   buildMines(): void { this.startBuild('mines') }
+  buildLight(): void { this.startBuild('light') }
 
   /** 防线面板里点"机枪扫射" */
   machineGun(): void {
@@ -1650,6 +1653,32 @@ export class World {
       this.scene.add(g)
       this.mineObjs.push(g)
     }
+    // 探照灯：阳台东头栏杆上一个灯头（装了才露出来）；夜里打仗时亮起来，光柱在院子里左右扫
+    const lamp = new THREE.Group()
+    const metal = new THREE.MeshStandardMaterial({ color: '#2f3336', roughness: 0.45, metalness: 0.7 })
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), metal)
+    pole.position.y = 0.25
+    const head = new THREE.Group()
+    head.position.y = 0.55
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.28, 14), metal)
+    can.rotation.x = Math.PI / 2
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#fff6d8', toneMapped: false }))
+    lens.position.z = 0.141
+    head.add(can, lens)
+    // 光柱：一个透明的锥（开着才看得见）
+    const beamMat = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(1.2, 7, 20, 1, true), beamMat)
+    beam.rotation.x = -Math.PI / 2
+    beam.position.z = 3.6
+    beam.userData.noClick = true
+    head.add(beam)
+    lamp.add(pole, head)
+    lamp.position.set(9.4, FLOOR_H + 0.9, 7.75)
+    lamp.visible = false
+    this.floor2.add(lamp)
+    this.searchlight = { root: lamp, head, beamMat, light: new THREE.SpotLight('#fff1cc', 0, 18, 0.32, 0.5, 1.2) }
+    this.searchlight.light.position.set(9.4, FLOOR_H + 1.45, 7.75)
+    this.scene.add(this.searchlight.light, this.searchlight.light.target)
     this.appliances.generator.push(gen)
     this.appliances.aircon.push(out, inner)
   }
@@ -1659,9 +1688,23 @@ export class World {
   private lidOpen = 0
 
   private readonly mineObjs: THREE.Object3D[] = []
+  private searchlight: { root: THREE.Object3D; head: THREE.Object3D; beamMat: THREE.MeshBasicMaterial; light: THREE.SpotLight } | null = null
 
   private updateHearth(dt: number): void {
     const l = this.life
+    const sl = this.searchlight
+    if (sl) {
+      sl.root.visible = l.light
+      // 夜里打仗时亮起来，在院子里左右扫
+      const on = l.light && !!l.siege && !l.siege.done && this.nightness > 0.4
+      const sweep = Math.sin(this.elapsed * 0.6) * 0.75
+      const tx = 6 + Math.sin(sweep) * 6
+      const tz = 11.2
+      sl.light.target.position.set(tx, 0, tz)
+      sl.light.intensity = on ? 40 : 0
+      sl.beamMat.opacity = on ? 0.08 : 0
+      sl.head.rotation.set(Math.atan2(FLOOR_H + 1.45, Math.hypot(tx - 9.4, tz - 7.75)) * 0.9, Math.atan2(tx - 9.4, tz - 7.75), 0, 'YXZ')
+    }
     this.mineObjs.forEach((o, k) => {
       const m = l.mines[k]
       o.visible = !!m?.armed
@@ -2081,7 +2124,7 @@ export class World {
     for (const z of this.life.siege?.zombies ?? []) {
       let walking = false
       if (z.brute && z.root.scale.x < 1.3) z.root.scale.setScalar(1.36)
-      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed * (z.slowed ? TRAP.slow : 1)) || walking
+      for (let left = sim; left > 1e-6; left -= 0.05) walking = z.follow(Math.min(left, 0.05), z.speed * (z.slowed ? TRAP.slow : 1) * (z.lit ? LIGHT.slow : 1)) || walking
       z.animate(Math.min(sim, 0.1), walking)
       z.root.visible = !(upstairsHidden && z.root.position.y > FLOOR_H - 0.4)
     }
@@ -3778,6 +3821,7 @@ export class World {
       garden: { built: this.life.garden.built, growth: this.life.garden.growth, n: this.life.plots.filter((p) => p.built).length, max: MAX_PLOTS, plots: this.life.plots.filter((p) => p.built).map((p) => ({ icon: cropOf(p.crop)?.icon ?? '🟫', name: cropOf(p.crop)?.name ?? '空地', p: Math.round(p.growth * 100), ripe: !!p.crop && p.growth >= 1 })) },
       mg: this.life.mg,
       mines: { laid: this.life.mines.length > 0, left: this.life.mines.filter((m) => m.armed).length },
+      light: this.life.light,
       temp: { out: this.life.outTemp, in: this.life.inTemp, ac: this.life.acOn, stove: this.life.stoveHeat },
       build: this.life.projects.map((p) => ({
         id: p.id, p: Math.floor(p.done * 100), worker: p.worker,
