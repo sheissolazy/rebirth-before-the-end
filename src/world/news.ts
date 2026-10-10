@@ -55,6 +55,18 @@ const NEW_KINDS: Record<number, string> = {
   3: '警告：一种体型肿胀的感染者被击毙后会爆炸，请远距离射击，别让它贴到门上。',
 }
 
+/** 末日后应急广播里每天换一条的城里的事（按天轮着播） */
+const TOWN_NEWS = [
+  '城东华联超市昨夜被抢空，请市民不要聚集。',
+  '江边码头附近发现大群感染者，沿江住户关紧门窗。',
+  '军区收容点今天开放登记，凭物资排队入住。',
+  '有人在老城区用对讲机喊话求救，频道 6 号。',
+  '自来水厂停运，请把雨水烧开再喝。',
+  '城北加油站起火，浓烟一夜没散。',
+  '一伙穿黑衣服的人在东区挨家收"保护费"，见到请绕开。',
+  '市第一人民医院还有医生值班，急症可以去，路上小心。',
+]
+
 const KIND_NAME: Record<CrisisKind, string> = { horde: '尸潮', scarcity: '抢粮的人', human: '黑鸦扫荡', climate: '暴雨', plague: '疫病' }
 
 function rainLine(day: number, label: string): NewsLine {
@@ -106,6 +118,7 @@ export function buildNews(c: NewsCtx): NewsView {
   if (m === 5) lines.push({ icon: '🌡️', text: '长期预报：下个月起持续高温，最高四十度以上。', tone: 'warn' })
   if (m === 9) lines.push({ icon: '❄️', text: '长期预报：下个月起强冷空气南下，随后是罕见的极寒。', tone: 'warn' })
   lines.push(rainLine(c.day + 1, '明天'))
+  lines.push({ icon: '📻', text: TOWN_NEWS[d % TOWN_NEWS.length] })
   // 这个月新出现了哪种丧尸就先说这个；大夜前一天起改说大夜
   const headline = c.crisisKind && inDays <= 1 ? BROADCAST[c.crisisKind] : (NEW_KINDS[month] ?? BROADCAST[c.crisisKind ?? 'horde'])
   return { mode: 'radio', channel: '市应急广播', date, headline, lines }
