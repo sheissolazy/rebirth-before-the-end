@@ -62,6 +62,8 @@ export interface WorldSave {
   interactions?: Record<string, { day: number; n: number }>
   /** 今天的菜 */
   menu?: string
+  stoveLeft?: number
+  climateNoted?: number
   shares?: Record<string, number>
   costBasis?: Record<string, number>
   stockFate?: boolean
@@ -157,6 +159,8 @@ export function snapshot(life: Household): WorldSave {
     runGain: Object.fromEntries(life.runGain),
     interactions: Object.fromEntries(life.interactions),
     menu: life.menu,
+    stoveLeft: life.stoveLeft,
+    climateNoted: life.climateNoted,
     shares: { ...life.shares },
     costBasis: { ...life.costBasis },
     stockFate: life.stockFate,
@@ -250,6 +254,8 @@ export function restore(life: Household, s: WorldSave): void {
   life.runGain = new Map(Object.entries(s.runGain ?? {}))
   life.interactions = new Map(Object.entries(s.interactions ?? {}))
   life.menu = s.menu ?? 'rice'
+  life.stoveLeft = s.stoveLeft ?? 0
+  life.climateNoted = s.climateNoted ?? -1
   life.shares = { ...(s.shares ?? {}) }
   life.costBasis = { ...(s.costBasis ?? {}) }
   if (s.stockFate !== undefined) life.stockFate = s.stockFate

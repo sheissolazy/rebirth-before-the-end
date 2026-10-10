@@ -350,6 +350,10 @@ export default function WorldView() {
           <div className="relative mt-1.5 flex items-center gap-3 text-[13px] font-semibold tabular-nums" style={{ fontFamily: SERIF }}>
             <span title={t('world.money', { n: hud.money.toLocaleString() })}>💰 {hud.money.toLocaleString()}</span>
             <span title={t('world.cores', { n: hud.cores })}>💎 {hud.cores}</span>
+            <span title={`外面 ${Math.round(hud.temp.out)}° · 屋里 ${Math.round(hud.temp.in)}°${hud.temp.ac ? '（空调开着）' : ''}${hud.temp.stove ? '（火炉烧着）' : ''}`}
+              style={{ color: hud.temp.in >= 35 || hud.temp.in <= 0 ? TONE.bad : hud.temp.out >= 35 || hud.temp.out <= 5 ? TONE.warn : undefined }}>
+              {hud.temp.out >= 35 ? '🌡️' : hud.temp.out <= 5 ? '❄️' : '🌤'} {Math.round(hud.temp.out)}°{Math.round(hud.temp.in) !== Math.round(hud.temp.out) ? ` / 屋里 ${Math.round(hud.temp.in)}°` : ''}
+            </span>
           </div>
           <button onClick={() => togglePop('stock')} title={t('world.stock.more')}
             className="relative mt-1 flex w-full items-center gap-x-3 rounded-sm text-left text-xs font-semibold tabular-nums hover:brightness-125">
@@ -640,6 +644,9 @@ export default function WorldView() {
         <div className="mt-1 flex flex-col gap-1">
           <button onClick={() => world.current?.debugNight(false)} className={DBG}>{t('world.debug.night')}</button>
           <button onClick={() => world.current?.debugNight(true)} className={DBG}>{t('world.debug.crisis')}</button>
+          <button onClick={() => world.current?.debugClimate('heat')} className={DBG}>🌡️ 跳到高温（第 7 个月）</button>
+          <button onClick={() => world.current?.debugClimate('cold')} className={DBG}>❄️ 跳到寒潮（第 11 个月）</button>
+          <button onClick={() => world.current?.debugClimate('frost')} className={DBG}>🥶 跳到极寒（第 12 个月）</button>
           <button onClick={() => world.current?.debugVisitor('jiangye_meet')} className={DBG}>{t('world.debug.jiangye')}</button>
           <button onClick={() => world.current?.debugVisitor('shenyan_meet')} className={DBG}>{t('world.debug.shenyan')}</button>
           <button onClick={() => world.current?.debugVisitor('guchen_visit')} className={DBG}>{t('world.debug.guchenVisit')}</button>

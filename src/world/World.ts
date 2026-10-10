@@ -23,6 +23,7 @@ import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ir
 import type { NewsView } from './news'
 import { freezer, waterDispenser } from './kitchen'
 import { GardenView } from './gardenView'
+import { extremeOf } from './climate'
 import { CROPS, MAX_PLOTS, cropOf, type CropId } from './garden'
 import { LOTTERY, STOCKS, marketState, pad2, stockPrice } from './money'
 import {
@@ -133,6 +134,8 @@ export interface Hud {
   sleepSkip: boolean
   /** 阳台机枪架好了没有 */
   mg: boolean
+  /** 气温：外面、屋里，空调开着没有、火炉在取暖没有 */
+  temp: { out: number; in: number; ac: boolean; stove: boolean }
   /** 屋外：女主身边能搜的地方 */
   search: { kind: string; state: string; progress: number | null } | null
   /** 全新开局的片头正在放 */
@@ -291,12 +294,16 @@ const TMP_TIP = new THREE.Vector3()
 type ToastKey = `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
+const HEAT_TINT = new THREE.Color('#f3c98a')
+const HEAT_SUN = new THREE.Color('#ffd27a')
+const COLD_TINT = new THREE.Color('#dde7f1')
+
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false,
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, temp: { out: 20, in: 20, ac: false, stove: false },
 }
 
 export class World {
@@ -484,6 +491,7 @@ export class World {
   private river: River | null = null
   private elapsed = 0
   private groundMesh: THREE.Mesh | null = null
+  private yardMesh: THREE.Mesh | null = null
 
   constructor(host: HTMLElement, onHud: (h: Hud) => void, style: ArtStyle = 'toon') {
     this.host = host
@@ -521,7 +529,7 @@ export class World {
     this.buildStreet()
     this.scene.add(this.van.parts.root, this.line.group)
     this.spawnActors()
-    this.scene.add(this.rain.lines, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts, this.birds.g)
+    this.scene.add(this.rain.lines, this.rain.flakes, ...this.spotMarks, this.torch, this.torch.target, this.flies.pts, this.birds.g)
     // 钓鱼竿：挂在女主身上（人物空间），竿尖往前上方翘
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.016, 2.0, 6), new THREE.MeshStandardMaterial({ color: '#4b3a2a', roughness: 0.6 }))
     pole.position.y = 1.0
@@ -691,6 +699,7 @@ export class World {
     yard.rotation.x = -Math.PI / 2
     yard.position.set((YARD.x0 + YARD.x1) / 2, -0.01, (YARD.z0 + YARD.z1) / 2)
     yard.receiveShadow = true
+    this.yardMesh = yard
     this.scene.add(ground, yard)
     // 门前的水泥院坝：从檐廊一直铺到铁门里
     const court = new THREE.Mesh(new THREE.PlaneGeometry(COURT.x1 - COURT.x0, COURT.z1 - COURT.z0), toon('#c4beb2', { name: 'concrete' }))
@@ -1830,6 +1839,22 @@ export class World {
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(s.sky).lerp(grey, rain * 0.75)
     else this.scene.background = s.sky.clone()
     this.scene.fog?.color.copy(s.fog).lerp(grey, rain * 0.75)
+    // 高温：天和雾泛黄、太阳更毒；寒潮、极寒：天发白发蓝、太阳没劲
+    const ext = extremeOf(this.life.clock.day)
+    if (ext) {
+      const tint = ext === 'heat' ? HEAT_TINT : COLD_TINT
+      const k = (ext === 'frost' ? 0.5 : ext === 'heat' ? 0.5 : 0.35) * (1 - s.night * 0.7)
+      if (this.scene.background instanceof THREE.Color) this.scene.background.lerp(tint, k)
+      this.scene.fog?.color.lerp(tint, k)
+      this.sun.intensity *= ext === 'heat' ? 1.15 : 0.75
+      if (ext === 'heat') this.sun.color.lerp(HEAT_SUN, 0.4 * (1 - s.night))
+    }
+    // 寒潮、极寒：地上结霜（草地泛白）；白天亮一点，夜里不发光
+    const frost = ext === 'frost' ? 0.42 : ext === 'cold' ? 0.22 : 0
+    for (const m of [this.groundMesh, this.yardMesh]) {
+      const mat = m?.material as THREE.MeshStandardMaterial | undefined
+      if (mat?.emissive) mat.emissive.setRGB(0.62, 0.68, 0.74).multiplyScalar(frost * (1 - s.night * 0.85))
+    }
     // 片头的高空镜头离得远，雾先淡一点，降下来以后恢复
     const introK = this.introT >= 0 ? 0.35 + 0.65 * Math.min(1, this.introT / World.INTRO_S) : 1
     this.fogK = this.introT >= 0 ? introK : this.fogK + (1 - this.fogK) * 0.04
@@ -2256,7 +2281,7 @@ export class World {
       } else this.groanT.set(z, left)
     }
     const rainNow = this.life.rain
-    this.rain.update(Math.min(sim, 0.1), this.pose.target, rainNow)
+    this.rain.update(Math.min(sim, 0.1), this.pose.target, rainNow, this.life.outTemp < 0)
     this.sound.ambience(this.nightness, !fighting, rainNow)
     this.updateLooks()
     for (const a of this.actors) {
@@ -3410,6 +3435,15 @@ export class World {
   }
 
   /** 原型调试：直接跳到末日第一晚（或月底危机夜）的晚上 8 点 50 */
+  /** 原型调试：跳到高温（第 7 个月）/ 寒潮（第 11 个月）/ 极寒（第 12 个月）的第一天上午 */
+  debugClimate(kind: 'heat' | 'cold' | 'frost'): void {
+    const m = kind === 'heat' ? 6 : kind === 'cold' ? 10 : 11
+    this.life.clock = { day: PROLOGUE_DAYS + m * 4, hour: 9 }
+    this.life.resetNight()
+    this.applySky()
+    this.pushLifeHud()
+  }
+
   debugNight(crisis: boolean): void {
     if (this.life.siege) return
     // 只往后跳，不倒回去（倒回去的话出门、访客、菜地这些按时间算的东西都会乱）
@@ -3700,6 +3734,7 @@ export class World {
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth, n: this.life.plots.filter((p) => p.built).length, max: MAX_PLOTS, plots: this.life.plots.filter((p) => p.built).map((p) => ({ icon: cropOf(p.crop)?.icon ?? '🟫', name: cropOf(p.crop)?.name ?? '空地', p: Math.round(p.growth * 100), ripe: !!p.crop && p.growth >= 1 })) },
       mg: this.life.mg,
+      temp: { out: this.life.outTemp, in: this.life.inTemp, ac: this.life.acOn, stove: this.life.stoveHeat },
       build: this.life.projects.map((p) => ({
         id: p.id, p: Math.floor(p.done * 100), worker: p.worker,
         working: this.actors.some((a) => a.name === p.worker && a.task?.kind === 'build'),

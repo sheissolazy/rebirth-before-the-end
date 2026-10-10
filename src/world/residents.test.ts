@@ -2703,3 +2703,70 @@ describe('菜园：多块地、种子、选种什么', () => {
     expect(back.navs[0].isBlockedAt(14.8, 7.6)).toBe(true)
   })
 })
+
+describe('高温、寒潮', () => {
+  const run = (life: Household, hours: number) => {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed); i++) life.tick(dt, () => false)
+  }
+
+  it('第 7 个月下午四十多度：有空调有电屋里 26 度、发电机烧油；没有空调在屋里也会中暑掉血', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 6 * 4, hour: 14 }
+    expect(life.outTemp).toBeGreaterThan(40)
+    expect(life.acOn).toBe(false)
+    expect(life.inTemp).toBeGreaterThan(36)
+    life.aircon = true
+    expect(life.acOn).toBe(false) // 末日后没电
+    life.generator = true
+    life.fuel = 2
+    expect(life.acOn).toBe(true)
+    expect(life.inTemp).toBe(26)
+    life.speed = 3
+    const mom = life.actors[1]
+    const h0 = mom.health
+    run(life, 1)
+    expect(life.fuel).toBeLessThan(2)
+    expect(mom.health).toBeGreaterThanOrEqual(h0 - 0.01)
+    // 关掉空调（拔了）：下午还在四十度上下，屋里三十六七度，渴得快，外面晒着的人中暑
+    life.aircon = false
+    mom.root.position.set(15, 0, 5)
+    const t0 = mom.needs.thirst
+    run(life, 1)
+    expect(mom.needs.thirst).toBeLessThan(t0 - 4)
+    expect(mom.health).toBeLessThan(h0)
+  })
+
+  it('寒潮夜里零下十几度：火炉先烧竹竿、没有就烧汽油，屋里撑到 16 度；什么都没有就冻伤；菜冻死', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: PROLOGUE_DAYS + 10 * 4, hour: 2 }
+    expect(life.outTemp).toBeLessThan(-12)
+    life.bamboo = 1
+    life.fuel = 0
+    expect(life.stoveHeat).toBe(true)
+    expect(life.inTemp).toBe(16)
+    expect(life.fireLit).toBe(true)
+    life.speed = 3
+    run(life, 0.5)
+    expect(life.bamboo).toBe(0)
+    expect(life.stoveLeft).toBeGreaterThan(5)
+    // 竹竿烧完、没有汽油：屋里零下，冻伤
+    life.stoveLeft = 0
+    expect(life.stoveHeat).toBe(false)
+    expect(life.inTemp).toBeLessThan(0)
+    const dad = life.actors[2]
+    const h0 = dad.health
+    run(life, 1)
+    expect(dad.health).toBeLessThan(h0 - 1)
+    // 菜地：零下 12 度以下冻死
+    life.money = 5000
+    life.clock = { day: 0, hour: 9 }
+    life.buildGarden()
+    life.plots[0] = { ...life.plots[0], crop: 'potato', growth: 0.5 }
+    life.clock = { day: PROLOGUE_DAYS + 11 * 4, hour: 3 }
+    run(life, 0.2)
+    expect(life.plots[0].crop).toBeNull()
+    expect(life.log.some((l) => l.key === 'world.garden.frozen')).toBe(true)
+    expect(life.log.some((l) => l.key === 'world.climate.frost')).toBe(true)
+  })
+})

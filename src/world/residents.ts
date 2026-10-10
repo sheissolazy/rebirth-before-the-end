@@ -21,6 +21,7 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { buildNews, type NewsView } from './news'
 import { LOT, LOTTERY, marketState, stockPrice } from './money'
+import { AC_FUEL, BAMBOO_HOURS, STOVE_FUEL, extremeOf, indoorTemp, outdoorTemp, tempEffect } from './climate'
 import { CROPS, MAX_PLOTS, PLOT_SLOTS, cropOf, emptyPlot, growPerDay, plotSpot, type CropId, type Plot } from './garden'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
@@ -556,6 +557,7 @@ export class Household {
     this.orderTick()
     this.healTick()
     this.moneyTick()
+    this.climateTick(hours)
     // 末日后开着电视：发电机烧油
     if (this.clock.day >= PROLOGUE_DAYS && this.tvOn) this.fuel = Math.max(0, this.fuel - hours * GEN_FUEL)
     for (const a of this.actors) {
@@ -682,6 +684,68 @@ export class Household {
     }
   }
 
+  // --- 气温（高温、寒潮） -----------------------------------------------------------
+
+  /** 火炉里这根竹竿还能烧几个小时 */
+  stoveLeft = 0
+  /** 这一轮极端天气提醒过没有（记的是哪个月的） */
+  climateNoted = -1
+
+  /** 外面几度 */
+  get outTemp(): number {
+    return outdoorTemp(this.clock.day, this.clock.hour)
+  }
+
+  /** 有没有电（末日前有；末日后要发电机、还得有油） */
+  get powered(): boolean {
+    return this.clock.day < PROLOGUE_DAYS || (this.generator && this.fuel > 0)
+  }
+
+  /** 空调开着：外面热（30 度以上）、家里有空调、有电 */
+  get acOn(): boolean {
+    return this.aircon && this.powered && this.outTemp > 30
+  }
+
+  /** 火炉在取暖：外面冷（12 度以下）、有东西烧（竹竿或者汽油） */
+  get stoveHeat(): boolean {
+    return this.outTemp < 12 && (this.stoveLeft > 0 || this.bamboo > 0 || this.fuel > 0)
+  }
+
+  /** 屋里几度 */
+  get inTemp(): number {
+    return indoorTemp(this.outTemp, this.acOn, this.stoveHeat)
+  }
+
+  /** 这个人那儿几度（在屋里按屋里算） */
+  tempAt(a: Actor): number {
+    return a.floor === 1 || inRect(HOUSE, a.pos.x, a.pos.z) ? this.inTemp : this.outTemp
+  }
+
+  /** 每个游戏小时：空调、火炉烧油烧竹竿；冷热伤人；极端天气来了提醒一次 */
+  private climateTick(hours: number): void {
+    const ext = extremeOf(this.clock.day)
+    const month = Math.floor((this.clock.day - PROLOGUE_DAYS) / 4)
+    if (ext && this.climateNoted !== month) {
+      this.climateNoted = month
+      this.note(`world.climate.${ext}`)
+      this.onRemind?.(`world.climate.${ext}Toast` as UiKey)
+    }
+    if (this.acOn && this.clock.day >= PROLOGUE_DAYS) this.fuel = Math.max(0, this.fuel - hours * AC_FUEL)
+    if (this.stoveHeat) {
+      if (this.stoveLeft <= 0 && this.bamboo > 0) { this.bamboo -= 1; this.stoveLeft = BAMBOO_HOURS }
+      if (this.stoveLeft > 0) this.stoveLeft = Math.max(0, this.stoveLeft - hours)
+      else this.fuel = Math.max(0, this.fuel - hours * STOVE_FUEL)
+    }
+    for (const a of this.actors) {
+      if (a.dead || a.lost || a.runaway || a.away) continue
+      const e = tempEffect(this.tempAt(a))
+      if (!e.thirst && !e.energy && !e.mood && !e.health) continue
+      const n = a.needs
+      a.needs = { ...n, thirst: Math.max(0, n.thirst - e.thirst * hours), energy: Math.max(0, n.energy - e.energy * hours * (a.esper ? 0.4 : 1)), mood: Math.max(0, n.mood - e.mood * hours) }
+      if (e.health) a.health = Math.max(1, a.health - e.health * hours)
+    }
+  }
+
   // --- 电视、火炉 -------------------------------------------------------------
 
   /** 电视有没有电：末日前有；末日后停电了，要有发电机、还得有油 */
@@ -698,6 +762,8 @@ export class Household {
   get fireLit(): boolean {
     const home = this.actors.filter((a) => !a.dead && !a.away && !this.isOut(a))
     if (home.some((a) => a.task?.phase === 'use' && a.task.spot?.near === 'fire')) return true
+    // 天冷：火炉一直烧着取暖
+    if (this.stoveHeat && home.length) return true
     const h = this.clock.hour
     return (h >= SUNSET || h < 0.5) && home.some((a) => a.task?.kind !== 'sleep')
   }
@@ -2705,8 +2771,17 @@ export class Household {
   /** 每个游戏小时长一点：浇过水（或者下雨）长得快 */
   private gardenGrow(hours: number): void {
     const farmer = this.hasTrait('trait_farmer')
+    const t = this.outTemp
     for (const p of this.plots) {
       if (!p.built || !p.crop || p.growth >= 1) continue
+      // 寒潮：零度以下不长，零下 12 度冻死
+      if (t < -12) {
+        this.note('world.garden.frozen', { crop: cropOf(p.crop)?.name ?? '' })
+        p.crop = null
+        p.growth = 0
+        continue
+      }
+      if (t < 0) continue
       if (this.rain > 0.2) p.watered = this.clock.day
       const c = cropOf(p.crop)
       if (!c) continue
