@@ -6,6 +6,7 @@ import { TRIPS, tripHours } from './expedition'
 import { shopFor } from './shop'
 import { PROLOGUE_DAYS } from './life'
 import type { Barriers } from './siege'
+import type { CropId, Plot } from './garden'
 import type { Clock, Ing, Needs, Stock } from './life'
 
 const PREFIX = (import.meta.env.VITE_SAVE_PREFIX as string | undefined) ?? 'rbte'
@@ -105,6 +106,8 @@ export interface WorldSave {
   helmet?: boolean
   xielinNotes?: number
   garden?: { built: boolean; growth: number; watered: number }
+  plots?: Plot[]
+  seeds?: Partial<Record<CropId, number>>
   cameoSeen?: boolean
   /** 一天只发生一次的事：暴雨后进水、早上送东西、今天来过访客；街上哪里搜过；今晚少来丧尸 */
   flooded?: number
@@ -200,7 +203,8 @@ export function snapshot(life: Household): WorldSave {
     guchenMet: life.guchenMet,
     helmet: life.helmet,
     xielinNotes: life.xielinNotes,
-    garden: { ...life.garden },
+    plots: life.plots.map((p) => ({ ...p })),
+    seeds: { ...life.seeds },
     cameoSeen: life.cameoSeen,
     flooded: life.flooded,
     careDay: life.careDay,
@@ -283,7 +287,10 @@ export function restore(life: Household, s: WorldSave): void {
   life.vanAt = s.vanAt ?? null
   life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, neighbor: 20, ...(s.affection ?? {}) }
   life.xielinNotes = s.xielinNotes ?? 0
-  if (s.garden) life.garden = { ...s.garden }
+  if (s.plots) life.plots = s.plots.map((p) => ({ ...p }))
+  else if (s.garden?.built) life.plots[0] = { built: true, crop: 'bokchoy', growth: s.garden.growth, watered: s.garden.watered, last: 'bokchoy' }
+  life.plots.forEach((p, i) => { if (p.built) life.blockPlot(i) })
+  if (s.seeds) life.seeds = { ...s.seeds }
   life.cameoSeen = !!s.cameoSeen
   life.flooded = s.flooded ?? -1
   life.careDay = s.careDay ?? -1

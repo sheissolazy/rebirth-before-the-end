@@ -22,6 +22,8 @@ import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
 import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ironStove, stool, tvStand } from './hearth'
 import type { NewsView } from './news'
 import { freezer, waterDispenser } from './kitchen'
+import { GardenView } from './gardenView'
+import { CROPS, MAX_PLOTS, cropOf, type CropId } from './garden'
 import { LOTTERY, STOCKS, marketState, pad2, stockPrice } from './money'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
@@ -122,7 +124,7 @@ export interface Hud {
   /** 末日前要做的事（做完打勾） */
   goals: { key: string; done: boolean }[] | null
   /** 菜地：开了没有、长到多少 */
-  garden: { built: boolean; growth: number }
+  garden: { built: boolean; growth: number; n: number; max: number; plots: { icon: string; name: string; p: number; ripe: boolean }[] }
   /** 正在干的工程：干到百分之几、谁在干、这会儿在不在干 */
   build: { id: string; p: number; worker: string; working: boolean }[]
   /** 江边钓鱼：在钓吗、站在钓鱼点旁边吗、今天钓了几条 */
@@ -213,6 +215,15 @@ export interface FurnitureMenu {
   options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: MenuCmd; dish?: string; text?: string; disabled?: boolean }[]
 }
 
+/** 菜地界面 */
+export interface PlotView {
+  i: number
+  who: string
+  crop: { icon: string; name: string; p: number; ripe: boolean; watered: boolean } | null
+  water: number
+  seeds: { id: CropId; icon: string; name: string; days: number; desc: string; have: number; gives: string }[]
+}
+
 /** 做饭界面（冰柜 | 这一锅 | 菜谱） */
 export interface CookView {
   mouths: number
@@ -250,7 +261,7 @@ const HEATER_SCALE = 0.62
 
 /** 家具在菜单标题上叫什么 */
 const FURNITURE_NAMES: [RegExp, string][] = [
-  [/fire_stove|heater/i, '火炉'], [/^tv$|television/i, '电视'], [/stool/i, '小板凳'],
+  [/^plot$/, '菜地'], [/fire_stove|heater/i, '火炉'], [/^tv$|television/i, '电视'], [/stool/i, '小板凳'],
   [/sofa/i, '沙发'], [/bed/i, '床'], [/stove|counter/i, '灶台'], [/fridge/i, '大冰柜'], [/dispenser/i, '饮水机'], [/kettle/i, '水壶'], [/cabinet/i, '柜子'],
   [/rocking/i, '摇椅'], [/bench/i, '长椅'], [/chair/i, '椅子'], [/table/i, '桌子'], [/crate/i, '储物箱'],
 ]
@@ -277,7 +288,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -285,7 +296,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0 }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false,
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false,
 }
 
 export class World {
@@ -442,10 +453,8 @@ export class World {
   /** 女主夜里在屋外的手电筒（一直在场景里，白天亮度 0，免得灯数变化重编译着色器） */
   private readonly torch = new THREE.SpotLight('#fff1cf', 0, 20, 0.5, 0.45, 1.4)
   private readonly bubbles = new Bubbles()
-  /** 菜地：一块土 + 两排苗（苗按长势缩放），熟了头上冒 🥬 */
-  private readonly gardenObj = new THREE.Group()
-  private readonly sprouts: THREE.Object3D[] = []
-  private readonly ripeMark = new THREE.Sprite(bubbleMaterial('🥬'))
+  /** 菜园：四块地（开了才显示），种什么长什么样，地头有木牌 */
+  private readonly gardenView = new GardenView()
   /** 街上能搜的地方头顶的放大镜 */
   private readonly spotMarks: THREE.Sprite[] = SCAVENGE.map((sp) => {
     const m = new THREE.Sprite(bubbleMaterial('🔍'))
@@ -532,7 +541,7 @@ export class World {
       this.sound.splash()
       if (caught) this.toast('world.toast.fish', 1.5)
     }
-    this.buildGarden()
+    this.scene.add(this.gardenView.group)
     this.forage = new ForageView(this.scene)
     this.buildScavengeHits()
     this.buildWellCoop()
@@ -826,40 +835,7 @@ export class World {
     }
   }
 
-  private buildGarden(): void {
-    const w = GARDEN.x1 - GARDEN.x0
-    const d = GARDEN.z1 - GARDEN.z0
-    const soil = new THREE.MeshStandardMaterial({ color: '#4a3324', roughness: 1 })
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), soil)
-    bed.position.set((GARDEN.x0 + GARDEN.x1) / 2, 0.03, (GARDEN.z0 + GARDEN.z1) / 2)
-    bed.receiveShadow = true
-    this.gardenObj.add(bed)
-    const leaf = new THREE.MeshStandardMaterial({ color: '#5f9a3a', roughness: 0.8 })
-    for (let r = 0; r < 2; r++) {
-      const ridge = new THREE.Mesh(new THREE.BoxGeometry(w - 0.3, 0.08, 0.4), soil)
-      ridge.position.set(bed.position.x, 0.1, GARDEN.z0 + 0.55 + r * 0.9)
-      this.gardenObj.add(ridge)
-      for (let k = 0; k < 4; k++) {
-        // 一棵苗：几片叶子（卡通小锥体）
-        const plant = new THREE.Group()
-        for (let l = 0; l < 4; l++) {
-          const blade = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 5), leaf)
-          blade.position.y = 0.2
-          blade.rotation.set(0.5 * Math.cos(l * 1.6), 0, 0.5 * Math.sin(l * 1.6))
-          blade.castShadow = true
-          plant.add(blade)
-        }
-        plant.position.set(GARDEN.x0 + 0.45 + k * 0.57, 0.12, GARDEN.z0 + 0.55 + r * 0.9)
-        this.sprouts.push(plant)
-        this.gardenObj.add(plant)
-      }
-    }
-    this.ripeMark.position.set(bed.position.x, 1.3, bed.position.z)
-    this.ripeMark.scale.setScalar(0.6)
-    this.gardenObj.add(this.ripeMark)
-    this.gardenObj.visible = false
-    this.scene.add(this.gardenObj)
-  }
+
 
   /** 两个人走得太近就让一让——只让一个人让：
    *  以前两个人同时往各自右手边让，在桌子和楼梯中间这种窄地方会绕着对方转圈、谁也过不去。
@@ -1749,6 +1725,29 @@ export class World {
     }
   }
 
+  /** 点了一块菜地：种的什么、长到哪了、能干什么、家里有哪些种子 */
+  plotView(i: number): PlotView {
+    const l = this.life
+    const p = l.plots[i]
+    const c = cropOf(p.crop)
+    return {
+      i, who: (this.mode === 'home' ? this.selected : this.heroine).name,
+      crop: c ? { icon: c.icon, name: c.name, p: Math.round(p.growth * 100), ripe: p.growth >= 1, watered: p.watered === l.clock.day } : null,
+      water: l.available.water,
+      seeds: CROPS.map((x) => ({ id: x.id, icon: x.icon, name: x.name, days: x.days, desc: x.desc, have: l.seeds[x.id] ?? 0,
+        gives: [x.gives.veg ? `菜 ${x.gives.veg}` : '', x.gives.grain ? `主食 ${x.gives.grain}` : '', x.gives.herbs ? `草药 ${x.gives.herbs}` : ''].filter(Boolean).join('、') })),
+    }
+  }
+
+  /** 菜地界面点了：种什么 / 浇水 / 收菜 / 拔掉 */
+  plotCommand(i: number, act: 'plant' | 'water' | 'harvest' | 'clear', crop?: CropId): string {
+    const who = this.mode === 'home' ? this.selected : this.heroine
+    const r = this.life.commandPlot(who, i, act, crop)
+    if (r !== 'ok' || act !== 'clear') this.toast(`world.plot.r.${r}`, 3, { who: who.name })
+    this.pushLifeHud()
+    return r
+  }
+
   /** 做饭界面点了"开始做" */
   cookAction(id: string): string {
     const r = this.life.cookPot(this.mode === 'home' ? this.selected : this.heroine, id)
@@ -2174,20 +2173,9 @@ export class World {
     this.updateHearth(dt)
     this.updateTargetRing()
     this.updatePops(dt)
-    const g = this.life.garden
+    // 菜园：开地的时候先翻土再围木板；种的菜跟着长势长高
     const digging = this.life.projects.find((p) => p.id === 'garden')?.done ?? -1
-    this.gardenObj.visible = g.built || digging >= 0
-    // 开地的时候：先翻出一块土，再起两道垄，菜苗等开好了才种上
-    if (!g.built && digging >= 0) {
-      const kids = this.gardenObj.children
-      kids.forEach((c, k) => { c.visible = k === 0 ? true : c === this.ripeMark || this.sprouts.includes(c as THREE.Group) ? false : digging > (k < 6 ? 0.35 : 0.7) })
-    } else if (g.built) this.gardenObj.children.forEach((c) => { if (c !== this.ripeMark) c.visible = true })
-    if (g.built) {
-      const sc = 0.2 + g.growth * 0.8
-      this.sprouts.forEach((p, k) => { p.scale.setScalar(sc * (0.9 + (k % 3) * 0.08)); p.rotation.y = Math.sin(this.elapsed * 0.8 + k) * 0.05 })
-      this.ripeMark.visible = g.growth >= 1 && this.mode === 'home'
-      this.ripeMark.position.y = 1.3 + Math.sin(this.elapsed * 2) * 0.05
-    }
+    this.gardenView.update(this.life.plots, this.life.nextPlot, digging, this.life.clock.day, this.elapsed)
     if (this.doomT > 0 && (this.doomT -= dt) <= 0) this.setHud({ doom: false })
     // 末日后：危机夜当天早上提醒一次；每天傍晚提醒丧尸要来了
     const ck = this.life.clock
@@ -2492,7 +2480,7 @@ export class World {
     this.life.cancel(this.heroine)
     this.life.cancelSearch()
     this.life.stopFishing()
-    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.builtPlotRects())
     // 停的地方在这个画风里被东西压住了（换过画风）：先挪回院子车位
     if (this.life.vanAt && this.vanStuck(this.life.vanAt)) {
       this.life.vanAt = null
@@ -2510,7 +2498,7 @@ export class World {
     const d = this.driving
     if (!d) return
     if (!force && Math.abs(d.speed) > 0.6) { this.toast('world.toast.stopFirst', 1.5); return }
-    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.builtPlotRects())
     // 车卡死了（比如菜地开在车底下）也让她下来
     const at = this.exitSpot(d, force || this.vanStuck(d))
     if (!at) { this.toast('world.toast.noExit', 1.5); return }
@@ -2532,7 +2520,7 @@ export class World {
   /** 下车站哪：车门边一个走得到的点（不隔着围栏、墙，跟车在院子同一边）；force 时找不到就找最近的空格子 */
   private exitSpot(d: { x: number; z: number; rot: number }, force: boolean): { x: number; z: number } | null {
     const nav = this.navs[0]
-    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.builtPlotRects())
     const wall = this.carBlocked
     const fx = Math.sin(d.rot)
     const fz = Math.cos(d.rot)
@@ -2564,7 +2552,7 @@ export class World {
     const k = this.keys
     const throttle = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0)
     const steer = (k.has('a') || k.has('arrowleft') ? 1 : 0) - (k.has('d') || k.has('arrowright') ? 1 : 0)
-    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.garden.built)
+    this.carBlocked ??= vehicleBlocker(this.style === 'paradise' ? PARADISE_EXTRAS : [], () => this.life.builtPlotRects())
     const next = driveStep(d, throttle, steer, dt, this.carBlocked)
     this.driving = next
     this.life.vanAt = { x: next.x, z: next.z, rot: next.rot }
@@ -2661,6 +2649,8 @@ export class World {
       const hit = this.furnitureUnder(floor)
       if (hit && (hit.userData.piece === 'diary' || hit.userData.piece === 'desk')) { this.onDiary?.(); return }
       if (hit && hit.userData.piece === 'wall_map') { this.onMap?.(); return }
+      // 菜地：选种什么、浇水、收菜
+      if (hit && hit.userData.slug === 'plot') { this.onPlot?.(hit.userData.plot as number); return }
       // 储藏室的铁架子、木箱：看看家里有什么
       if (hit && isStorage(hit)) { this.onStock?.(); return }
       if (hit && (hit.userData.slug === 'large_iron_gate' || hit.userData.gate)) { this.onMap?.(); return }
@@ -3319,6 +3309,7 @@ export class World {
   /** 界面设置：点了日记本 / 墙上的地图 / 储藏室的架子 */
   onDiary: (() => void) | null = null
   onStock: (() => void) | null = null
+  onPlot: ((i: number) => void) | null = null
   onMap: (() => void) | null = null
   /** 有人到了店里：弹出交易界面 */
   onShop: ((v: ShopView) => void) | null = null
@@ -3707,7 +3698,7 @@ export class World {
       space: { ...this.life.space, cap: this.life.spaceCap },
       molotovs: this.life.molotovs,
       search: this.searchHud(),
-      garden: { built: this.life.garden.built, growth: this.life.garden.growth },
+      garden: { built: this.life.garden.built, growth: this.life.garden.growth, n: this.life.plots.filter((p) => p.built).length, max: MAX_PLOTS, plots: this.life.plots.filter((p) => p.built).map((p) => ({ icon: cropOf(p.crop)?.icon ?? '🟫', name: cropOf(p.crop)?.name ?? '空地', p: Math.round(p.growth * 100), ripe: !!p.crop && p.growth >= 1 })) },
       mg: this.life.mg,
       build: this.life.projects.map((p) => ({
         id: p.id, p: Math.floor(p.done * 100), worker: p.worker,

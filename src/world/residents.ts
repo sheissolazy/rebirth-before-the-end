@@ -1,7 +1,7 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, TV, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, wallPieces, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, HOUSE, PARADISE_SPOTS, SPOTS, TV, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, wallPieces, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
@@ -21,6 +21,7 @@ import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { buildNews, type NewsView } from './news'
 import { LOT, LOTTERY, marketState, stockPrice } from './money'
+import { CROPS, MAX_PLOTS, PLOT_SLOTS, cropOf, emptyPlot, growPerDay, plotSpot, type CropId, type Plot } from './garden'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
@@ -92,6 +93,9 @@ interface Task {
   dish?: string
   /** 做饭：这一锅做几人份 */
   servings?: number
+  /** 菜地：第几块、种什么（没有 crop 就是浇水或者收菜） */
+  plot?: number
+  crop?: CropId
   /** 玩家亲口下令接着干的工程：天黑也干，只有快累垮、快渴死、快饿死才停 */
   forced?: boolean
   /** 做饭：已经从家里拿了料（被叫走时还回去） */
@@ -422,7 +426,19 @@ export class Household {
   /** 第一个尸潮危机夜街尽头那个人（阿寂的伏笔），看过就不再出现 */
   cameoSeen = false
   /** 菜地：开了没有、长到多少（1 = 能收）、哪天浇过水 */
-  garden: { built: boolean; growth: number; watered: number } = { built: false, growth: 0, watered: -1 }
+  /** 四块菜地（开了几块、各种的什么、长到哪了） */
+  plots: Plot[] = PLOT_SLOTS.map(() => emptyPlot())
+  /** 家里的种子（几包）：外婆家本来就有两包小白菜、一包小葱 */
+  seeds: Partial<Record<CropId, number>> = { bokchoy: 2, scallion: 1 }
+  /** 老的"一块菜地"接口（界面、老测试用）：开了没有、长得最快那块到哪了、第一块哪天浇的水 */
+  get garden(): { built: boolean; growth: number; watered: number } {
+    const built = this.plots.filter((p) => p.built)
+    return { built: built.length > 0, growth: Math.max(0, ...built.filter((p) => p.crop).map((p) => p.growth)), watered: this.plots[0].watered }
+  }
+  /** 下一块要开的地（都开了是 -1） */
+  get nextPlot(): number {
+    return this.plots.findIndex((p) => !p.built)
+  }
   /** 末日前去军区门口见过顾沉 */
   guchenMet = false
   /** 顾沉送的头盔：女主被咬伤害减半 */
@@ -1949,6 +1965,10 @@ export class Household {
       const n = g[k]
       if (n) { this.gainFood(k, n); what.push(t_(`world.unit.${k}` as UiKey, { n })) }
     }
+    for (const c of CROPS) {
+      const n = g[`seed_${c.id}`]
+      if (n) { this.seeds[c.id] = (this.seeds[c.id] ?? 0) + n; what.push(`${n} 包${c.name}种子`) }
+    }
     add('water', g.water)
     add('ammo', g.ammo)
     add('medkits', g.medkits)
@@ -2480,9 +2500,10 @@ export class Household {
   startBuild(id: BuildId, who: Actor): 'ok' | 'money' | 'cores' | 'busy' | 'done' | 'fight' | 'van' | 'nobody' {
     if (this.siege && !this.siege.done) return 'fight'
     if (this.projects.some((p) => p.id === id)) return 'busy'
-    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.garden.built) || (id === 'mg' && this.mg)) return 'done'
+    if ((id === 'trap' && this.trap.hp > 0) || (id === 'wall' && this.wall) || (id === 'garden' && this.nextPlot < 0) || (id === 'mg' && this.mg)) return 'done'
     const v = this.vanAt
-    if (id === 'garden' && v && v.x > GARDEN.x0 - 2 && v.x < GARDEN.x1 + 2 && v.z > GARDEN.z0 - 1.2 && v.z < GARDEN.z1 + 1.2) return 'van'
+    const slot = PLOT_SLOTS[Math.max(0, this.nextPlot)]
+    if (id === 'garden' && v && v.x > slot.x0 - 2 && v.x < slot.x1 + 2 && v.z > slot.z0 - 1.2 && v.z < slot.z1 + 1.2) return 'van'
     // 选中的人有空就派 TA；TA 在干别的工程（或者干不了）就找家里别的有空的人，会修东西的优先
     const worker = this.freeForBuild(who) ? who
       : this.actors.find((a) => a.handy && this.freeForBuild(a)) ?? this.actors.find((a) => this.freeForBuild(a))
@@ -2535,7 +2556,7 @@ export class Household {
     if (!p) return null
     let spot: Spot
     let piece: number | undefined
-    if (p.id === 'garden') spot = GARDEN_SPOT
+    if (p.id === 'garden') spot = plotSpot(Math.max(0, this.nextPlot))
     // 机枪位：二楼阳台上，面朝院子
     else if (p.id === 'mg') spot = { kind: 'stroll', x: 3.2, z: 7.1, floor: 1, face: 0, pose: 'work' }
     else if (p.id === 'trap') spot = { kind: 'stroll', x: 3.6 + Math.floor(p.done * 3) * 0.7, z: 13.75, floor: 0, face: 0, pose: 'work' }
@@ -2609,16 +2630,19 @@ export class Household {
       this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 100)
       this.note('world.log.wall')
     }
-    if (p.id === 'garden') { this.garden = { built: true, growth: 0, watered: -1 }; this.note('world.log.gardenBuilt') }
+    if (p.id === 'garden') this.openPlot()
     if (p.id === 'mg') { this.mg = true; this.note('world.log.mgBuilt', { who: p.worker }) }
     this.onRemind?.(`world.build.done.${p.id}` as UiKey)
   }
 
+  /** 马上开一块地（原型调试、老测试用；平常走"建设"派人去开） */
   buildGarden(): boolean {
+    const i = this.nextPlot
+    if (i < 0) return false
+    const r = PLOT_SLOTS[i]
     // 车停在那块地上：先挪车
     const v = this.vanAt
-    if (v && v.x > GARDEN.x0 - 2 && v.x < GARDEN.x1 + 2 && v.z > GARDEN.z0 - 1.2 && v.z < GARDEN.z1 + 1.2) return false
-    if (this.garden.built) return false
+    if (v && v.x > r.x0 - 2 && v.x < r.x1 + 2 && v.z > r.z0 - 1.2 && v.z < r.z1 + 1.2) return false
     if (this.clock.day < PROLOGUE_DAYS) {
       if (this.money < Household.GARDEN_COST) return false
       this.money -= Household.GARDEN_COST
@@ -2626,40 +2650,128 @@ export class Household {
       if (this.cores < Household.GARDEN_CORES) return false
       this.cores -= Household.GARDEN_CORES
     }
-    this.garden = { built: true, growth: 0, watered: -1 }
-    this.note('world.log.gardenBuilt')
+    this.openPlot()
     return true
   }
 
+  /** 下一块地开好了：挡上（人绕着走）、记一笔 */
+  private openPlot(): void {
+    const i = this.nextPlot
+    if (i < 0) return
+    this.plots[i] = { ...emptyPlot(), built: true }
+    this.blockPlot(i)
+    this.note('world.log.gardenBuilt', { n: i + 1 })
+  }
+
+  /** 开好的菜地人不能踩（绕着走）；读档后也要重新挡上 */
+  blockPlot(i: number): void {
+    const r = PLOT_SLOTS[i]
+    this.navs[0].blockRect(r.x0 + 0.1, r.z0 + 0.1, r.x1 - 0.1, r.z1 - 0.1)
+  }
+
+  /** 开好的菜地（车也不能压） */
+  builtPlotRects(): { x0: number; z0: number; x1: number; z1: number }[] {
+    return this.plots.flatMap((p, i) => (p.built ? [PLOT_SLOTS[i]] : []))
+  }
+
+  /** 种这块地用什么：上一茬种的（还有种子）→ 家里种子最多的那样 */
+  private seedFor(p: Plot): CropId | null {
+    if (p.last && (this.seeds[p.last] ?? 0) > 0) return p.last
+    const have = CROPS.filter((c) => (this.seeds[c.id] ?? 0) > 0).sort((a, b) => (this.seeds[b.id] ?? 0) - (this.seeds[a.id] ?? 0))
+    return have[0]?.id ?? null
+  }
+
+  /** 家里人自己去照料菜地：熟了的先收，空着的种上，没浇水的浇水 */
   private gardenTask(): Task | null {
-    const g = this.garden
-    if (!g.built || this.taken.has(GARDEN_SPOT)) return null
-    const ripe = g.growth >= 1
-    if (!ripe && (g.watered === this.clock.day || this.available.water < 0.4)) return null
-    return { kind: 'garden', spot: GARDEN_SPOT, phase: 'go', hours: ripe ? 0.6 : 0.4, manual: false }
+    const free = (i: number) => !this.actors.some((a) => a.task?.kind === 'garden' && a.task.plot === i)
+    const job = (i: number, hours: number, crop?: CropId): Task => ({ kind: 'garden', spot: plotSpot(i), phase: 'go', hours, manual: false, plot: i, crop })
+    for (let i = 0; i < MAX_PLOTS; i++) {
+      const p = this.plots[i]
+      if (p.built && p.crop && p.growth >= 1 && free(i)) return job(i, 0.6)
+    }
+    for (let i = 0; i < MAX_PLOTS; i++) {
+      const p = this.plots[i]
+      const seed = p.built && !p.crop ? this.seedFor(p) : null
+      if (seed && free(i)) return job(i, 0.5, seed)
+    }
+    if (this.available.water < 0.4) return null
+    for (let i = 0; i < MAX_PLOTS; i++) {
+      const p = this.plots[i]
+      if (p.built && p.crop && p.growth < 1 && p.watered !== this.clock.day && free(i)) return job(i, 0.4)
+    }
+    return null
   }
 
   /** 每个游戏小时长一点：浇过水（或者下雨）长得快 */
   private gardenGrow(hours: number): void {
-    const g = this.garden
-    if (!g.built || g.growth >= 1) return
-    if (this.rain > 0.2) g.watered = this.clock.day
-    const rate = (g.watered === this.clock.day ? 0.5 : 0.12) * (this.hasTrait('trait_farmer') ? 1.6 : 1) // 每天
-    g.growth = Math.min(1, g.growth + (rate * hours) / 24)
+    const farmer = this.hasTrait('trait_farmer')
+    for (const p of this.plots) {
+      if (!p.built || !p.crop || p.growth >= 1) continue
+      if (this.rain > 0.2) p.watered = this.clock.day
+      const c = cropOf(p.crop)
+      if (!c) continue
+      p.growth = Math.min(1, p.growth + (growPerDay(c, p.watered === this.clock.day, farmer) * hours) / 24)
+    }
   }
 
-  /** 照料菜地做完：熟了就收 3 份吃的，没熟就浇水（用掉一点水） */
-  private finishGarden(): void {
-    const g = this.garden
-    if (g.growth >= 1) {
-      g.growth = 0
-      this.gainFood('veg', 3)
-      this.onGain?.('🥬+3', null, { x: (GARDEN.x0 + GARDEN.x1) / 2, z: (GARDEN.z0 + GARDEN.z1) / 2 })
-      this.note('world.log.harvest')
-    } else if (g.watered !== this.clock.day) {
-      this.take('water', 0.3)
-      g.watered = this.clock.day
+  /** 照料菜地做完：要种就种上，熟了就收，没熟就浇水（用掉一点水） */
+  private finishGarden(a: Actor, t: Task): void {
+    const i = t.plot ?? 0
+    const p = this.plots[i]
+    if (!p?.built) return
+    const r = PLOT_SLOTS[i]
+    const at = { x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 }
+    if (t.crop && !p.crop) {
+      if ((this.seeds[t.crop] ?? 0) <= 0) return
+      this.seeds[t.crop] = (this.seeds[t.crop] ?? 0) - 1
+      this.plots[i] = { ...p, crop: t.crop, growth: 0, watered: this.clock.day, last: t.crop }
+      this.take('water', 0.2)
+      this.onGain?.(`🌱 ${cropOf(t.crop)?.name}`, a)
+      if (!CROPS.some((c) => (this.seeds[c.id] ?? 0) > 0)) this.note('world.garden.noSeeds')
+      return
     }
+    if (p.crop && p.growth >= 1) {
+      const c = cropOf(p.crop)!
+      const g = c.gives
+      if (g.veg) this.gainFood('veg', g.veg)
+      if (g.grain) this.gainFood('grain', g.grain)
+      if (g.herbs) this.herbs += g.herbs
+      // 一半机会留一包种（末日后买不到种子，靠这个接着种）
+      const keep = this.rand() < 0.5
+      if (keep) this.seeds[c.id] = (this.seeds[c.id] ?? 0) + 1
+      const got = [g.veg ? `🥬+${g.veg}` : '', g.grain ? `🌾+${g.grain}` : '', g.herbs ? `🌿+${g.herbs}` : '', keep ? '🌱+1' : ''].filter(Boolean).join(' ')
+      this.onGain?.(`${c.icon} ${got}`, null, at)
+      this.plots[i] = { ...p, crop: null, growth: 0 }
+      this.note('world.log.harvest', { crop: c.name })
+      return
+    }
+    if (p.crop && p.watered !== this.clock.day) {
+      this.take('water', 0.3)
+      p.watered = this.clock.day
+    }
+  }
+
+  /** 点菜地选了：种什么 / 浇水 / 收菜 / 拔掉（选中的人去干；拔掉马上就拔） */
+  commandPlot(a: Actor, i: number, act: 'plant' | 'water' | 'harvest' | 'clear', crop?: CropId): 'ok' | 'busy' | 'seeds' | 'none' | 'water' {
+    const p = this.plots[i]
+    if (!p?.built) return 'none'
+    if (act === 'clear') {
+      if (!p.crop) return 'none'
+      this.plots[i] = { ...p, crop: null, growth: 0 }
+      return 'ok'
+    }
+    if (this.isOut(a) || a.away || a.dead || this.isInjured(a) || (this.siege && !this.siege.done)) return 'busy'
+    if (act === 'plant') {
+      if (!crop || (this.seeds[crop] ?? 0) <= 0) return 'seeds'
+      if (p.crop) this.plots[i] = { ...p, crop: null, growth: 0 }
+    } else if (act === 'harvest' && !(p.crop && p.growth >= 1)) return 'none'
+    else if (act === 'water') {
+      if (!p.crop || p.growth >= 1) return 'none'
+      if (this.available.water < 0.3) return 'water'
+    }
+    this.cancel(a)
+    this.assign(a, { kind: 'garden', spot: plotSpot(i), phase: 'go', hours: act === 'harvest' ? 0.6 : act === 'plant' ? 0.5 : 0.4, manual: true, plot: i, crop: act === 'plant' ? crop : undefined })
+    return 'ok'
   }
 
   /** 最外面一层坏了的防线（白天爸爸会去修） */
@@ -3393,7 +3505,7 @@ export class Household {
       if (fx) this.onGain?.(`${d.icon} ${fx}`, a)
     }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
-    if (t.kind === 'garden') this.finishGarden()
+    if (t.kind === 'garden' && t.hours <= 0) this.finishGarden(a, t)
     if (t.kind === 'forage' && t.hours <= 0 && t.forage) this.pickForage(a, t.forage)
     if (t.kind === 'pump' && t.hours <= 0) {
       this.stock = { ...this.stock, water: this.stock.water + Household.PUMP_WATER }

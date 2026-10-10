@@ -1,6 +1,7 @@
 // 出门采购：到了店里弹出交易界面，自己挑要买什么。末日前花钱；末日后只有军区基地还在"做生意"，收晶核。
 // 价格越接近末日越贵（大家开始抢购）；能带回来多少看去了几个人、开没开车。
 import type { TripStock } from './expedition'
+import { CROPS, type CropId } from './garden'
 
 export type ShopCat = 'food' | 'water' | 'med' | 'defense' | 'other'
 
@@ -17,7 +18,7 @@ export interface ShopItem {
   /** 这家店一趟最多卖几份 */
   stock: number
   /** 买一份得到什么 */
-  give: Partial<TripStock> & { meat?: number; veg?: number; egg?: number; gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean; generator?: boolean; aircon?: boolean }
+  give: Partial<TripStock> & Partial<Record<`seed_${CropId}`, number>> & { meat?: number; veg?: number; egg?: number; gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean; generator?: boolean; aircon?: boolean }
   /** 只能买一次（家里有了就不卖了） */
   once?: boolean
 }
@@ -42,6 +43,11 @@ export interface ShopDef {
   items: ShopItem[]
   /** 这家店收什么 */
   buys?: SellItem[]
+}
+
+/** 菜种子（五金店、网上卖）：一包种一块地 */
+function seedItems(): ShopItem[] {
+  return CROPS.map((c) => ({ id: `seed_${c.id}`, name: `${c.name}种子（一包）`, icon: c.icon, cat: 'other' as ShopCat, desc: `种一块菜地。${c.desc}`, price: c.seedPrice, weight: 0, stock: 6, give: { [`seed_${c.id}`]: 1 } }))
 }
 
 export const SHOPS: ShopDef[] = [
@@ -70,6 +76,7 @@ export const SHOPS: ShopDef[] = [
       { id: 'bottles', name: '汽油瓶和布条', icon: '🔥', cat: 'defense', desc: '回家灌上油就是两个燃烧瓶。', price: 300, weight: 1, stock: 4, give: { molotovs: 2 } },
       { id: 'bamboo', name: '一捆竹竿', icon: '🎋', cat: 'defense', desc: '三根，爸爸能削成一排竹尖刺。', price: 200, weight: 2, stock: 3, give: { bamboo: 3 } },
       { id: 'crossbow', name: '复合弩', icon: '🏹', cat: 'defense', desc: '没声音，箭能捡回来再用，给爸爸用正合适。', price: 1500, weight: 2, stock: 1, give: { crossbow: true }, once: true },
+      ...seedItems(),
       { id: 'generator', name: '汽油发电机', icon: '🔌', cat: 'other', desc: '末日后停电，有它电视才收得到应急广播，以后高温、寒潮开空调也靠它。开着烧汽油。', price: 3200, weight: 4, stock: 1, give: { generator: true }, once: true },
     ],
   },
@@ -222,7 +229,7 @@ const pick = (ids: string[]) => ids.map((id) => {
 export const ONLINE_SHOP: ShopDef = {
   id: 'online', currency: 'money', phase: 'prologue',
   items: [
-    ...pick(['rice', 'noodles', 'cans', 'eggs', 'veggies', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire', 'generator']),
+    ...pick(['rice', 'noodles', 'cans', 'eggs', 'veggies', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire', 'generator', ...CROPS.map((c) => `seed_${c.id}`)]),
     // 家电只在网上买（店里搬不回来）
     { id: 'aircon', name: '空调（一拖一）', icon: '❄️', cat: 'other', desc: '前世第七个月高温四十多度。末日后停电，要配发电机才开得起来。', price: 3800, weight: 4, stock: 1, give: { aircon: true }, once: true },
   ],

@@ -442,7 +442,7 @@ export function vanPose(move: VanMove | null, away: boolean, absHour: number, at
 
 /** 开车用的碰撞：比走路的格子图（半米一格）细，按真实的围栏、房子、树、车、木桶、长椅算；
  *  铁门那两米是空的，自家车位不算挡 */
-export function vehicleBlocker(extra: Placement[] = [], gardenBuilt: () => boolean = () => true): (x: number, z: number) => boolean {
+export function vehicleBlocker(extra: Placement[] = [], plots: () => Rect[] = () => [GARDEN]): (x: number, z: number) => boolean {
   const rects: Rect[] = []
   const add = (x0: number, z0: number, x1: number, z1: number) => rects.push({ x0, z0, x1, z1 })
   for (const s of fenceSegments()) {
@@ -470,9 +470,9 @@ export function vehicleBlocker(extra: Placement[] = [], gardenBuilt: () => boole
   for (const z of [CLOTHESLINE.z0, CLOTHESLINE.z1]) add(CLOTHESLINE.x - 0.12, z - 0.12, CLOTHESLINE.x + 0.12, z + 0.12)
   for (const l of STREET_LAMPS) add(l.x - 0.15, l.z - 0.15, l.x + 0.15, l.z + 0.15)
   // 菜地开了才挡（没开的时候那里就是草地）
-  const inGarden = (x: number, z: number) => x > GARDEN.x0 && x < GARDEN.x1 && z > GARDEN.z0 && z < GARDEN.z1
+  const inRectXZ = (r: Rect, x: number, z: number) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1
   return (x, z) => x < WORLD.x0 + 0.5 || x > WORLD.x1 - 0.5 || z < WORLD.z0 + 0.5 || z > WORLD.z1 - 0.5
-    || rects.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) || (inGarden(x, z) && gardenBuilt())
+    || rects.some((r) => inRectXZ(r, x, z)) || plots().some((r) => inRectXZ(r, x, z))
 }
 
 export interface DriveState { x: number; z: number; rot: number; speed: number }

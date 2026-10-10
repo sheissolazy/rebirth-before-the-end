@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lt, t, type UiKey } from '../i18n'
 import { locations } from '../content/locations'
-import { EMPTY_HUD, World, type CookView, type FurnitureMenu, type Holdings, type Hud, type PhoneView } from './World'
+import { EMPTY_HUD, World, type CookView, type FurnitureMenu, type Holdings, type Hud, type PhoneView, type PlotView } from './World'
 import { loadStyle, saveStyle, type ArtStyle } from './paradise'
 import { DEPRESSED, calendarLabel } from './life'
 import type { PersonHud } from './residents'
@@ -12,6 +12,7 @@ import { PhonePanel } from './PhonePanel'
 import { NewsPanel } from './NewsPanel'
 import { CookPanel } from './CookPanel'
 import { HoldingsPanel } from './HoldingsPanel'
+import { GardenPanel } from './GardenPanel'
 import type { NewsView } from './news'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
@@ -198,6 +199,7 @@ export default function WorldView() {
   const [news, setNews] = useState<NewsView | null>(null)
   const [cook, setCook] = useState<CookView | null>(null)
   const [hold, setHold] = useState<Holdings | null>(null)
+  const [plot, setPlot] = useState<PlotView | null>(null)
   // 打丧尸时点防线 / 丧尸弹出的面板（开枪、燃烧瓶、救人）
   const [linePanel, setLinePanel] = useState(false)
   const setDiary = (open: boolean) => {
@@ -233,6 +235,7 @@ export default function WorldView() {
       else if (keptSpeed.current !== null) w.setSpeed(keptSpeed.current)
       w.onDiary = () => setDiary(true)
       w.onStock = () => setHold(world.current?.holdings() ?? null)
+      w.onPlot = (i) => setPlot(world.current?.plotView(i) ?? null)
       w.onMap = () => setMap(true)
       w.onFurnitureMenu = (m) => setFurn(m)
       w.onLinePanel = (open) => setLinePanel(open)
@@ -252,7 +255,7 @@ export default function WorldView() {
   const visitId = hud.visit?.id ?? null
   // 家里几张嘴（存货够几天按人头算，一人一天大约一份吃的、一份水）
   const mouths = Math.max(1, hud.people.filter((p) => !p.gone).length)
-  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone || !!news || !!cook || !!hold
+  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone || !!news || !!cook || !!hold || !!plot
   // 面板一出现就停（layout effect 跟渲染同步，中间不会漏掉一次按空格或调速）
   useLayoutEffect(() => {
     const w = world.current
@@ -424,13 +427,16 @@ export default function WorldView() {
                     {t(hud.prologue ? 'world.wall.build' : 'world.wall.buildCores')}
                   </button>
                 )}
-                {!hud.garden.built ? (
+                {hud.garden.n < hud.garden.max ? (
                   <button onClick={() => world.current?.buildGardenPlot()} disabled={hud.build.some((b) => b.id === 'garden') || (hud.prologue ? hud.money < 800 : hud.cores < 2)} className={BUILD} title={t('world.build.hours', { h: 2 })}>
-                    {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores')}
+                    {t(hud.prologue ? 'world.garden.build' : 'world.garden.buildCores', { n: hud.garden.n, max: hud.garden.max })}
                   </button>
                 ) : (
-                  <div className={BUILD_DONE}>{t(hud.garden.growth >= 1 ? 'world.garden.ripe' : 'world.garden.growing', { p: Math.round(hud.garden.growth * 100) })}</div>
+                  <div className={BUILD_DONE}>{t('world.garden.allBuilt')}</div>
                 )}
+                {hud.garden.plots.map((p, k) => (
+                  <div key={k} className={BUILD_DONE}>{p.icon} 第 {k + 1} 块：{p.name}{p.name !== '空地' ? (p.ripe ? ' · 熟了' : ` · ${p.p}%`) : '（点菜地选种什么）'}</div>
+                ))}
                 {!hud.mg && !hud.build.some((b) => b.id === 'mg') && (
                   <button onClick={() => world.current?.buildMachineGun()} disabled={hud.prologue ? hud.money < 8000 : hud.cores < 8} className={BUILD} title={t('world.build.hours', { h: 3 })}>
                     {t(hud.prologue ? 'world.mg.build' : 'world.mg.buildCores')}
@@ -889,6 +895,7 @@ export default function WorldView() {
           else if (o.spot) world.current?.useFurniture(o.spot)
         }} />}
       {news && <NewsPanel view={news} onClose={() => setNews(null)} />}
+      {plot && <GardenPanel view={plot} onClose={() => setPlot(null)} onAct={(act, crop) => { const r = world.current?.plotCommand(plot.i, act, crop); if (r === 'ok' && act !== 'clear') setPlot(null); else setPlot(world.current?.plotView(plot.i) ?? null) }} />}
       {hold && <HoldingsPanel view={hold} onClose={() => setHold(null)} />}
       {cook && <CookPanel view={cook} onClose={() => setCook(null)} onCook={(id) => world.current?.cookAction(id) ?? 'busy'} />}
 

@@ -2629,3 +2629,77 @@ describe('炒股、彩票', () => {
     expect(life.claimLottery()).toBe(0)
   })
 })
+
+describe('菜园：多块地、种子、选种什么', () => {
+  const run = (life: Household, hours: number, auto: (a: Actor) => boolean = () => false, until?: () => boolean) => {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed) && !until?.(); i++) {
+      life.tick(dt, auto)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('开两块地，一块种番茄一块种土豆；浇水长熟以后收：番茄是菜、土豆是主食；用掉种子，收的时候可能留种', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 8 }
+    life.money = 5000
+    life.speed = 3
+    expect(life.buildGarden()).toBe(true)
+    expect(life.buildGarden()).toBe(true)
+    expect(life.plots.filter((p) => p.built).length).toBe(2)
+    life.seeds = { tomato: 1, potato: 1 }
+    const [, mom, dad] = life.actors
+    expect(life.commandPlot(mom, 0, 'plant', 'bokchoy')).toBe('seeds')
+    expect(life.commandPlot(mom, 0, 'plant', 'tomato')).toBe('ok')
+    expect(life.commandPlot(dad, 1, 'plant', 'potato')).toBe('ok')
+    run(life, 2, () => false, () => !!life.plots[0].crop && !!life.plots[1].crop)
+    expect(life.plots[0].crop).toBe('tomato')
+    expect(life.plots[1].crop).toBe('potato')
+    expect(life.seeds.tomato).toBe(0)
+    // 长熟（直接拨快），让人去收
+    life.plots[0].growth = 1
+    life.plots[1].growth = 1
+    const veg = life.ingHave('veg')
+    const grain = life.ingHave('grain')
+    expect(life.commandPlot(mom, 0, 'harvest')).toBe('ok')
+    expect(life.commandPlot(dad, 1, 'harvest')).toBe('ok')
+    run(life, 2, () => false, () => !life.plots[0].crop && !life.plots[1].crop)
+    expect(life.ingHave('veg')).toBeCloseTo(veg + 4, 1)
+    expect(life.ingHave('grain')).toBeCloseTo(grain + 5, 1)
+    expect(life.log.filter((l) => l.key === 'world.log.harvest').length).toBe(2)
+  })
+
+  it('家里人自己照料：空地拿现有的种子种上，收完接着种上一茬种的', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 8 }
+    life.money = 5000
+    life.speed = 3
+    life.buildGarden()
+    life.seeds = { scallion: 3 }
+    for (const a of life.actors) a.needs = { hunger: 95, thirst: 95, energy: 95, mood: 95 }
+    run(life, 3, (a) => life.isHomeBody(a), () => life.plots[0].crop === 'scallion')
+    expect(life.plots[0].crop).toBe('scallion')
+    expect(life.plots[0].last).toBe('scallion')
+    life.plots[0].growth = 1
+    run(life, 6, (a) => life.isHomeBody(a), () => life.log.some((l) => l.key === 'world.log.harvest') && life.plots[0].crop === 'scallion' && life.plots[0].growth < 0.5)
+    expect(life.log.some((l) => l.key === 'world.log.harvest')).toBe(true)
+    expect(life.plots[0].crop).toBe('scallion')
+  })
+
+  it('网上买种子；菜地和种子存档后还在，开好的地读档后人还是绕着走', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 5000
+    expect(life.placeOrder({ seed_corn: 2 })).toBe('ok')
+    life.speed = 1
+    for (let i = 0; i < 4000 && life.orders.length; i++) life.tick(0.5, () => false)
+    expect(life.seeds.corn).toBe(2)
+    life.buildGarden()
+    life.plots[0] = { ...life.plots[0], crop: 'corn', growth: 0.4 }
+    const back = simulate('paradise', 0).life
+    restore(back, snapshot(life))
+    expect(back.plots[0]).toMatchObject({ built: true, crop: 'corn', growth: 0.4 })
+    expect(back.seeds.corn).toBe(2)
+    expect(back.navs[0].isBlockedAt(14.8, 7.6)).toBe(true)
+  })
+})
