@@ -85,6 +85,11 @@ export const SPIKE_ROWS: Omit<SpikeRow, 'hits'>[] = [
   { x0: 2.6, x1: 6.0, z0: 11.0, z1: 12.2 },
   { x0: 4.4, x1: 7.6, z0: 8.5, z1: 9.5 },
 ]
+/** 院子里埋的地雷：从铁门到堂屋门那条路上四颗。丧尸踩上去就炸（一颗只能炸一次），1.8 米内的丧尸都重伤 */
+export interface Mine { x: number; z: number; armed: boolean }
+export const MINE_SPOTS: Pt[] = [{ x: 4.1, z: 12.5 }, { x: 4.9, z: 10.5 }, { x: 6.4, z: 10.3 }, { x: 5.8, z: 8.0 }]
+export const MINE = { trigger: 0.55, radius: 1.8, dmg: 95, hurt: 15 }
+
 export const inRow = (r: Omit<SpikeRow, 'hits'>, p: Pt) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1
 
 /** 丧尸的种类：越往后种类越多（见 Siege.pickKind）
@@ -182,6 +187,7 @@ export type SiegeEvent =
   | { kind: 'fire'; at: Pt }
   | { kind: 'spit'; from: Pt; at: Pt }
   | { kind: 'boom'; at: Pt }
+  | { kind: 'mine'; at: Pt }
   | { kind: 'burst'; from: { x: number; y: number; z: number }; at: Pt[] }
   | { kind: 'newKind'; zombie: ZombieKind }
   | { kind: 'down'; who: string }
@@ -212,6 +218,8 @@ export interface SiegeOpts {
   trap?: { hp: number }
   /** 院子里的竹尖刺（和 Household 共用） */
   spikes?: SpikeRow[]
+  /** 院子里的地雷（和 Household 共用） */
+  mines?: Mine[]
   spawn: (at: Pt, raider: boolean, brute?: boolean, kind?: ZombieKind) => Zombie
   emit: (e: SiegeEvent) => void
 }
@@ -461,6 +469,15 @@ export class Siege {
         if (z.hp <= 0) { this.kill(z, 'trap'); return }
       } else z.inSpike = -1
     }
+    // 踩到地雷：炸（一颗只炸一次）
+    const mines = this.o.mines
+    if (mines && z.floor === 0 && z.state !== 'leave' && !this.o.ambushAt) {
+      const m = mines.find((x) => x.armed && Math.hypot(x.x - z.pos.x, x.z - z.pos.z) < MINE.trigger)
+      if (m) {
+        this.blast(m)
+        if (!z.alive) return
+      }
+    }
     if (z.state === 'leave') {
       if (!z.path.length) { z.state = 'dead'; z.deadT = 7 }
       return
@@ -705,6 +722,26 @@ export class Siege {
     this.o.emit({ kind: 'spit', from: z.pos, at: prey.pos })
     this.o.emit({ kind: 'hit', at: prey.pos })
     if (prey.health <= 0) this.knockDown(prey)
+  }
+
+  /** 地雷炸了：周围的丧尸重伤（站得近的人也会被崩到） */
+  private blast(m: Mine): void {
+    m.armed = false
+    const at = { x: m.x, z: m.z }
+    this.o.emit({ kind: 'boom', at })
+    this.o.emit({ kind: 'mine', at })
+    for (const o of this.zombies) {
+      if (!o.alive || o.floor !== 0 || Math.hypot(o.pos.x - m.x, o.pos.z - m.z) > MINE.radius) continue
+      o.hp -= MINE.dmg
+      o.hitT = 0.3
+      if (o.hp <= 0) this.kill(o, 'mine')
+    }
+    for (const a of this.o.defenders) {
+      if (this.downed.has(a) || a.floor !== 0 || Math.hypot(a.pos.x - m.x, a.pos.z - m.z) > MINE.radius) continue
+      a.health = Math.max(0, a.health - MINE.hurt)
+      this.o.emit({ kind: 'hit', at: a.pos })
+      if (a.health <= 0) this.knockDown(a)
+    }
   }
 
   private kill(z: Zombie, by: string): void {

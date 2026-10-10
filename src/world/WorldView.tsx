@@ -413,7 +413,7 @@ export default function WorldView() {
                       <div className="h-full rounded-full" style={{ width: `${Math.max(3, b.p)}%`, background: TONE[toneOf(b.p, 34, 67)] }} />
                     </div>
                     {!b.working && (
-                      <button onClick={() => world.current?.continueBuild(b.id as 'trap' | 'wall' | 'garden' | 'mg')} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
+                      <button onClick={() => world.current?.continueBuild(b.id as 'trap' | 'wall' | 'garden' | 'mg' | 'mines')} className="mt-1 w-full rounded-sm bg-[#e8c98a]/90 py-0.5 text-[11px] font-semibold text-[#1d1915] hover:bg-[#f1d8a3]">
                         {t('world.build.resume', { who: hud.selected })}
                       </button>
                     )}
@@ -447,6 +447,12 @@ export default function WorldView() {
                   </button>
                 )}
                 {hud.mg && <div className={BUILD_DONE}>{t('world.mg.done')}</div>}
+                {!hud.build.some((b) => b.id === 'mines') && (!hud.mines.laid || hud.mines.left < 4) && (
+                  <button onClick={() => world.current?.buildMines()} disabled={hud.prologue ? hud.money < 3000 : hud.cores < 3} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
+                    {hud.mines.laid ? t('world.mines.rebuild', { n: hud.mines.left }) : t(hud.prologue ? 'world.mines.build' : 'world.mines.buildCores')}
+                  </button>
+                )}
+                {hud.mines.laid && hud.mines.left === 4 && <div className={BUILD_DONE}>{t('world.mines.left', { n: hud.mines.left })}</div>}
                 {hud.spikeNext >= 0 ? (
                   <button onClick={() => world.current?.craftSpikes()} disabled={hud.bamboo < 3} className={BUILD} title={t('world.spikes.tip')}>
                     {t('world.spikes.build', { n: hud.spikeNext + 1, have: hud.bamboo })}

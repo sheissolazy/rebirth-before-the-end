@@ -32,7 +32,7 @@ import {
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
 import { DISHES, ING_INFO, INGS, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, dishOf, isCrisisNight, isNight } from './life'
-import { LAYERS, MG, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
+import { LAYERS, MG, MINE_SPOTS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
 import { npcs } from '../content/npcs'
@@ -134,6 +134,8 @@ export interface Hud {
   sleepSkip: boolean
   /** 阳台机枪架好了没有 */
   mg: boolean
+  /** 地雷：埋过没有、还剩几颗 */
+  mines: { laid: boolean; left: number }
   /** 气温：外面、屋里，空调开着没有、火炉在取暖没有 */
   temp: { out: number; in: number; ac: boolean; stove: boolean }
   /** 屋外：女主身边能搜的地方 */
@@ -291,7 +293,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.mine' | `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const HEAT_TINT = new THREE.Color('#f3c98a')
@@ -303,7 +305,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, temp: { out: 20, in: 20, ac: false, stove: false },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0 }, temp: { out: 20, in: 20, ac: false, stove: false },
 }
 
 export class World {
@@ -655,6 +657,7 @@ export class World {
       else if (e.kind === 'newKind') { this.toast(`world.toast.newKind.${e.zombie}`, 5); this.sound.groan(1, 0.8) }
       else if (e.kind === 'spit') this.sound.squelch()
       else if (e.kind === 'boom') { this.sound.crash(); this.sound.squelch() }
+      else if (e.kind === 'mine') this.toast('world.toast.mine', 2)
       else if (e.kind === 'burst') { for (let k = 0; k < 3; k++) setTimeout(() => this.sound.shot(0.8), k * 90) }
       else if (e.kind === 'end') { this.onLinePanel?.(false); this.lineTarget = null }
       else if (e.kind === 'down' && firstTime('down')) this.toast('world.toast.downTip', 6)
@@ -1045,6 +1048,8 @@ export class World {
       let at: THREE.Vector3
       if (p.id === 'garden') { const g = PLOT_SLOTS[Math.max(0, this.life.nextPlot)]; at = new THREE.Vector3((g.x0 + g.x1) / 2, 1.6, (g.z0 + g.z1) / 2) }
       else if (p.id === 'trap') at = new THREE.Vector3(4, 1.7, 14.6)
+      else if (p.id === 'mg') at = new THREE.Vector3(3.2, FLOOR_H + 1.9, 7.1)
+      else if (p.id === 'mines') at = new THREE.Vector3(5.2, 1.5, 10.5)
       else {
         const all = wallPieces()
         const w = all[Math.min(all.length - 1, Math.floor(p.done * all.length))]
@@ -1161,6 +1166,7 @@ export class World {
   buildYardWall(): void { this.startBuild('wall') }
   buildGardenPlot(): void { this.startBuild('garden') }
   buildMachineGun(): void { this.startBuild('mg') }
+  buildMines(): void { this.startBuild('mines') }
 
   /** 防线面板里点"机枪扫射" */
   machineGun(): void {
@@ -1626,6 +1632,24 @@ export class World {
     inner.position.set(AIRCON_IN.x, AIRCON_IN.y, AIRCON_IN.z)
     inner.rotation.y = -Math.PI / 2
     for (const o of [gen, out, inner]) { o.visible = false; this.scene.add(o) }
+    // 地雷：半埋在土里的圆铁饼，上面一颗小红灯（埋了才露出来，炸了就没了）
+    const iron = new THREE.MeshStandardMaterial({ color: '#4a4f3c', roughness: 0.6, metalness: 0.5 })
+    const led = new THREE.MeshBasicMaterial({ color: '#ff3b2f' })
+    for (const m of MINE_SPOTS) {
+      const g = new THREE.Group()
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.06, 14), iron)
+      disc.position.y = 0.02
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8), iron)
+      knob.position.y = 0.065
+      const light = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 4), led)
+      light.position.set(0.09, 0.06, 0)
+      g.add(disc, knob, light)
+      g.position.set(m.x, 0, m.z)
+      g.visible = false
+      g.userData.light = light
+      this.scene.add(g)
+      this.mineObjs.push(g)
+    }
     this.appliances.generator.push(gen)
     this.appliances.aircon.push(out, inner)
   }
@@ -1634,8 +1658,17 @@ export class World {
   private freezerLid: THREE.Object3D | null = null
   private lidOpen = 0
 
+  private readonly mineObjs: THREE.Object3D[] = []
+
   private updateHearth(dt: number): void {
     const l = this.life
+    this.mineObjs.forEach((o, k) => {
+      const m = l.mines[k]
+      o.visible = !!m?.armed
+      // 小红灯一闪一闪
+      const light = o.userData.light as THREE.Object3D | undefined
+      if (light) light.visible = Math.sin(this.elapsed * 3 + k) > 0
+    })
     if (this.freezerLid) {
       const using = this.actors.some((a) => a.task?.kind === 'plate' && a.task.phase !== 'go')
       this.lidOpen = THREE.MathUtils.damp(this.lidOpen, using ? 1 : 0, 6, dt)
@@ -3744,6 +3777,7 @@ export class World {
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth, n: this.life.plots.filter((p) => p.built).length, max: MAX_PLOTS, plots: this.life.plots.filter((p) => p.built).map((p) => ({ icon: cropOf(p.crop)?.icon ?? '🟫', name: cropOf(p.crop)?.name ?? '空地', p: Math.round(p.growth * 100), ripe: !!p.crop && p.growth >= 1 })) },
       mg: this.life.mg,
+      mines: { laid: this.life.mines.length > 0, left: this.life.mines.filter((m) => m.armed).length },
       temp: { out: this.life.outTemp, in: this.life.inTemp, ac: this.life.acOn, stove: this.life.stoveHeat },
       build: this.life.projects.map((p) => ({
         id: p.id, p: Math.floor(p.done * 100), worker: p.worker,

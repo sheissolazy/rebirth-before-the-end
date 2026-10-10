@@ -62,6 +62,7 @@ export interface WorldSave {
   interactions?: Record<string, { day: number; n: number }>
   /** 今天的菜 */
   menu?: string
+  mines?: { x: number; z: number; armed: boolean }[]
   stoveLeft?: number
   climateNoted?: number
   shares?: Record<string, number>
@@ -76,8 +77,8 @@ export interface WorldSave {
   fridgeWarned?: boolean
   invited?: { id: string; at: number } | null
   /** 干到一半的工程（旧存档是一项 project，新的是 projects） */
-  project?: { id: 'trap' | 'wall' | 'garden' | 'mg'; done: number; worker: string } | null
-  projects?: { id: 'trap' | 'wall' | 'garden' | 'mg'; done: number; worker: string }[]
+  project?: { id: 'trap' | 'wall' | 'garden' | 'mg' | 'mines'; done: number; worker: string } | null
+  projects?: { id: 'trap' | 'wall' | 'garden' | 'mg' | 'mines'; done: number; worker: string }[]
   gateBonus: number
   barriers: Barriers
   nightDone: number
@@ -161,6 +162,7 @@ export function snapshot(life: Household): WorldSave {
     runGain: Object.fromEntries(life.runGain),
     interactions: Object.fromEntries(life.interactions),
     menu: life.menu,
+    mines: life.mines.map((m) => ({ ...m })),
     stoveLeft: life.stoveLeft,
     climateNoted: life.climateNoted,
     shares: { ...life.shares },
@@ -256,6 +258,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.runGain = new Map(Object.entries(s.runGain ?? {}))
   life.interactions = new Map(Object.entries(s.interactions ?? {}))
   life.menu = s.menu ?? 'rice'
+  life.mines = (s.mines ?? []).map((m) => ({ ...m }))
   life.stoveLeft = s.stoveLeft ?? 0
   life.climateNoted = s.climateNoted ?? -1
   life.shares = { ...(s.shares ?? {}) }

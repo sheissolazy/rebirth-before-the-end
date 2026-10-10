@@ -2881,3 +2881,43 @@ describe('审查发现的问题（10-10 夜里）', () => {
     expect(life.ingHave('veg')).toBeCloseTo(veg + 4, 1)
   })
 })
+
+describe('地雷', () => {
+  it('派人埋好四颗；丧尸踩上去炸、周围的丧尸重伤，一颗只炸一次；可以补埋；存档后还在', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 20000
+    life.speed = 3
+    const dad = life.actors[2]
+    expect(life.startBuild('mines', dad)).toBe('ok')
+    for (let i = 0; i < 6000 && !life.mines.length; i++) {
+      life.tick(0.1, () => false)
+      for (const a of life.actors) { a.follow(0.3, 2.2); a.updateSettle(0.3) }
+    }
+    expect(life.mines.filter((m) => m.armed).length).toBe(4)
+    expect(life.startBuild('mines', dad)).toBe('done')
+    // 打仗：丧尸走到第一颗地雷上
+    life.spawnZombie = (at) => new Zombie(at)
+    life.clock = { day: PROLOGUE_DAYS, hour: 21.1 }
+    life.barriers.gate = 0
+    life.startSiege(3, false)
+    const s = life.siege!
+    const m0 = life.mines[0]
+    for (let i = 0; i < 400 && s.zombies.length < 2; i++) life.tick(0.05, () => false)
+    const z = s.zombies[0] ?? null
+    expect(z).toBeTruthy()
+    let booms = 0
+    life.onSiege = (e) => { if (e.kind === 'mine') booms++ }
+    if (z) {
+      z.root.position.set(m0.x, 0, m0.z)
+      for (const o of s.zombies.slice(1)) o.root.position.set(m0.x + 0.8, 0, m0.z)
+    }
+    for (let i = 0; i < 40 && booms === 0; i++) life.tick(0.05, () => false)
+    expect(booms).toBe(1)
+    expect(life.mines[0].armed).toBe(false)
+    expect(life.mines.filter((m) => m.armed).length).toBe(3)
+    const back = simulate('paradise', 0).life
+    restore(back, snapshot(life))
+    expect(back.mines.filter((m) => m.armed).length).toBe(3)
+  })
+})
