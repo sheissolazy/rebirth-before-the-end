@@ -3461,7 +3461,9 @@ export class Household {
     if (this.cooking) return 'cooking'
     const ok = (x: Actor) => !x.dead && !x.lost && !x.runaway && !x.away && !this.isOut(x) && !this.isInjured(x) && !x.guest
     const free = (x: Actor) => ok(x) && (!x.task || !x.task.manual)
-    const who = (a && ok(a) ? a : undefined) ?? this.actors.find((x) => x !== this.actors[0] && free(x)) ?? this.actors.find(free)
+    // 选中的是家里别的人：就 TA；选中的是女主（或者没选）：先找有空的家里人，都没空才女主自己做
+    const picked = a && a !== this.actors[0] && ok(a) ? a : undefined
+    const who = picked ?? this.actors.find((x) => x !== this.actors[0] && free(x)) ?? (a && ok(a) ? a : this.actors.find(free))
     if (!who) return 'busy'
     this.menu = id
     this.cancel(who)

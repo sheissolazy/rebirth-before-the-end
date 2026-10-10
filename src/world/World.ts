@@ -1807,7 +1807,13 @@ export class World {
             ...own(l.helmet, '⛑️', '防暴头盔', '被咬少掉一半血'),
             ...own(l.trap.hp > 0, '🪤', '铁门外的钉板', `还剩 ${Math.round(l.trap.hp)}%`),
             ...own(l.mg, '🔥', '阳台机枪', '打仗时点防线扫射'),
+            ...own(l.mines.some((m) => m.armed), '💣', '院子里的地雷', `还剩 ${l.mines.filter((m) => m.armed).length}/4 颗`),
+            ...own(l.light, '🔦', '阳台探照灯', '夜里打仗时照院子'),
           ],
+        },
+        {
+          title: '菜种子（一包种一块地）',
+          items: CROPS.filter((c) => (l.seeds[c.id] ?? 0) > 0).map((c) => ({ icon: c.icon, name: `${c.name}种子`, n: `${l.seeds[c.id]} 包` })),
         },
         {
           title: '车和家电',
