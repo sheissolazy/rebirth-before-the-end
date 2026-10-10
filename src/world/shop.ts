@@ -17,7 +17,7 @@ export interface ShopItem {
   /** 这家店一趟最多卖几份 */
   stock: number
   /** 买一份得到什么 */
-  give: Partial<TripStock> & { gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean }
+  give: Partial<TripStock> & { gate?: number; trap?: number; bamboo?: number; crossbow?: boolean; helmet?: boolean; generator?: boolean; aircon?: boolean }
   /** 只能买一次（家里有了就不卖了） */
   once?: boolean
 }
@@ -68,6 +68,7 @@ export const SHOPS: ShopDef[] = [
       { id: 'bottles', name: '汽油瓶和布条', icon: '🔥', cat: 'defense', desc: '回家灌上油就是两个燃烧瓶。', price: 300, weight: 1, stock: 4, give: { molotovs: 2 } },
       { id: 'bamboo', name: '一捆竹竿', icon: '🎋', cat: 'defense', desc: '三根，爸爸能削成一排竹尖刺。', price: 200, weight: 2, stock: 3, give: { bamboo: 3 } },
       { id: 'crossbow', name: '复合弩', icon: '🏹', cat: 'defense', desc: '没声音，箭能捡回来再用，给爸爸用正合适。', price: 1500, weight: 2, stock: 1, give: { crossbow: true }, once: true },
+      { id: 'generator', name: '汽油发电机', icon: '🔌', cat: 'other', desc: '末日后停电，有它电视才收得到应急广播，以后高温、寒潮开空调也靠它。开着烧汽油。', price: 3200, weight: 4, stock: 1, give: { generator: true }, once: true },
     ],
   },
   {
@@ -218,7 +219,11 @@ const pick = (ids: string[]) => ids.map((id) => {
 /** 网上能买的（当成一家"店"，价格已经含加价；一样跟着末日临近涨价） */
 export const ONLINE_SHOP: ShopDef = {
   id: 'online', currency: 'money', phase: 'prologue',
-  items: pick(['rice', 'noodles', 'cans', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire']),
+  items: [
+    ...pick(['rice', 'noodles', 'cans', 'snacks', 'water', 'barrel', 'medkit', 'medbox', 'tablets', 'bamboo', 'bottles', 'wire', 'generator']),
+    // 家电只在网上买（店里搬不回来）
+    { id: 'aircon', name: '空调（一拖一）', icon: '❄️', cat: 'other', desc: '前世第七个月高温四十多度。末日后停电，要配发电机才开得起来。', price: 3800, weight: 4, stock: 1, give: { aircon: true }, once: true },
+  ],
 }
 
 /** 一单多少钱（含运费） */

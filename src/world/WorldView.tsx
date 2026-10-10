@@ -9,6 +9,8 @@ import { DiaryPanel } from './DiaryPanel'
 import { MapPanel, type AwayTrip, type MapMember } from './MapPanel'
 import { TradePanel, type ShopView } from './TradePanel'
 import { PhonePanel } from './PhonePanel'
+import { NewsPanel } from './NewsPanel'
+import type { NewsView } from './news'
 import { TRIPS } from './expedition'
 import type { LogEntry } from './residents'
 import { PERK_DEFS, boughtPerks, rebirthPoints, togglePerk } from './save'
@@ -191,6 +193,7 @@ export default function WorldView() {
   const [shop, setShop] = useState<ShopView | null>(null)
   // 手机开着时的画面数据（下单、打电话以后重新取一次）
   const [phone, setPhone] = useState<PhoneView | null>(null)
+  const [news, setNews] = useState<NewsView | null>(null)
   // 打丧尸时点防线 / 丧尸弹出的面板（开枪、燃烧瓶、救人）
   const [linePanel, setLinePanel] = useState(false)
   const setDiary = (open: boolean) => {
@@ -244,7 +247,7 @@ export default function WorldView() {
   const visitId = hud.visit?.id ?? null
   // 家里几张嘴（存货够几天按人头算，一人一天大约一份吃的、一份水）
   const mouths = Math.max(1, hud.people.filter((p) => !p.gone).length)
-  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone
+  const blocking = welcome || diary || map || !!visitId || !!shop || !!phone || !!news
   // 面板一出现就停（layout effect 跟渲染同步，中间不会漏掉一次按空格或调速）
   useLayoutEffect(() => {
     const w = world.current
@@ -551,7 +554,7 @@ export default function WorldView() {
                 {t('world.trip.recall')}
               </button>
             )}
-            <PersonCard p={p} portrait={hud.portraits[p.name]} selected={p.name === hud.selected} onClick={() => world.current?.select(p.name)} />
+            <PersonCard p={p} portrait={hud.portraits[p.name]} selected={p.name === hud.selected} onClick={() => world.current?.focus(p.name)} />
           </div>
         ))}
       </div>
@@ -870,7 +873,13 @@ export default function WorldView() {
         onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }}
         onInvite={(id) => { const r = world.current?.inviteContact(id) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }} />}
       {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
-        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target); else if (o.spot) world.current?.useFurniture(o.spot, o.dish) }} />}
+        onPick={(o) => {
+          if (o.act && furn.target) world.current?.interactWith(furn.target, o.act)
+          else if (o.cmd === 'news') setNews(world.current?.newsView() ?? null)
+          else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target)
+          else if (o.spot) world.current?.useFurniture(o.spot, o.dish)
+        }} />}
+      {news && <NewsPanel view={news} onClose={() => setNews(null)} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

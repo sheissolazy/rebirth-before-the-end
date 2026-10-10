@@ -66,6 +66,8 @@ export const PH_MODELS = [
   // 储藏室：铁架子和上面放的吃的、水、药箱、弹药箱、油桶
   'steel_frame_shelves_01', 'long_life_food', 'russian_food_cans_01', 'cardboard_box_01', 'plastic_bottle_gallon',
   'medical_box', 'ammo_box', 'metal_jerrycan',
+  // 堂屋的电视、火炉、小板凳；买回来的发电机、空调外机
+  'television_02', 'scandinavian_masonry_heater', 'wooden_stool_02', 'portable_generator', 'exterior_aircon_unit',
 ] as const
 
 export interface ParadiseKit {

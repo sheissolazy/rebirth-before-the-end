@@ -105,6 +105,14 @@ export const WALLS: WallSeg[] = [
   ...run(1, 'z', 8, -3, 6, true, { 2: 'door' }), // 小客厅 ↔ 客房一
 ]
 
+/** 堂屋的电视（电视柜正中）、火炉（铁皮炉子正中） */
+export const TV = { x: 5.42, z: -0.27 }
+export const HEARTH = { x: 7.5, z: -0.02 }
+/** 买了以后摆在哪：发电机放在储藏室东墙外、空调外机贴着东墙，室内机挂在堂屋东墙上 */
+export const GENERATOR_AT = { x: 12.6, z: 4.3 }
+export const AIRCON_OUT = { x: 12.3, z: 1.6 }
+export const AIRCON_IN = { x: 7.9, z: 4.1, y: 2.15 }
+
 export const FURNITURE: Placement[] = [
   // 堂屋：八仙桌四把椅子、墙上的地图
   { piece: 'table', x: 6, z: 2.6, rot: 0, floor: 0, block: [0.65, 0.4] },
@@ -113,6 +121,11 @@ export const FURNITURE: Placement[] = [
   { piece: 'chair', x: 5.12, z: 2.6, rot: -90, floor: 0 },
   { piece: 'chair', x: 6.88, z: 2.6, rot: 90, floor: 0 },
   { piece: 'wall_map', x: 4.6, z: 4.4, rot: 90, floor: 0 },
+  // 堂屋北墙：老柜子左边一个矮电视柜、上面一台老电视（坐在八仙桌南边那把椅子上正好看）；东北角一只铁皮火炉、旁边两个小板凳
+  { piece: 'tv', x: TV.x, z: TV.z, rot: 0, floor: 0, block: [0.42, 0.22] },
+  { piece: 'fire_stove', x: HEARTH.x, z: HEARTH.z, rot: -45, floor: 0, block: [0.36, 0.36] },
+  { piece: 'stool', x: 6.85, z: 0.75, rot: 140, floor: 0 },
+  { piece: 'stool', x: 7.3, z: 1.2, rot: 171, floor: 0 },
   // 储藏室：囤的东西一箱一箱码着（世外桃源画风换成分类的铁架子，见 PANTRY_SHELVES）
   { piece: 'crate', x: 11.4, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
   { piece: 'crate', x: 10.7, z: 5.4, rot: 0, floor: 0, block: [0.35, 0.35], toonOnly: true },
@@ -161,11 +174,11 @@ function pantryShelves(): Placement[] {
 /** 世外桃源画风里额外摆的 Poly Haven 模型（卡通画风里没有）。piece 是 PROC_PIECES 里的名字时用代码搭 */
 export const PROC_PIECES = ['platform_bed', 'camp_bed', 'iron_bedding', 'blocker'] as const
 export const PARADISE_EXTRAS: Placement[] = [
-  // 堂屋：神龛（中式柜子）靠北墙、角落一盆绿植、八仙桌上的吊灯、东北角的摇椅
+  // 堂屋：神龛（中式柜子）靠北墙、东南角一盆绿植和一把摇椅、八仙桌上的吊灯
   { piece: 'chinese_cabinet', x: 6.4, z: -0.05, rot: 0, floor: 0, block: [0.65, 0.32], scale: 0.85 },
-  { piece: 'potted_plant_01', x: 7.55, z: 0.1, rot: 0, floor: 0, block: [0.3, 0.3] },
+  { piece: 'potted_plant_01', x: 7.6, z: 5.6, rot: 0, floor: 0, block: [0.3, 0.3] },
   { piece: 'chinese_chandelier', x: 6, z: 2.6, rot: 0, floor: 0, y: 1.7, scale: 0.8 },
-  { piece: 'Rockingchair_01', x: 7.35, z: 1.1, rot: -120, floor: 0, block: [0.4, 0.45] },
+  { piece: 'Rockingchair_01', x: 7.4, z: 4.6, rot: -120, floor: 0, block: [0.4, 0.45] },
   // 爸妈卧室：一张老式雕花双人床（床头靠北墙），两边床头柜；床头柜上一张全家福；南窗下一个矮五斗柜，上面一座座钟；西墙上挂钟
   { piece: 'GothicBed_01', x: 1.75, z: 2.67, rot: 0, floor: 0, block: [0.75, 1.02] },
   { piece: 'ClassicNightstand_01', x: 0.5, z: 1.9, rot: 0, floor: 0, block: [0.29, 0.21] },
@@ -276,6 +289,8 @@ export interface Spot {
   /** 先走到这里再挪进去（家具占的格子走不进去） */
   ax?: number
   az?: number
+  /** 火炉边的座位：坐着烤火心情涨得快 */
+  near?: 'fire'
 }
 
 /** 跑步机上跑步的位置（跑带上，面朝北；从东边上下） */
@@ -291,6 +306,9 @@ export const SPOTS: Spot[] = [
   { kind: 'dine', x: 6, z: 3.3, floor: 0, face: 180, pose: 'sit' },
   { kind: 'dine', x: 5.12, z: 2.6, floor: 0, face: 90, pose: 'sit', ax: 4.75, az: 2.8 },
   { kind: 'dine', x: 6.88, z: 2.6, floor: 0, face: -90, pose: 'sit', ax: 7.25, az: 2.8 },
+  // 堂屋火炉边两个小板凳：坐着烤火
+  { kind: 'relax', x: 6.85, z: 0.75, floor: 0, face: 140, pose: 'sit', near: 'fire' },
+  { kind: 'relax', x: 7.3, z: 1.2, floor: 0, face: 171, pose: 'sit', near: 'fire' },
   // 二楼小客厅的沙发两个座位
   { kind: 'relax', x: 5.62, z: 1.2, floor: 1, face: 0, pose: 'sit', ax: 5.62, az: 2.1 },
   { kind: 'relax', x: 6.38, z: 1.2, floor: 1, face: 0, pose: 'sit', ax: 6.38, az: 2.1 },
@@ -310,7 +328,7 @@ export const SPOTS: Spot[] = [
 
 /** 世外桃源画风多出来能坐的地方：堂屋的摇椅、院坝的长椅 */
 export const PARADISE_SPOTS: Spot[] = [
-  { kind: 'relax', x: 7.35, z: 1.1, floor: 0, face: -120, pose: 'sit', y: 0.04, ax: 6.25, az: 1.6 },
+  { kind: 'relax', x: 7.4, z: 4.6, floor: 0, face: -120, pose: 'sit', y: 0.04, ax: 6.4, az: 4.4 },
   { kind: 'relax', x: 10.62, z: 9.6, floor: 0, face: -90, pose: 'sit', ax: 9.85, az: 9.6 },
 ]
 

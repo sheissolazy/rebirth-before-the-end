@@ -1,13 +1,13 @@
 // 家里的人：走路（会上下楼）、四条需求、像模拟人生那样自己找事做；玩家也可以点家具让 TA 去用。
 import * as THREE from 'three'
 import { CLOTHESLINE } from './decor'
-import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, wallPieces, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
+import { PORCH, FRONT_DOOR, COOP_SPOT, WELL_SPOT, BEDS, FLOOR_H, GARDEN, GARDEN_SPOT, HOUSE, PARADISE_SPOTS, SPOTS, TV, VAN_DOORS, VAN_IN_H, VAN_OUT_H, VAN_PARK, YARD, inRect, wallPieces, type Floor, type Spot, type StairPoint, type VanMove } from './layout'
 import { route, type NavGrid, type Pt } from './nav'
 import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  BEAT, DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
+  BEAT, DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, SUNSET, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type SpikeRow, type Zombie, type ZombieKind } from './siege'
@@ -19,6 +19,7 @@ import { survivorNames, survivorTraits } from '../content/survivors'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
+import { buildNews, type NewsView } from './news'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
@@ -28,7 +29,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run' | 'tv'
 
 /** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
 export type BuildId = 'trap' | 'wall' | 'garden' | 'mg'
@@ -37,6 +38,11 @@ export const BUILD_WORK: Record<BuildId, number> = { trap: 1.5, wall: 9, garden:
 export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], wall: [6000, 6], garden: [800, 2], mg: [8000, 8] }
 
 /** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
+/** 烤火、看电视每小时多涨多少心情；末日后开着电视发电机每小时烧多少油 */
+export const FIRE_MOOD = 12
+export const TV_MOOD = 5
+export const GEN_FUEL = 0.05
+
 export type InteractKind = 'chat' | 'comfort' | 'hug' | 'joke' | 'tea'
 export const INTERACTIONS: { id: InteractKind; hours: number; self: number; other: number; low?: number; water?: number }[] = [
   { id: 'chat', hours: 0.15, self: 5, other: 8 },
@@ -309,7 +315,7 @@ export interface PersonHud {
   injured: number
   health: number
   needs: Needs
-  doing: TaskKind | 'down'
+  doing: TaskKind | 'down' | 'fire'
   going: boolean
   floor: Floor
 }
@@ -513,6 +519,8 @@ export class Household {
     this.courierTick(hours)
     this.orderTick()
     this.healTick()
+    // 末日后开着电视：发电机烧油
+    if (this.clock.day >= PROLOGUE_DAYS && this.tvOn) this.fuel = Math.max(0, this.fuel - hours * GEN_FUEL)
     for (const a of this.actors) {
       if (a.dead) continue
       // 出门在外（去公司、去店里、借给顾沉……画面上看不见的时候）：吃的喝的不掉，回来还是走的时候那样
@@ -523,6 +531,14 @@ export class Household {
         if (a.esper) {
           const d = a.needs.energy - e0
           a.needs = { ...a.needs, energy: Math.max(0, Math.min(100, e0 + (d < 0 ? d * 0.4 : d * 1.6))) }
+        }
+        // 烤火、看电视：心情比干坐着涨得快；电视没电了就不看了
+        if (a.task?.phase === 'use') {
+          if (a.task.spot?.near === 'fire') a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + hours * FIRE_MOOD) }
+          else if (a.task.kind === 'tv') {
+            if (this.tvPowered) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + hours * TV_MOOD) }
+            else a.task.hours = 0
+          }
         }
       }
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
@@ -546,6 +562,57 @@ export class Household {
         }
       }
     }
+  }
+
+  // --- 电视、火炉 -------------------------------------------------------------
+
+  /** 电视有没有电：末日前有；末日后停电了，要有发电机、还得有油 */
+  get tvPowered(): boolean {
+    return this.clock.day < PROLOGUE_DAYS || (this.generator && this.fuel > 0)
+  }
+
+  /** 有人在看电视（画面上屏幕亮着） */
+  get tvOn(): boolean {
+    return this.tvPowered && this.actors.some((a) => a.task?.kind === 'tv' && a.task.phase === 'use' && !a.away)
+  }
+
+  /** 火炉烧着：有人坐在边上烤火，或者天黑以后家里还有人醒着 */
+  get fireLit(): boolean {
+    const home = this.actors.filter((a) => !a.dead && !a.away && !this.isOut(a))
+    if (home.some((a) => a.task?.phase === 'use' && a.task.spot?.near === 'fire')) return true
+    const h = this.clock.hour
+    return (h >= SUNSET || h < 0.5) && home.some((a) => a.task?.kind !== 'sleep')
+  }
+
+  /** 去看电视：坐到八仙桌边的椅子上（先挑正对着电视的那把） */
+  watchTv(a: Actor, manual = true): 'ok' | 'nopower' | 'busy' | 'fighting' {
+    if (this.siege && !this.siege.done) return 'fighting'
+    if (!this.tvPowered) return 'nopower'
+    if (this.isOut(a) || a.dead || a.lost || a.runaway || a.away) return 'busy'
+    // 自己想看：饭点不看（椅子要留着吃饭）
+    if (!manual && isMealTime(this.clock.hour)) return 'busy'
+    const facing = (s: Spot) => {
+      const dir = THREE.MathUtils.radToDeg(Math.atan2(TV.x - s.x, TV.z - s.z))
+      return Math.abs(((s.face - dir + 540) % 360) - 180)
+    }
+    const seat = this.spots.filter((s) => s.kind === 'dine' && s.floor === 0 && (!this.taken.has(s) || this.taken.get(s) === a))
+      .sort((p, q) => facing(p) - facing(q))[0]
+    if (!seat) return 'busy'
+    if (manual) this.cancel(a)
+    this.assign(a, { kind: 'tv', spot: seat, phase: 'go', hours: manual ? 1.5 : 0.8 + this.rand() * 0.6, manual })
+    return 'ok'
+  }
+
+  /** 电视里在说什么（新闻频道 / 应急广播 / 停电） */
+  news(): NewsView {
+    const c = this.clock
+    const crisisDay = Household.nextNightDay(c, true)
+    return buildNews({
+      day: c.day, hour: c.hour, powered: this.tvPowered,
+      crisisDay, crisisKind: Household.crisisKind({ day: crisisDay, hour: 21 }),
+      tonight: c.day >= PROLOGUE_DAYS ? Household.nightCount(c).count : 0,
+      aircon: this.aircon, generator: this.generator,
+    })
   }
 
   // --- 来敲门的人 -------------------------------------------------------------
@@ -614,6 +681,9 @@ export class Household {
 
   /** 从五金店带回来的弩（给爸爸；爸爸不在就给家里别的人） */
   crossbow = false
+  /** 家电：发电机（末日后电视、空调要靠它，烧汽油）、空调（高温天用） */
+  generator = false
+  aircon = false
 
   /** 把弩交给爸爸（不在了就交给家里最健康的人，女主自己用霰弹枪） */
   equipCrossbow(): void {
@@ -754,7 +824,7 @@ export class Household {
     if (st !== 'ok') return st
     const total = orderTotal(cart, this.clock.day)
     if (total <= 0) return 'empty'
-    if (ONLINE_SHOP.items.some((it) => (cart[it.id] ?? 0) > it.stock)) return 'stock'
+    if (ONLINE_SHOP.items.some((it) => (cart[it.id] ?? 0) > it.stock || (it.once && (cart[it.id] ?? 0) > 0 && this.owns(it)))) return 'stock'
     if (total > this.money) return 'money'
     this.money -= total
     const arrive = (this.clock.day + 1) * 24 + DELIVERY_HOUR + this.rand() * 0.8
@@ -1263,7 +1333,7 @@ export class Household {
 
   /** 一起坐着歇、一起吃饭的人会聊起来：心情慢慢变好 */
   private chatTick(hours: number): void {
-    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company' || a.task.kind === 'interact') && !a.away
+    const social = (a: Actor) => !!a.task && a.task.phase === 'use' && (a.task.kind === 'relax' || a.task.kind === 'sit' || a.task.kind === 'eat' || a.task.kind === 'company' || a.task.kind === 'interact' || a.task.kind === 'tv') && !a.away
     const calm = !this.siege || this.siege.done
     for (const a of this.actors) {
       a.calm = calm
@@ -1325,7 +1395,7 @@ export class Household {
     }
     // 衣服还晾在外面：离得最近的闲人冒雨去收
     if (this.laundryOut && !this.actors.some((o) => o.task?.kind === 'fetch')) {
-      const free = ['idle', 'stroll', 'relax', 'tidy', 'company', 'pet', 'wash', 'hang']
+      const free = ['idle', 'stroll', 'relax', 'tidy', 'company', 'pet', 'wash', 'hang', 'tv']
       // 楼上的人下楼要多走一段：按距离 + 楼层挑最近的
       const midZ = (CLOTHESLINE.z0 + CLOTHESLINE.z1) / 2
       const dist = (o: Actor) => Math.hypot(o.pos.x - CLOTHESLINE.x, o.pos.z - midZ) + o.floor * 8
@@ -1743,8 +1813,11 @@ export class Household {
   /** "只能买一次"的东西家里已经有了 */
   owns(it: ShopItem): boolean {
     // 别的一拨人已经买了、还在路上带回来的，也算有了
-    const coming = (k: 'crossbow' | 'helmet') => this.trips.some((t) => !!t.cargo?.[k])
+    // 网上下了单、快递还没到的，也算有了
+    const coming = (k: 'crossbow' | 'helmet' | 'generator' | 'aircon') => this.trips.some((t) => !!t.cargo?.[k])
+      || this.orders.some((o) => ONLINE_SHOP.items.some((x) => (o.cart[x.id] ?? 0) > 0 && !!x.give[k]))
     return (!!it.give.crossbow && (this.crossbow || coming('crossbow'))) || (!!it.give.helmet && (this.helmet || coming('helmet')))
+      || (!!it.give.generator && (this.generator || coming('generator'))) || (!!it.give.aircon && (this.aircon || coming('aircon')))
   }
 
   /** 买回来的东西入库 */
@@ -1782,6 +1855,8 @@ export class Household {
       this.note('world.log.crossbow', { who: this.actors.find((a) => a.weapon === 'crossbow')?.name ?? '爸爸' })
     }
     if (g.helmet && !this.helmet) { this.helmet = true; this.actors[0].helmet = true; what.push(t_('world.unit.helmet')) }
+    if (g.generator && !this.generator) { this.generator = true; what.push(t_('world.unit.generator')); this.note('world.log.generator') }
+    if (g.aircon && !this.aircon) { this.aircon = true; what.push(t_('world.unit.aircon')); this.note('world.log.aircon') }
     return what
   }
 
@@ -2501,7 +2576,7 @@ export class Household {
     if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'craft') return 'cook'
     if (t.kind === 'build') return 'cook'
-    if (t.kind === 'hens') return 'relax'
+    if (t.kind === 'hens' || t.kind === 'tv') return 'relax'
     // 跑步：比干活还累（runTick 里另外扣精力和水）
     if (t.kind === 'run') return 'cook'
     if (t.kind === 'pump') return 'cook'
@@ -2581,7 +2656,11 @@ export class Household {
     else if (want === 'drink') task = this.spotTask(a, this.nearest(a, this.freeSpots('drink')), 'drink', 0.12)
     else if (want === 'eat') task = this.eatTask(a)
     else if (want === 'relax' || (want === 'stroll' && night)) {
-      task = this.spotTask(a, this.pick(this.freeSpots('relax', night ? indoor : undefined)), 'relax', 1 + this.rand())
+      // 有空爱看会儿电视；晚上爱凑到火炉边烤烤火
+      if (!late && !a.guest && this.rand() < 0.3 && this.watchTv(a, false) === 'ok') return
+      const fire = this.freeSpots('relax', (s) => s.near === 'fire')
+      const warm = isNight(this.clock.hour) && fire.length > 0 && this.rand() < 0.6
+      task = this.spotTask(a, this.pick(warm ? fire : this.freeSpots('relax', night ? indoor : undefined)), 'relax', 1 + this.rand())
     } else if (want === 'stroll') task = this.spotTask(a, this.pick(this.freeSpots('stroll')), 'stroll', 0.5 + this.rand() * 0.5)
     if (!task) task = { kind: 'idle', spot: null, phase: 'use', hours: 0.25 + this.rand() * 0.4, manual: false }
     this.assign(a, task)
@@ -2695,7 +2774,7 @@ export class Household {
 
   /** 家里人听到车开回来 / 出门的人进了街口：没在忙的出来迎一迎（吃饭做饭睡觉的不动） */
   private greetArrivals(t: Trip): void {
-    const free = ['idle', 'stroll', 'relax', 'company', 'tidy', 'wash', 'sit']
+    const free = ['idle', 'stroll', 'relax', 'company', 'tidy', 'wash', 'sit', 'tv']
     // 打丧尸时、下着雨都不出去迎（雨天跟夜里一样待在屋里）
     if ((this.siege && !this.siege.done) || this.rain > 0.1) return
     let k = 0
@@ -2970,7 +3049,9 @@ export class Household {
     if (t.kind === 'run' && (a.needs.energy < 12 || a.needs.thirst < 15)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true
-    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
+    // 看电视占着八仙桌的椅子：饭点到了就关电视，让出来吃饭
+    if (!t.manual && t.kind === 'tv' && isMealTime(this.clock.hour)) return true
+    if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet' || t.kind === 'tv')) {
       // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
       if (isMealTime(this.clock.hour) && n.hunger < 60 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
@@ -3172,7 +3253,7 @@ export class Household {
       fitness: Math.round(a.fitness),
       injured: this.isInjured(a) ? Math.ceil(a.injured - this.absHour) : 0,
       needs: { ...a.needs },
-      doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
+      doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.spot?.near === 'fire' ? 'fire' : a.task?.kind ?? 'idle',
       going: !!a.task && a.task.phase === 'go' && a.task.kind !== 'walk',
       floor: a.floor,
     }))

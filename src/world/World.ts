@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import {
-  COOP, COURT, FLOOR_H, FRONT_DOOR, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
+  AIRCON_IN, AIRCON_OUT, COOP, COURT, FLOOR_H, FRONT_DOOR, GENERATOR_AT, HEARTH, TV, STORE_ROOM, FURNITURE, GARDEN, GATE, WELL, HOUSE, HOUSE_CENTER, PORCH, PARADISE_EXTRAS, PROPS, STAIR_HOLE, STREET, STREET_LAMPS, VAN_PARK, WALLS, WORLD, YARD,
   fenceSegments, isHome, wallPieces, type Floor, type Placement, type Spot,
 } from './layout'
 import { navFloors, type NavGrid } from './nav'
@@ -19,6 +19,8 @@ import {
 import { PantryView } from './pantry'
 import { TONE } from './ui'
 import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
+import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ironStove, stool, tvStand } from './hearth'
+import type { NewsView } from './news'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
@@ -197,11 +199,16 @@ export interface FurnitureMenu {
   /** 点的是人：TA 的名字和现在的心情 */
   target?: string
   mood?: number
-  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' | 'bandage'; dish?: string; text?: string; disabled?: boolean }[]
+  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: MenuCmd; dish?: string; text?: string; disabled?: boolean }[]
 }
+
+export type MenuCmd = 'feed' | 'hens' | 'bandage' | 'tv' | 'news'
+/** 世外桃源画风的火炉（Poly Haven 的芬兰铁皮炉，原大 2.36 米高）缩到多大 */
+const HEATER_SCALE = 0.62
 
 /** 家具在菜单标题上叫什么 */
 const FURNITURE_NAMES: [RegExp, string][] = [
+  [/fire_stove|heater/i, '火炉'], [/^tv$|television/i, '电视'], [/stool/i, '小板凳'],
   [/sofa/i, '沙发'], [/bed/i, '床'], [/stove|counter/i, '灶台'], [/kettle|fridge/i, '水壶'], [/cabinet/i, '柜子'],
   [/rocking/i, '摇椅'], [/bench/i, '长椅'], [/chair/i, '椅子'], [/table/i, '桌子'], [/crate/i, '储物箱'],
 ]
@@ -228,7 +235,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.tv.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -710,6 +717,7 @@ export class World {
           if (this.actors[k].driver?.attach(w, 'RightHand')) { this.weapons.push(w); this.kitOf.set(this.actors[k], w) }
         })
       }
+      this.addHearth(paradise)
       this.addLamps()
       this.collectClickables()
       // 大橘：不挡开场，后台加载好了再放到客厅地毯上
@@ -1296,6 +1304,15 @@ export class World {
     }
     const made: Record<string, () => THREE.Object3D> = {
       sofa, counter, fridge, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H), treadmill,
+      fire_stove: ironStove, stool,
+      tv: () => {
+        const g = new THREE.Group()
+        const crt = crtTv()
+        crt.position.y = TV_STAND_H
+        g.add(tvStand(), crt)
+        g.userData.crt = crt
+        return g
+      },
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
     obj.userData.piece = p.piece
@@ -1430,6 +1447,22 @@ export class World {
         doomed.push(o)
       } else if (piece === 'bed') {
         doomed.push(o)
+      } else if (piece === 'tv') {
+        // 电视柜留着，上面换成真的老电视
+        const crt = o.userData.crt as THREE.Object3D | undefined
+        if (crt) doomed.push(crt)
+        o.add(placeModel(kit, 'television_02', 0, TV_STAND_H, 0, 0, 1.25))
+      } else if (piece === 'fire_stove') {
+        const m = placeModel(kit, 'scandinavian_masonry_heater', o.position.x, y, o.position.z, rot, HEATER_SCALE)
+        m.userData.slug = 'fire_stove'
+        o.parent?.add(m)
+        doomed.push(o)
+      } else if (piece === 'stool') {
+        // 原模型是个 27 厘米宽、18 厘米高的小矮凳：放大到 44 厘米高能坐，宽窄少放大一点（不然成了长条凳）
+        const m = placeModel(kit, 'wooden_stool_02', o.position.x, y, o.position.z, rot)
+        m.scale.set(1.9, 2.4, 1.9)
+        o.parent?.add(m)
+        doomed.push(o)
       }
     })
     visit(this.scene)
@@ -1520,6 +1553,69 @@ export class World {
     blade.visible = false
     const driver = a.driver as { attach(o: THREE.Object3D, bone: string): boolean } | null
     if (driver?.attach(blade, 'RightHand')) { this.weapons.push(blade); this.kitOf.set(a, blade) }
+  }
+
+  // --- 电视、火炉、发电机、空调 ----------------------------------------------------
+
+  private tvScreen: TvScreen | null = null
+  private fireGlow: FireGlow | null = null
+  private readonly appliances = { generator: [] as THREE.Object3D[], aircon: [] as THREE.Object3D[] }
+
+  /** 电视屏幕、炉门的火光、烟囱；买回来才露出来的发电机和空调（先摆好藏着） */
+  private addHearth(kit: ParadiseKit | null): void {
+    const real = !!kit
+    // 屏幕：贴在电视屏幕前面一点（真模型的屏幕偏上、外壳更深）
+    const scr = new TvScreen(real ? 0.34 : 0.36, real ? 0.26 : 0.28)
+    scr.mesh.position.set(TV.x + (real ? -0.012 : -0.03), TV_STAND_H + (real ? 0.31 : 0.21), TV.z + (real ? 0.226 : 0.202))
+    scr.light.position.set(TV.x, TV_STAND_H + 0.35, TV.z + 0.7)
+    this.scene.add(scr.mesh, scr.light)
+    this.tvScreen = scr
+    // 火炉：炉门朝西南（对着镜头和两个小板凳）
+    const a = THREE.MathUtils.degToRad(-45)
+    const r = real ? 0.37 : 0.325
+    const glow = new FireGlow(0.2, real ? 0.17 : 0.16)
+    glow.group.position.set(HEARTH.x + Math.sin(a) * r, 0.42, HEARTH.z + Math.cos(a) * r)
+    glow.group.rotation.y = a
+    this.scene.add(glow.group)
+    this.fireGlow = glow
+    const pipe = flue(real ? 2.36 * HEATER_SCALE - 0.04 : 1.12, FLOOR_H - 0.4)
+    pipe.position.set(HEARTH.x, 0, HEARTH.z)
+    this.scene.add(pipe)
+    // 发电机放在储藏室东墙外；空调外机贴着东墙，室内机挂在堂屋东墙上
+    const gen = real ? placeModel(kit, 'portable_generator', GENERATOR_AT.x, 0, GENERATOR_AT.z, 90) : generatorBox()
+    if (!real) { gen.position.set(GENERATOR_AT.x, 0, GENERATOR_AT.z); gen.rotation.y = Math.PI / 2 }
+    let out: THREE.Object3D
+    if (real) {
+      out = new THREE.Group()
+      for (const part of variants(kit.models.get('exterior_aircon_unit')!)[0].parts) {
+        const mesh = new THREE.Mesh(part.geo, part.mat)
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        out.add(mesh)
+      }
+    } else out = box(0.8, 0.6, 0.3, '#d9d9d4', [0, 0.3, 0])
+    out.position.set(AIRCON_OUT.x, 0, AIRCON_OUT.z)
+    out.rotation.y = Math.PI / 2
+    const inner = acIndoor()
+    inner.position.set(AIRCON_IN.x, AIRCON_IN.y, AIRCON_IN.z)
+    inner.rotation.y = -Math.PI / 2
+    for (const o of [gen, out, inner]) { o.visible = false; this.scene.add(o) }
+    this.appliances.generator.push(gen)
+    this.appliances.aircon.push(out, inner)
+  }
+
+  private updateHearth(dt: number): void {
+    const l = this.life
+    this.tvScreen?.update(dt, l.tvOn ? (l.clock.day < PROLOGUE_DAYS ? 'tv' : 'radio') : 'off')
+    this.fireGlow?.update(dt, l.fireLit)
+    for (const o of this.appliances.generator) o.visible = l.generator
+    for (const o of this.appliances.aircon) o.visible = l.aircon
+  }
+
+  /** 电视里在说什么（点电视选"听新闻"） */
+  newsView(): NewsView {
+    this.onFurnitureMenu?.(null)
+    return this.life.news()
   }
 
   /** 屋里的暖灯和路灯：一直在场景里，白天亮度为 0（灯的数量不变，免得着色器重新编译） */
@@ -1929,6 +2025,7 @@ export class World {
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     this.updateConstruction()
     this.updateMgNest()
+    this.updateHearth(dt)
     this.updateTargetRing()
     this.updatePops(dt)
     const g = this.life.garden
@@ -2903,10 +3000,20 @@ export class World {
   onFurnitureMenu: ((menu: FurnitureMenu | null) => void) | null = null
 
   private furnitureOptions(root: THREE.Object3D, floor: Floor): FurnitureMenu['options'] {
+    const id = String(root.userData.slug ?? root.userData.piece ?? '')
+    // 电视：去看一会儿（坐到八仙桌边）/ 听听新闻里说什么
+    if (/^tv$|television/.test(id)) {
+      const on = this.life.tvPowered
+      return [
+        { label: 'world.use.tv', cmd: 'tv', disabled: !on, text: on ? undefined : t('world.tv.noPower') },
+        { label: 'world.use.news', cmd: 'news' },
+      ]
+    }
     const box = new THREE.Box3().setFromObject(root)
     const c = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
-    const reach = Math.max(1.0, Math.max(size.x, size.z) / 2 + 0.7)
+    // 火炉：两个小板凳都算（一个在炉子西南、一个在南边）
+    const reach = Math.max(1.0, Math.max(size.x, size.z) / 2 + 0.7) + (/fire_stove/.test(id) ? 0.4 : 0)
     const best = new Map<Spot['kind'], { spot: Spot; d: number; free: boolean }>()
     for (const s of this.life.allSpots) {
       if (s.floor !== floor || s.kind === 'stroll') continue
@@ -2933,7 +3040,7 @@ export class World {
         }
         continue
       }
-      out.push({ label: `world.use.${k}` as UiKey, spot })
+      out.push({ label: spot.near === 'fire' ? 'world.use.fire' : `world.use.${k}` as UiKey, spot })
     }
     return out
   }
@@ -2975,9 +3082,15 @@ export class World {
   }
 
   /** 鸡圈菜单里选了一项 */
-  menuCommand(cmd: 'feed' | 'hens' | 'bandage', target?: string): void {
+  menuCommand(cmd: MenuCmd, target?: string): void {
     this.onFurnitureMenu?.(null)
     const who = this.mode === 'home' ? this.selected : this.heroine
+    if (cmd === 'news') return
+    if (cmd === 'tv') {
+      const r = this.life.watchTv(who)
+      if (r !== 'ok') this.toast(`world.tv.${r}`, 3, { who: who.name })
+      return
+    }
     if (cmd === 'bandage') {
       const a = this.actors.find((x) => x.name === target)
       if (!a) return
@@ -3156,6 +3269,17 @@ export class World {
     this.selected = actor
     if (this.mode === 'home') this.setViewFloor(actor.root.position.y > FLOOR_H - 0.4 ? 1 : 0)
     this.setHud({ selected: actor.name })
+  }
+
+  /** 点下面的人物卡：选中 TA，镜头挪过去对准 TA（只挪一次，不一直跟着——一家人走来走去时画面会抖） */
+  focus(name: string): void {
+    const actor = this.actors.find((x) => x.name === name)
+    if (!actor) return
+    this.select(actor)
+    if (this.mode !== 'home' || this.selected !== actor || actor.away || this.life.isOut(actor)) return
+    const base = this.desiredPose('home').target.sub(this.pan)
+    const p = actor.root.position
+    this.pan.set(p.x - base.x, 0, p.z - base.z).clampLength(0, 10)
   }
 
   private visitHud(): Hud['visit'] {

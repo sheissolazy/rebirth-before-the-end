@@ -2357,3 +2357,108 @@ describe('阳台机枪', () => {
     expect(s.machineGun().r).toBe('cool')
   })
 })
+
+describe('电视和火炉', () => {
+  const step = (life: Household, hours: number) => {
+    const dt = 0.1
+    for (let i = 0; i < (hours * DAY_SECONDS) / 24 / (dt * life.speed); i++) {
+      life.tick(dt, () => false)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('看电视：坐到正对电视的那把椅子上，心情涨；末日后停电，要有发电机才能看，开着烧油，没油就关了', () => {
+    const { life } = simulate('paradise', 0)
+    const hero = life.actors[0]
+    life.clock = { day: 1, hour: 10 }
+    life.speed = 3
+    expect(life.tvPowered).toBe(true)
+    expect(life.watchTv(hero)).toBe('ok')
+    // 八仙桌南边那把椅子面朝北，正对着北墙的电视
+    expect(hero.task?.spot).toMatchObject({ kind: 'dine', x: 6, z: 3.3 })
+    step(life, 0.4)
+    expect(hero.task?.kind).toBe('tv')
+    expect(hero.task?.phase).toBe('use')
+    expect(life.tvOn).toBe(true)
+    hero.needs = { ...hero.needs, mood: 40 }
+    step(life, 0.8)
+    expect(hero.needs.mood).toBeGreaterThan(40 + 0.8 * 6)
+    // 末日后：停电了
+    life.cancel(hero)
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 10 }
+    expect(life.tvPowered).toBe(false)
+    expect(life.watchTv(hero)).toBe('nopower')
+    expect(life.news().mode).toBe('off')
+    life.generator = true
+    life.fuel = 1
+    expect(life.watchTv(hero)).toBe('ok')
+    step(life, 1.2)
+    expect(life.tvOn).toBe(true)
+    expect(life.fuel).toBeLessThan(1)
+    expect(life.fuel).toBeGreaterThan(0.9)
+    expect(life.news().mode).toBe('radio')
+    // 没油了：电视黑了，人也不看了
+    life.fuel = 0
+    step(life, 0.1)
+    expect(life.tvOn).toBe(false)
+    expect(hero.task?.kind).not.toBe('tv')
+  })
+
+  it('火炉边的小板凳上烤火：心情涨得比看电视还快；天黑以后炉子烧着', () => {
+    const { life } = simulate('paradise', 0)
+    const mom = life.actors[1]
+    life.clock = { day: 1, hour: 14 }
+    life.speed = 3
+    const stool = life.allSpots.find((s) => s.near === 'fire')!
+    expect(stool).toBeTruthy()
+    expect(life.fireLit).toBe(false)
+    expect(life.commandSpot(mom, stool)).toBe(true)
+    step(life, 0.4)
+    expect(mom.task?.phase).toBe('use')
+    expect(life.fireLit).toBe(true)
+    expect(life.hud()[1].doing).toBe('fire')
+    mom.needs = { ...mom.needs, mood: 30 }
+    step(life, 0.8)
+    expect(mom.needs.mood).toBeGreaterThan(30 + 0.8 * 12)
+    life.cancel(mom)
+    life.clock = { day: 1, hour: 20 }
+    expect(life.fireLit).toBe(true)
+  })
+
+  it('发电机、空调只能买一台：网上下了单就不能再买；到货后存档还在', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 20000
+    expect(life.placeOrder({ generator: 1, aircon: 1 })).toBe('ok')
+    expect(life.placeOrder({ generator: 1 })).toBe('stock')
+    expect(life.placeOrder({ aircon: 1 })).toBe('stock')
+    life.speed = 1
+    for (let i = 0; i < 4000 && life.orders.length; i++) life.tick(0.5, () => false)
+    expect(life.generator).toBe(true)
+    expect(life.aircon).toBe(true)
+    const back = simulate('paradise', 0).life
+    restore(back, snapshot(life))
+    expect(back.generator).toBe(true)
+    expect(back.aircon).toBe(true)
+  })
+
+  it('新闻：末日前每天一条头条、物价和天气；末日后应急广播说下一个大夜是什么、第二个月出现跑得快的', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    const n0 = life.news()
+    expect(n0.mode).toBe('tv')
+    expect(n0.date).toBe('末日前 4 天')
+    expect(n0.lines.some((l) => l.text.includes('物价'))).toBe(true)
+    life.clock = { day: 2, hour: 9 }
+    expect(life.news().headline).not.toBe(n0.headline)
+    expect(life.news().lines.some((l) => l.text.includes('最后一天能下单'))).toBe(true)
+    life.generator = true
+    life.fuel = 2
+    life.clock = { day: PROLOGUE_DAYS + 1, hour: 9 }
+    const r = life.news()
+    expect(r.mode).toBe('radio')
+    expect(r.lines.some((l) => l.text.includes('下一个大夜在 2 天后：尸潮'))).toBe(true)
+    life.clock = { day: PROLOGUE_DAYS + 4, hour: 9 }
+    expect(life.news().headline).toContain('快速奔跑')
+  })
+})
