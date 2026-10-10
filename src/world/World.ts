@@ -2789,7 +2789,7 @@ export class World {
   }
 
   /** 全家都睡着了：时间自动快进，有人醒了（或者打起来了）就回到原来的速度 */
-  static readonly SLEEP_SKIP = 10
+  static readonly SLEEP_SKIP = 40
   private sleepSkip: { prev: number } | null = null
   private sleepOptOut = false
   private updateSleepSkip(): void {

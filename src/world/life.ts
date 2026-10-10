@@ -1,7 +1,9 @@
 // 2.5D 版的"过日子"：时钟、需求、自主行动的决策（纯逻辑，不依赖 three.js，方便单测）。
 // 一天 = 文字版的一周；序章 4 天；一个月 4 天，月底那一晚是危机夜。
 
-export const DAY_SECONDS = 300 // 1 倍速下，游戏里一天 = 现实 5 分钟
+export const DAY_SECONDS = 1440 // 1 倍速下现实 1 秒 = 游戏 1 分钟，一天 = 现实 24 分钟
+/** 说话气泡、挥手、站一下这类小动作原来按"一天 = 现实 5 分钟"调的：倒计时乘它，现实里还是那么长 */
+export const BEAT = DAY_SECONDS / 300
 export const PROLOGUE_DAYS = 4
 export const DAYS_PER_MONTH = 4
 export const SUNRISE = 6

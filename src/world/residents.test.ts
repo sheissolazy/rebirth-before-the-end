@@ -1972,8 +1972,8 @@ describe('点人物互动', () => {
     const before = mom.needs.mood
     expect(life.interact(hero, mom, 'comfort')).toBe('ok')
     run()
-    // 第二次：妈妈心情已经不低了，只加基础的一半
-    expect(mom.needs.mood - before).toBeLessThan(first / 2)
+    // 第二次：同一天再安慰只加一半（再算上这一会儿心情自己慢慢回一点）
+    expect(mom.needs.mood - before).toBeLessThan(first * 0.6)
   })
 
   it('睡着的人、打丧尸的时候不能互动', () => {
@@ -1996,10 +1996,10 @@ describe('手机', () => {
     expect(life.orders.length).toBe(1)
     life.speed = 1
     // 当天不到
-    for (let i = 0; i < 200 && life.clock.day === 0; i++) life.tick(1, () => false)
+    for (let i = 0; i < 2000 && life.clock.day === 0; i++) life.tick(1, () => false)
     expect(life.stock.food).toBeLessThanOrEqual(food)
     // 第二天中午以前到
-    for (let i = 0; i < 400 && life.clock.hour < 12; i++) life.tick(0.5, () => false)
+    for (let i = 0; i < 4000 && life.clock.hour < 12; i++) life.tick(0.5, () => false)
     expect(life.orders.length).toBe(0)
     expect(life.stock.food).toBeGreaterThan(food + 5)
     expect(life.log.some((l) => l.key === 'world.phone.delivered')).toBe(true)
@@ -2036,7 +2036,7 @@ describe('建设要人去干活', () => {
   it('砌院墙：爸爸真的走到墙边一段一段砌，天黑收工、第二天自己接着干，干完才算砌好', () => {
     const { life } = simulate('paradise', 0)
     const dad = life.actors[2]
-    life.clock = { day: 0, hour: 8 }
+    life.clock = { day: 0, hour: 13 }
     life.money = 20000
     expect(life.startBuild('wall', dad)).toBe('ok')
     expect(life.wall).toBe(false)

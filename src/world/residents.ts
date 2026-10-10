@@ -7,7 +7,7 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
+  BEAT, DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type SpikeRow, type Zombie, type ZombieKind } from './siege'
@@ -39,14 +39,14 @@ export const BUILD_COST: Record<BuildId, [number, number]> = { trap: [1500, 2], 
 /** 点人物弹出的互动：选中的人走过去跟 TA 做这件事，两个人心情都会变好（同一天对同一个人做同一件事，效果一次比一次少） */
 export type InteractKind = 'chat' | 'comfort' | 'hug' | 'joke' | 'tea'
 export const INTERACTIONS: { id: InteractKind; hours: number; self: number; other: number; low?: number; water?: number }[] = [
-  { id: 'chat', hours: 0.35, self: 5, other: 8 },
+  { id: 'chat', hours: 0.15, self: 5, other: 8 },
   // 安慰：对方心情不好（低于 40）时多加很多
-  { id: 'comfort', hours: 0.3, self: 2, other: 6, low: 16 },
-  { id: 'hug', hours: 0.12, self: 6, other: 10 },
+  { id: 'comfort', hours: 0.15, self: 2, other: 6, low: 16 },
+  { id: 'hug', hours: 0.06, self: 6, other: 10 },
   // 讲笑话：看运气，0~12
-  { id: 'joke', hours: 0.15, self: 4, other: 6 },
+  { id: 'joke', hours: 0.07, self: 4, other: 6 },
   // 一起喝杯茶：时间长一点、用掉一点水
-  { id: 'tea', hours: 0.6, self: 10, other: 12, water: 0.2 },
+  { id: 'tea', hours: 0.3, self: 10, other: 12, water: 0.2 },
 ]
 
 interface Task {
@@ -538,7 +538,7 @@ export class Household {
       if (a.lost || a.dead || a.runaway) continue
       if (a.task) this.runTask(a, hours)
       else {
-        a.hold = Math.max(0, a.hold - hours)
+        a.hold = Math.max(0, a.hold - hours * BEAT)
         if (a.hold <= 0 && !a.path.length && !a.settling && autonomous(a)) this.think(a)
         // 干完活（铺钉板、撸猫……）站在院子外面、没事可做的家里人：自己走回家（女主是玩家在操控，不管）
         else if (a.hold <= 0 && !a.path.length && !a.settling && a !== this.actors[0] && a.floor === 0 && !inRect(YARD, a.pos.x, a.pos.z) && !fighting) {
@@ -718,7 +718,7 @@ export class Household {
       c.pending = null
       if (c.order) { this.applyGives(cartGives(ONLINE_SHOP, c.order.cart)); c.order = null }
       this.onCourier?.(c, 'drop')
-    } else if (c.phase === 'drop' && (c.wait -= hours) <= 0) {
+    } else if (c.phase === 'drop' && (c.wait -= hours * BEAT) <= 0) {
       c.phase = 'leave'
       c.setPath(route(this.navs, { ...c.pos, floor: 0 }, { ...c.home, floor: 0 }) ?? [])
     } else if (c.phase === 'leave' && !c.path.length) {
@@ -1267,7 +1267,7 @@ export class Household {
     const calm = !this.siege || this.siege.done
     for (const a of this.actors) {
       a.calm = calm
-      if (a.line && (a.line.hours -= hours) <= 0) a.line = null
+      if (a.line && (a.line.hours -= hours * BEAT) <= 0) a.line = null
       // 帮忙搬的箱子放下了（或者被别的事打断了）
       if (a.carrying && a.task?.kind !== 'help' && !this.onTrip(a)) a.carrying = false
       a.chatting = social(a) && this.actors.some((b) => b !== a && social(b) && b.floor === a.floor
@@ -2724,7 +2724,7 @@ export class Household {
       const order = this.actors.filter((o) => o.task?.kind === 'greet').indexOf(a)
       t.waitT = 0.07 + Math.max(0, order) * 0.09
     }
-    if (t.waitT !== undefined && t.waitT > 0) t.waitT -= hours
+    if (t.waitT !== undefined && t.waitT > 0) t.waitT -= hours * BEAT
     if (near && t.wave === undefined && t.waitT !== undefined && t.waitT <= 0) {
       t.wave = 0.2
       const prologue = this.clock.day < PROLOGUE_DAYS
@@ -2732,7 +2732,7 @@ export class Household {
       a.line = { text: t_(`world.greet.${prologue ? 'calm' : 'doom'}${n}` as UiKey), hours: 0.22 }
     }
     if (t.wave !== undefined && t.wave > 0) {
-      t.wave = Math.max(0, t.wave - hours)
+      t.wave = Math.max(0, t.wave - hours * BEAT)
       // 挥完手：接过一个箱子，帮着一起搬进客厅
       if (t.wave === 0 && trip?.phase === 'back') {
         t.hours = 0
