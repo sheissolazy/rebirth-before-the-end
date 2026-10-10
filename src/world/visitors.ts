@@ -6,7 +6,7 @@ import { person } from './meshes'
 import { Walker } from './walker'
 import type { Pt } from './nav'
 
-export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'scout' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
+export type VisitorId = 'relative_loan' | 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'scout' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
   | 'invite_jiangye' | 'invite_shenyan' | 'invite_guchen' | 'invite_xielin' | 'invite_neighbor'
 export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen' | 'xielin'
 
@@ -43,6 +43,9 @@ export interface VisitorCtx {
   jiangyeHome: boolean
   /** 沈砚已经住进来了 */
   shenyanHome: boolean
+  money: number
+  /** 中了彩票、兑了奖（消息传开了） */
+  rich: boolean
 }
 
 export interface VisitorDef {
@@ -64,6 +67,12 @@ export const INVITES: VisitorDef[] = (['jiangye', 'shenyan', 'guchen', 'xielin',
 }))
 
 export const VISITORS: VisitorDef[] = [
+  // 中了彩票的消息传开了：二姑上门借钱
+  {
+    id: 'relative_loan', model: 'neighbor', icon: '👩‍🦳', chance: 0.5,
+    when: (c) => c.prologue && c.rich && daytime(c) && c.seen.relative_loan === undefined,
+    choices: [{ id: 'lend', need: (c) => c.money >= 5000 }, { id: 'refuse' }],
+  },
   {
     id: 'neighbor_rice', model: 'neighbor', icon: '👵', chance: 0.35,
     when: (c) => c.prologue && c.day >= 1 && daytime(c) && c.seen.neighbor_rice === undefined,

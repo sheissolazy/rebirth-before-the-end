@@ -22,6 +22,7 @@ import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
 import { FireGlow, TV_STAND_H, TvScreen, acIndoor, crtTv, flue, generatorBox, ironStove, stool, tvStand } from './hearth'
 import type { NewsView } from './news'
 import { freezer, waterDispenser } from './kitchen'
+import { LOTTERY, STOCKS, marketState, pad2, stockPrice } from './money'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
@@ -192,6 +193,15 @@ export interface PhoneView {
   fee: number
   /** 今天已经请过人了 */
   invited: boolean
+  /** 股票：开没开市、三只股票今天的价和昨天的价、手上多少股 */
+  market: 'open' | 'closed' | 'gone'
+  stocks: { id: string; name: string; code: string; memory: string; clarity: 'clear' | 'half' | 'vague'; price: number; prev: number; shares: number; cost: number }[]
+  /** 彩票：号码（后区第二个记不清）、买了没有、开奖了没有、中了多少 */
+  lottery: {
+    issue: string; front: number[]; back: number; back2Maybe: number[]; price: number; maxMult: number
+    drawText: string; canBuy: boolean; ticket: { back2: number; mult: number } | null
+    drawn: boolean; real: number | null; prize: number; claimed: boolean; canClaim: boolean
+  }
 }
 
 /** 点家具 / 点人物弹出的小菜单：家具的选项带 spot（去用它），人物的选项带 act（走过去互动） */
@@ -3198,7 +3208,39 @@ export class World {
       contacts: l.contacts(),
       fee: ONLINE_FEE,
       invited: l.inviteDay === day || !!l.invited,
+      market: marketState(day, l.clock.hour),
+      stocks: STOCKS.map((st) => ({
+        id: st.id, name: st.name, code: st.code, memory: st.memory, clarity: st.clarity,
+        price: stockPrice(st.id, day, l.stockFate), prev: day > 0 ? stockPrice(st.id, day - 1, l.stockFate) : stockPrice(st.id, 0, l.stockFate),
+        shares: l.shares[st.id] ?? 0, cost: l.costBasis[st.id] ?? 0,
+      })),
+      lottery: {
+        issue: LOTTERY.issue, front: [...LOTTERY.front], back: LOTTERY.back, back2Maybe: [...LOTTERY.back2Maybe], price: LOTTERY.price, maxMult: LOTTERY.maxMult,
+        drawText: `末日前 ${PROLOGUE_DAYS - LOTTERY.drawDay} 天晚上 ${Math.floor(LOTTERY.drawHour)}:${pad2(Math.round((LOTTERY.drawHour % 1) * 60))} 开奖`,
+        canBuy: !l.ticket && !l.lotteryDrawn && !(day === LOTTERY.drawDay && l.clock.hour >= LOTTERY.drawHour - 0.5),
+        ticket: l.ticket ? { ...l.ticket } : null,
+        drawn: l.lotteryDrawn, real: l.lotteryDrawn ? l.lotteryBack2 : null,
+        prize: l.lotteryPrize, claimed: l.lotteryClaimed, canClaim: !!l.lotteryPrize && !l.lotteryClaimed && day < PROLOGUE_DAYS,
+      },
     }
+  }
+
+  tradeStock(id: string, lots: number): string {
+    const r = this.life.tradeStock(id, lots)
+    this.pushLifeHud()
+    return r
+  }
+
+  buyTicket(back2: number, mult: number): string {
+    const r = this.life.buyTicket(back2, mult)
+    this.pushLifeHud()
+    return r
+  }
+
+  claimLottery(): number {
+    const n = this.life.claimLottery()
+    this.pushLifeHud()
+    return n
   }
 
   placeOrder(cart: Cart): string {

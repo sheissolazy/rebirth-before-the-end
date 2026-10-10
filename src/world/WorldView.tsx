@@ -876,7 +876,10 @@ export default function WorldView() {
       {phone && <PhonePanel view={phone} onClose={() => setPhone(null)}
         onOrder={(cart) => { const r = world.current?.placeOrder(cart) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
         onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }}
-        onInvite={(id) => { const r = world.current?.inviteContact(id) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }} />}
+        onInvite={(id) => { const r = world.current?.inviteContact(id) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
+        onTrade={(id, lots) => { const r = world.current?.tradeStock(id, lots) ?? 'closed'; setPhone(world.current?.phoneView() ?? null); return r }}
+        onTicket={(b2, m) => { const r = world.current?.buyTicket(b2, m) ?? 'closed'; setPhone(world.current?.phoneView() ?? null); return r }}
+        onClaim={() => { const n = world.current?.claimLottery() ?? 0; setPhone(world.current?.phoneView() ?? null); return n }} />}
       {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
         onPick={(o) => {
           if (o.act && furn.target) world.current?.interactWith(furn.target, o.act)

@@ -61,6 +61,13 @@ export interface WorldSave {
   interactions?: Record<string, { day: number; n: number }>
   /** 今天的菜 */
   menu?: string
+  shares?: Record<string, number>
+  costBasis?: Record<string, number>
+  stockFate?: boolean
+  lotteryBack2?: number
+  ticket?: { back2: number; mult: number } | null
+  lotteryPrize?: number
+  lotteryClaimed?: boolean
   larder?: Record<Ing, number>
   fridge?: { dish: string; left: number }[]
   fridgeWarned?: boolean
@@ -147,6 +154,13 @@ export function snapshot(life: Household): WorldSave {
     runGain: Object.fromEntries(life.runGain),
     interactions: Object.fromEntries(life.interactions),
     menu: life.menu,
+    shares: { ...life.shares },
+    costBasis: { ...life.costBasis },
+    stockFate: life.stockFate,
+    lotteryBack2: life.lotteryBack2,
+    ticket: life.ticket ? { ...life.ticket } : null,
+    lotteryPrize: life.lotteryPrize,
+    lotteryClaimed: life.lotteryClaimed,
     larder: (life.syncLarder(), { ...life.larder }),
     fridge: life.fridge.map((p) => ({ ...p })),
     fridgeWarned: life.fridgeWarned,
@@ -232,6 +246,13 @@ export function restore(life: Household, s: WorldSave): void {
   life.runGain = new Map(Object.entries(s.runGain ?? {}))
   life.interactions = new Map(Object.entries(s.interactions ?? {}))
   life.menu = s.menu ?? 'rice'
+  life.shares = { ...(s.shares ?? {}) }
+  life.costBasis = { ...(s.costBasis ?? {}) }
+  if (s.stockFate !== undefined) life.stockFate = s.stockFate
+  if (s.lotteryBack2 !== undefined) life.lotteryBack2 = s.lotteryBack2
+  life.ticket = s.ticket ? { ...s.ticket } : null
+  life.lotteryPrize = s.lotteryPrize ?? 0
+  life.lotteryClaimed = !!s.lotteryClaimed
   // 老存档没有分食材：全算主食（对账时自动补）
   life.larder = s.larder ? { ...s.larder } : { grain: 0, meat: 0, veg: 0, egg: 0 }
   life.fridge = (s.fridge ?? []).map((p) => ({ ...p }))

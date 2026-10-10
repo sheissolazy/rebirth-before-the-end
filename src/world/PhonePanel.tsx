@@ -5,19 +5,29 @@ import { t, type UiKey } from '../i18n'
 import type { PhoneView } from './World'
 import { TONE } from './ui'
 
-type Tab = 'shop' | 'orders' | 'contacts'
+type Tab = 'shop' | 'orders' | 'contacts' | 'stocks' | 'lottery'
 
-export function PhonePanel({ view, onOrder, onCall, onInvite, onClose }: {
+export function PhonePanel({ view, onOrder, onCall, onInvite, onTrade, onTicket, onClaim, onClose }: {
   view: PhoneView
   onOrder: (cart: Record<string, number>) => string
   onCall: (id: string) => { r: string; line?: string }
   onInvite: (id: string) => string
+  onTrade: (id: string, lots: number) => string
+  onTicket: (back2: number, mult: number) => string
+  onClaim: () => number
   onClose: () => void
 }) {
   const [tab, setTab] = useState<Tab>('shop')
   const [cart, setCart] = useState<Record<string, number>>({})
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
   const [calling, setCalling] = useState<{ name: string; line: string } | null>(null)
+  const [back2, setBack2] = useState<number>(view.lottery.back2Maybe[0])
+  const [mult, setMult] = useState(1)
+  const yuan = (n: number) => `¥${Math.round(n).toLocaleString()}`
+  const trade = (id: string, lots: number) => {
+    const r = onTrade(id, lots)
+    setMsg(r === 'ok' ? null : { text: { money: '钱不够', closed: '现在没开市（末日前每天 9:30～15:00）', none: '手上没有这只股票' }[r] ?? r, ok: false })
+  }
   const cost = view.items.reduce((s, it) => s + (cart[it.id] ?? 0) * it.price, 0)
   const total = cost > 0 ? cost + view.fee : 0
   const signal = view.state !== 'nosignal'
@@ -107,6 +117,94 @@ export function PhonePanel({ view, onOrder, onCall, onInvite, onClose }: {
                   </div>
                 </div>
               )}
+              {tab === 'stocks' && (
+                <div className="pt-1">
+                  <div className="flex items-baseline justify-between px-1 pb-1">
+                    <div className="text-[20px] font-bold">股票</div>
+                    <div className="text-[11px] font-semibold" style={{ color: view.market === 'open' ? '#d0571f' : '#8a7f74' }}>{view.market === 'open' ? '● 交易中' : view.market === 'gone' ? '股市没了' : '休市（9:30～15:00 开）'}</div>
+                  </div>
+                  <div className="px-1 pb-2 text-[11px] text-[#8a7f74]">重生的人知道后面几天会怎样——但记忆有清楚有模糊。末日一到股市就没了，记得卖掉。</div>
+                  <div className="space-y-2">
+                    {view.stocks.map((st) => {
+                      const ch = st.prev ? (st.price / st.prev - 1) * 100 : 0
+                      const up = ch >= 0
+                      const value = st.shares * st.price
+                      const pl = value - st.cost
+                      return (
+                        <div key={st.id} className="rounded-xl bg-white px-3 py-2.5 shadow-sm ring-1 ring-black/5">
+                          <div className="flex items-baseline justify-between">
+                            <div><span className="text-[14px] font-bold">{st.name}</span> <span className="text-[11px] text-[#8a7f74]">{st.code}</span></div>
+                            <div className="text-right">
+                              <span className="text-[16px] font-bold tabular-nums" style={{ color: up ? '#d23a2a' : '#2f9a4a' }}>{st.price.toFixed(2)}</span>
+                              <span className="ml-1.5 text-[11px] font-semibold tabular-nums" style={{ color: up ? '#d23a2a' : '#2f9a4a' }}>{up ? '+' : ''}{ch.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          <div className="mt-1 rounded-md bg-[#f6f1e8] px-2 py-1 text-[11px] italic leading-snug text-[#6b5f53]">
+                            <span className="mr-1 not-italic font-semibold" style={{ color: st.clarity === 'clear' ? '#3f8a2c' : st.clarity === 'half' ? '#b07d10' : '#c0533a' }}>{st.clarity === 'clear' ? '记得清' : st.clarity === 'half' ? '有印象' : '记不清'}</span>{st.memory}
+                          </div>
+                          {st.shares > 0 && (
+                            <div className="mt-1 flex justify-between text-[11px]">
+                              <span>持有 {st.shares} 股 · 市值 {yuan(value)}</span>
+                              <span className="font-semibold" style={{ color: pl >= 0 ? '#d23a2a' : '#2f9a4a' }}>{pl >= 0 ? '+' : ''}{yuan(pl).replace('¥-', '-¥')}</span>
+                            </div>
+                          )}
+                          <div className="mt-1.5 flex gap-1.5">
+                            <button disabled={view.market !== 'open'} onClick={() => trade(st.id, 1)} className="flex-1 rounded-full py-1 text-[11px] font-semibold text-white disabled:opacity-35" style={{ background: '#d23a2a' }}>买一手 {yuan(st.price * 100)}</button>
+                            <button disabled={view.market !== 'open' || st.shares <= 0} onClick={() => trade(st.id, -1)} className="flex-1 rounded-full py-1 text-[11px] font-semibold text-white disabled:opacity-35" style={{ background: '#2f9a4a' }}>卖一手</button>
+                            <button disabled={view.market !== 'open' || st.shares <= 0} onClick={() => trade(st.id, -st.shares / 100)} className="rounded-full bg-[#f1ebe2] px-2.5 py-1 text-[11px] font-semibold disabled:opacity-35">全卖</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {tab === 'lottery' && (
+                <div className="pt-1">
+                  <div className="px-1 pb-2 text-[20px] font-bold">彩票</div>
+                  <div className="rounded-xl bg-gradient-to-b from-[#fff7ea] to-[#fde9c8] px-3 py-3 shadow-sm ring-1 ring-[#e8b36a]">
+                    <div className="text-[13px] font-bold text-[#8a4b12]">超级大乐透 第 {view.lottery.issue} 期</div>
+                    <div className="text-[11px] text-[#a0703a]">{view.lottery.drawText}，第二天能兑奖</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {view.lottery.front.map((n) => <span key={n} className="flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: '#d23a2a' }}>{String(n).padStart(2, '0')}</span>)}
+                      <span className="mx-0.5 text-[#c9a46a]">|</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: '#2a6fd2' }}>{String(view.lottery.back).padStart(2, '0')}</span>
+                      {(view.lottery.ticket ? [view.lottery.ticket.back2] : view.lottery.back2Maybe).map((n) => (
+                        <button key={n} disabled={!view.lottery.canBuy} onClick={() => setBack2(n)}
+                          className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${(view.lottery.ticket?.back2 ?? back2) === n ? 'text-white' : 'text-[#2a6fd2] ring-1 ring-[#2a6fd2]'}`}
+                          style={{ background: (view.lottery.ticket?.back2 ?? back2) === n ? '#2a6fd2' : 'transparent' }}>{String(n).padStart(2, '0')}</button>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-[11px] italic leading-snug text-[#6b5f53]">前世这一期的号码背得滚瓜烂熟……就是后区最后一个，是 {view.lottery.back2Maybe.join(' 还是 ')}？</div>
+                    {view.lottery.canBuy && (
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-[12px]">
+                          <span>倍数</span>
+                          {Array.from({ length: view.lottery.maxMult }, (_, k) => k + 1).map((k) => (
+                            <button key={k} onClick={() => setMult(k)} className={`h-6 w-6 rounded-full text-[11px] font-bold ${mult === k ? 'bg-[#e2793a] text-white' : 'bg-white ring-1 ring-black/10'}`}>{k}</button>
+                          ))}
+                        </div>
+                        <button onClick={() => { const r = onTicket(back2, mult); setMsg(r === 'ok' ? null : { text: r === 'money' ? '钱不够' : '已经截止了', ok: false }) }}
+                          className="rounded-full bg-[#e2793a] px-3 py-1 text-[12px] font-bold text-white">买一注 ¥{view.lottery.price * mult}</button>
+                      </div>
+                    )}
+                    {view.lottery.canBuy && <div className="mt-1 text-[10px] text-[#8a7f74]">倍数越高中得越多，也越扎眼（彩票站最多给打 {view.lottery.maxMult} 倍）</div>}
+                    {view.lottery.ticket && !view.lottery.drawn && <div className="mt-2 text-[12px] font-semibold text-[#8a4b12]">已买 {view.lottery.ticket.mult} 倍，等开奖。</div>}
+                    {view.lottery.drawn && (
+                      <div className="mt-2 rounded-lg bg-white/70 px-2.5 py-2 text-[12px]">
+                        <div>开奖号码：后区最后一个是 <b>{String(view.lottery.real).padStart(2, '0')}</b></div>
+                        {view.lottery.ticket ? (
+                          <div className="mt-0.5 font-semibold" style={{ color: '#d23a2a' }}>{view.lottery.claimed ? `已兑奖 ${yuan(view.lottery.prize)}` : view.lottery.prize ? `中了 ${yuan(view.lottery.prize)}（税后）` : ''}</div>
+                        ) : <div className="mt-0.5 text-[#8a7f74]">这一期没买。</div>}
+                        {view.lottery.canClaim && (
+                          <button onClick={() => { const n = onClaim(); if (n) setMsg({ text: `${yuan(n)} 到账了`, ok: true }) }}
+                            className="mt-1.5 w-full rounded-full py-1.5 text-[13px] font-bold text-white" style={{ background: '#d23a2a' }}>去兑奖</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {tab === 'contacts' && (
                 <div className="pt-1">
                   <div className="px-1 pb-2 text-[20px] font-bold">{t('world.phone.tab.contacts').replace(/^\S+\s/, '')}</div>
@@ -142,7 +240,7 @@ export function PhonePanel({ view, onOrder, onCall, onInvite, onClose }: {
           )}
 
           {/* 联系人页的提示（请了谁、什么时候到） */}
-          {signal && tab === 'contacts' && msg && (
+          {signal && (tab === 'contacts' || tab === 'stocks' || tab === 'lottery') && msg && (
             <div className="border-t border-black/5 bg-white px-4 py-2 text-[12px] font-semibold" style={{ color: msg.ok ? '#3f8a2c' : TONE.bad }}>{msg.text}</div>
           )}
           {/* 网购的结账条 */}
@@ -160,7 +258,7 @@ export function PhonePanel({ view, onOrder, onCall, onInvite, onClose }: {
 
           {/* 底部标签 */}
           <div className="flex border-t border-black/5 bg-[#fbf9f6] pb-3 pt-1.5">
-            {(['shop', 'orders', 'contacts'] as const).map((k) => (
+            {(['shop', 'orders', 'stocks', 'lottery', 'contacts'] as const).map((k) => (
               <button key={k} onClick={() => { setTab(k); setMsg(null) }}
                 className={`flex-1 text-center text-[11px] font-semibold ${tab === k ? 'text-[#e2793a]' : 'text-[#9a8f84]'}`}>
                 {t(`world.phone.tab.${k}`)}{k === 'orders' && view.orders.length > 0 ? ` (${view.orders.length})` : ''}

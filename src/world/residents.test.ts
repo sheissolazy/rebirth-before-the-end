@@ -2561,3 +2561,71 @@ describe('冰箱和做饭', () => {
     expect(at).toBe('0.85,-0.25')
   })
 })
+
+describe('炒股、彩票', () => {
+  it('华康医药：第一天买两手，末日前一天卖掉赚三成多；收市后买不了；末日一到没卖的股票没了', () => {
+    const { life } = simulate('paradise', 0)
+    life.money = 20000
+    life.clock = { day: 0, hour: 10 }
+    expect(life.tradeStock('huakang', 2)).toBe('ok')
+    expect(life.money).toBe(20000 - 2400)
+    expect(life.shares.huakang).toBe(200)
+    life.clock = { day: 0, hour: 16 }
+    expect(life.tradeStock('huakang', 1)).toBe('closed')
+    life.clock = { day: 3, hour: 10 }
+    expect(life.tradeStock('huakang', -1)).toBe('ok')
+    expect(life.money).toBe(20000 - 2400 + 1597)
+    expect(life.tradeStock('xindun', 1)).toBe('ok')
+    // 末日：剩下的一手华康、一手鑫盾都没了
+    life.clock = { day: PROLOGUE_DAYS, hour: 8 }
+    life.speed = 1
+    life.tick(0.05, () => false)
+    expect(life.shares).toEqual({})
+    expect(life.log.some((l) => l.key === 'world.stock.gone')).toBe(true)
+  })
+
+  it('记得模糊的那只：这一世往哪边走开局定好，存档后不变', () => {
+    const { life } = simulate('paradise', 0)
+    life.stockFate = false
+    const back = simulate('paradise', 0).life
+    back.stockFate = true
+    restore(back, snapshot(life))
+    expect(back.stockFate).toBe(false)
+  })
+
+  it('彩票：后区最后一个号选对了是一等奖、选错了二等奖；开奖后兑奖到账，消息传开二姑会来借钱', () => {
+    for (const right of [true, false]) {
+      const { life } = simulate('paradise', 0)
+      life.money = 1000
+      life.lotteryBack2 = 9
+      life.clock = { day: 0, hour: 10 }
+      expect(life.buyTicket(right ? 9 : 8, 2)).toBe('ok')
+      expect(life.buyTicket(9, 1)).toBe('have')
+      expect(life.money).toBe(996)
+      // 开奖
+      life.clock = { day: 1, hour: 21.6 }
+      life.speed = 1
+      life.tick(0.05, () => false)
+      expect(life.lotteryPrize).toBe((right ? 120000 : 30000) * 2)
+      expect(life.claimLottery()).toBe(life.lotteryPrize)
+      expect(life.money).toBe(996 + life.lotteryPrize)
+      expect(life.claimLottery()).toBe(0)
+      const ctx = { ...life.visitorCtx(), hour: 10 }
+      expect(VISITORS.find((v) => v.id === 'relative_loan')!.when(ctx)).toBe(true)
+    }
+  })
+
+  it('开奖以后、末日以后都买不了彩票；末日以后兑不了奖', () => {
+    const { life } = simulate('paradise', 0)
+    life.money = 1000
+    life.clock = { day: 1, hour: 21.2 }
+    expect(life.buyTicket(9, 1)).toBe('closed')
+    life.clock = { day: 0, hour: 10 }
+    life.buyTicket(9, 1)
+    life.clock = { day: PROLOGUE_DAYS, hour: 8 }
+    life.speed = 1
+    life.tick(0.05, () => false)
+    expect(life.lotteryPrize).toBeGreaterThan(0)
+    expect(life.claimLottery()).toBe(0)
+  })
+})

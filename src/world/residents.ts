@@ -20,6 +20,7 @@ import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
 import { buildNews, type NewsView } from './news'
+import { LOT, LOTTERY, marketState, stockPrice } from './money'
 import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
@@ -538,6 +539,7 @@ export class Household {
     this.courierTick(hours)
     this.orderTick()
     this.healTick()
+    this.moneyTick()
     // 末日后开着电视：发电机烧油
     if (this.clock.day >= PROLOGUE_DAYS && this.tvOn) this.fuel = Math.max(0, this.fuel - hours * GEN_FUEL)
     for (const a of this.actors) {
@@ -580,6 +582,87 @@ export class Household {
           a.setPath(route(this.navs, a.pos, HOME_IN) ?? [])
         }
       }
+    }
+  }
+
+  // --- 炒股、彩票（末日前搞钱） ----------------------------------------------------
+
+  /** 手上的股票（id → 股数）、买进一共花了多少钱 */
+  shares: Record<string, number> = {}
+  costBasis: Record<string, number> = {}
+  /** 记得模糊的那只股票这一世往哪边走、彩票后区第二个号其实是几（开局定好；不动 rand，免得别的随机事件跟着变） */
+  stockFate = Math.random() < 0.6
+  lotteryBack2: number = Math.random() < 0.5 ? LOTTERY.back2Maybe[0] : LOTTERY.back2Maybe[1]
+  /** 买的彩票：后区第二个号选的几、打了几倍 */
+  ticket: { back2: number; mult: number } | null = null
+  /** 开奖以后中了多少（没兑的）；兑过了没有 */
+  lotteryPrize = 0
+  lotteryClaimed = false
+
+  /** 买（lots > 0）或卖（lots < 0）几手 */
+  tradeStock(id: string, lots: number): 'ok' | 'money' | 'closed' | 'none' {
+    if (marketState(this.clock.day, this.clock.hour) !== 'open') return 'closed'
+    const price = stockPrice(id, this.clock.day, this.stockFate)
+    if (lots > 0) {
+      const cost = Math.round(price * LOT * lots)
+      if (cost > this.money) return 'money'
+      this.money -= cost
+      this.shares[id] = (this.shares[id] ?? 0) + LOT * lots
+      this.costBasis[id] = (this.costBasis[id] ?? 0) + cost
+      return 'ok'
+    }
+    const have = this.shares[id] ?? 0
+    const n = Math.min(have, LOT * -lots)
+    if (n <= 0) return 'none'
+    this.money += Math.round(price * n)
+    this.costBasis[id] = (this.costBasis[id] ?? 0) * (1 - n / have)
+    this.shares[id] = have - n
+    if (!this.shares[id]) { delete this.shares[id]; delete this.costBasis[id] }
+    return 'ok'
+  }
+
+  /** 开奖前买一注（后区第二个号自己选，最多 3 倍） */
+  buyTicket(back2: number, mult: number): 'ok' | 'money' | 'closed' | 'have' {
+    if (this.ticket) return 'have'
+    const c = this.clock
+    if (c.day > LOTTERY.drawDay || (c.day === LOTTERY.drawDay && c.hour >= LOTTERY.drawHour - 0.5)) return 'closed'
+    const m = Math.max(1, Math.min(LOTTERY.maxMult, Math.round(mult)))
+    if (LOTTERY.price * m > this.money) return 'money'
+    this.money -= LOTTERY.price * m
+    this.ticket = { back2, mult: m }
+    this.note('world.lottery.bought', { n: m })
+    return 'ok'
+  }
+
+  /** 开过奖了没有 */
+  get lotteryDrawn(): boolean {
+    const c = this.clock
+    return c.day > LOTTERY.drawDay || (c.day === LOTTERY.drawDay && c.hour >= LOTTERY.drawHour)
+  }
+
+  /** 去兑奖（末日以后就兑不了了） */
+  claimLottery(): number {
+    if (!this.lotteryPrize || this.lotteryClaimed || this.clock.day >= PROLOGUE_DAYS) return 0
+    const n = this.lotteryPrize
+    this.money += n
+    this.lotteryClaimed = true
+    this.note('world.lottery.claimed', { n: n.toLocaleString() })
+    return n
+  }
+
+  /** 开奖；末日一到股市没了 */
+  private moneyTick(): void {
+    if (this.ticket && this.lotteryDrawn && !this.lotteryPrize && !this.lotteryClaimed) {
+      const first = this.ticket.back2 === this.lotteryBack2
+      this.lotteryPrize = (first ? LOTTERY.first : LOTTERY.second) * this.ticket.mult
+      this.note(first ? 'world.lottery.first' : 'world.lottery.second', { n: this.lotteryPrize.toLocaleString() })
+      this.onRemind?.('world.lottery.wonToast')
+    }
+    if (this.clock.day >= PROLOGUE_DAYS && Object.keys(this.shares).length) {
+      const n = Object.values(this.shares).reduce((m, x) => m + x, 0)
+      this.note('world.stock.gone', { n })
+      this.shares = {}
+      this.costBasis = {}
     }
   }
 
@@ -644,6 +727,7 @@ export class Household {
       food: this.stock.food, water: this.stock.water, ammo: this.ammo.n, seen: this.seen, helpedNeighbor: this.helpedNeighbor, residents: this.residents,
       affection: this.affection, warnedJiangye: this.warnedJiangye, guchenMet: this.guchenMet, lendable: this.lendable().length, xielinNotes: this.xielinNotes, jiangyeHome: this.jiangyeHome, shenyanHome: this.shenyanHome,
       worstHealth: Math.min(...this.actors.filter((a) => !a.away && !a.lost).map((a) => a.health)), medkits: this.medkits,
+      money: this.money, rich: this.lotteryClaimed,
     }
   }
 
@@ -1133,7 +1217,13 @@ export class Household {
     this.seen[def.id] = this.clock.day
     const all = (d: number) => { for (const a of this.actors) a.needs = { ...a.needs, mood: Math.max(0, Math.min(100, a.needs.mood + d)) } }
     const food = (d: number) => { this.stock = { ...this.stock, food: Math.max(0, this.stock.food + d) } }
-    if (def.id === 'neighbor_rice') {
+    if (def.id === 'relative_loan') {
+      // 中了彩票的消息传开了，二姑上门借钱
+      if (choice === 'lend') { this.money -= 5000; all(3) } else {
+        this.actors[1].needs = { ...this.actors[1].needs, mood: Math.max(0, this.actors[1].needs.mood - 8) }
+        this.actors[0].needs = { ...this.actors[0].needs, mood: Math.max(0, this.actors[0].needs.mood - 3) }
+      }
+    } else if (def.id === 'neighbor_rice') {
       if (choice === 'give') { food(-1); all(6); this.helpedNeighbor = true } else this.actors[0].needs.mood = Math.max(0, this.actors[0].needs.mood - 3)
     } else if (def.id === 'neighbor_thanks') {
       this.stock = { ...this.stock, water: this.stock.water + 3 }
