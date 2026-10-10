@@ -111,3 +111,16 @@ fuser -k 4173/tcp                   # 关预览；别用 pkill -f，会把自己
 - 面板藏着时看画面：`tools/preview/devserve.py`（静态文件 + 收截图）+ `tools/preview/shot.js`（页面里的 `__ff` 快进、`__shot` 离屏截图），详见 `~/Documents/MyGames/KNOWLEDGE.md`"面板藏着也能看画面"。
 - 预览面板读不了 `~/Documents`：用 `VITE_SAVE_PREFIX=rbte-proto npx vite build --outDir <scratchpad>/proto-dist` 再用 python http.server 看；页面带 `?debug` 时可以在控制台用 `window.__world`。
 - 还没做、等用户拍板的见 `docs/DEVLOG.md` 文末"下一步"。
+
+## 10. 2026-10-09 晚 ～ 10-10 凌晨（囤囤一个人做）：新加的系统在哪
+
+- **时间**：`life.ts` 的 `DAY_SECONDS = 1440`（一倍速现实 1 秒 = 游戏 1 分钟）；说话气泡、挥手这种小动作的倒计时乘 `BEAT`（按现实秒算）。
+- **电视、火炉**：`residents.ts` 的 `watchTv` / `tvPowered` / `tvOn` / `fireLit` / `news()`；新闻内容 `news.ts`；画面 `hearth.ts`（屏幕 `TvScreen`、火光 `FireGlow`、卡通画风的电视柜/铁皮炉/小板凳）；`World.ts` 的 `addHearth` / `updateHearth`。
+- **做饭**：食材 `larder`（主食/肉/菜/蛋，跟 `stock.food` 对账 `syncLarder`）、冰柜里的饭 `fridge`、`cookPot` / `potTask` / `eatTask`（`plate` 任务去冰柜拿一份）/ `fallbackDish`；存档时 `foodForSave` 把做到一半的那锅、手里那份算回去。菜谱 `life.ts` 的 `DISHES`（`stew` 大杂烩用 `any`）。界面 `CookPanel.tsx`；大冰柜、饮水机、鸡蛋篮 `kitchen.ts`。
+- **闲着干什么**：`residents.ts` 的 `freeTime`（按权重挑）+ `nearForage`（末日前、篱笆外 `NEAR_FORAGE` 米以内，女主不去）。
+- **手机炒股、彩票**：`money.ts`（`STOCKS`、`LOTTERY`）+ `residents.ts` 的 `tradeStock` / `buyTicket` / `claimLottery` / `moneyTick`；界面在 `PhonePanel.tsx` 的 stocks / lottery 页；二姑借钱是 `visitors.ts` 的 `relative_loan`。
+- **菜园**：`garden.ts`（`CROPS`、`PLOT_SLOTS`、`plotSpot`）+ `residents.ts` 的 `plots` / `seeds` / `gardenTask` / `finishGarden` / `harvestPlot` / `commandPlot` / `openPlot`（开好的地 `blockPlot` 挡住寻路）；画面 `gardenView.ts`（按材质合并网格）；界面 `GardenPanel.tsx`。
+- **家当面板**：`World.holdings()` + `HoldingsPanel.tsx`（点储藏室铁架子）。
+- **气温**：`climate.ts`（每月温度、屋里温度、冷热伤害、阈值常量）+ `residents.ts` 的 `climateTick` / `acOn` / `stoveHeat` / `inTemp`；画面在 `World.applySky`（泛黄/发白、草地结霜）和 `weather.ts`（下雪 `flakes`）。
+- **新防御**：地雷 `siege.ts` 的 `MINE_SPOTS` / `blast`、探照灯 `LIGHT`（`z.lit` 走得慢）；建设项目 `mines` / `light`。
+- 测试 216 个：`npx vitest run`（约 40 秒）。**macOS 没有 `timeout`，后台跑 + pgrep 看着**；测试里循环次数别写成每轮除以 `life.speed`（游戏结束速度变 0 会死循环）。
