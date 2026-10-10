@@ -18,7 +18,7 @@ import {
 } from './paradise'
 import { PantryView } from './pantry'
 import { TONE } from './ui'
-import { campBed, ironBedBedding, platformBed } from './bedroom'
+import { campBed, ironBedBedding, platformBed, treadmill } from './bedroom'
 import {
   COLORS, barrel, box, car, counter, crossbowMesh, crowbar, desk, fridge, neighborHouse, rollingPin, shelf, shotgun, sofa, stairs,
   flatRoof, toon, toonify, tree,
@@ -179,7 +179,7 @@ export interface FurnitureMenu {
   /** 点的是人：TA 的名字和现在的心情 */
   target?: string
   mood?: number
-  options: { label: UiKey; spot?: Spot; act?: InteractKind }[]
+  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' }[]
 }
 
 /** 家具在菜单标题上叫什么 */
@@ -210,7 +210,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -285,6 +285,9 @@ export class World {
   private catHeart = new THREE.Sprite(this.catLove)
   private petT = 20
   private petting: Actor | null = null
+  private purred = false
+  /** 跑步机跑带的贴图（有人跑时滚动） */
+  private treadmillBelt: THREE.Texture | null = null
   /** 铁门的两扇门（绕门轴转）：车进出时全开，有人走过时开一半 */
   private gateDoors: { pivot: THREE.Object3D; sign: number }[] = []
   private gateAngle = 0
@@ -516,6 +519,7 @@ export class World {
     this.life.makeActor = (name, model, at) => {
       const a = new Actor(name, '#8a6d4f', '#222222', 1.03, at, { hunger: 60, thirst: 60, energy: 70, mood: 60 })
       a.model = model
+      a.fitness = 45
       this.setupActor(a)
       this.dressResident(a)
       return a
@@ -1256,10 +1260,11 @@ export class World {
       return o
     }
     const made: Record<string, () => THREE.Object3D> = {
-      sofa, counter, fridge, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H),
+      sofa, counter, fridge, desk, shelf, wall_map: parchmentMap, stairs: () => stairs(FLOOR_H), treadmill,
     }
     const obj = made[p.piece]?.() ?? box(0.5, 0.5, 0.5, '#ff00ff')
     obj.userData.piece = p.piece
+    if (obj.userData.belt) this.treadmillBelt = obj.userData.belt as THREE.Texture
     if (p.toonOnly) obj.userData.toonOnly = true
     obj.position.set(p.x, y, p.z)
     obj.rotation.y = p.piece === 'wall_map' ? 0 : THREE.MathUtils.degToRad(p.rot)
@@ -1445,6 +1450,9 @@ export class World {
     dad.weapon = 'crowbar'
     dad.handy = true
     dad.model = 'dad'
+    // 体能：爸爸干惯了体力活，妈妈弱一点
+    mom.fitness = 25
+    dad.fitness = 40
     this.actors.push(this.heroine, mom, dad)
     for (const a of this.actors) this.setupActor(a)
     this.selected = this.heroine
@@ -2026,8 +2034,16 @@ export class World {
       if (this.petting) {
         const p = this.petting
         if (p.task?.kind !== 'pet') this.petting = null
-        else if (p.task.phase === 'use') { cat.hearts = Math.max(cat.hearts, 0.3); cat.stay(3) }
+        else if (p.task.phase === 'use') {
+          cat.hearts = Math.max(cat.hearts, 0.3)
+          cat.stay(3)
+          // 摸上了：呼噜呼噜
+          if (!this.purred) { this.purred = true; this.sound.purr() }
+        }
       }
+      // 跑步机：有人在上面跑，跑带往后滚
+      const belt = this.treadmillBelt
+      if (belt && this.actors.some((a) => a.task?.kind === 'run' && a.task.phase === 'use')) belt.offset.y += sim * 0.9
       // 猫挨着的人（1.3 米内、同一层）心情慢慢变好
       if (sim > 0) {
         for (const a of this.actors) {
@@ -2277,6 +2293,15 @@ export class World {
     if (!cat) return
     cat.poke()
     this.sound.meow()
+    // 选中的人走过去蹲下撸它（猫坐着等）；走不过去就还是隔空喵一声
+    const who = this.mode === 'home' ? this.selected : this.heroine
+    if (this.life.petCat(who, cat.pos, true)) {
+      this.petting = who
+      this.purred = false
+      cat.stay(30)
+      this.toast('world.toast.goPet', 2, { who: who.name })
+      return
+    }
     this.sound.purr()
     this.toast('world.toast.cat', 2)
     for (const a of this.actors) {
@@ -2312,7 +2337,7 @@ export class World {
     if (fs) { this.tapForage(fs); return }
     // 点压水井 / 鸡圈：选中的人去压水、喂鸡
     const chore = floor === 0 ? this.choreUnder() : null
-    if (chore) { this.tapChore(chore); return }
+    if (chore) { this.tapChore(chore, cx, cy); return }
     // 点邻居家、街上盖着车罩的车、接雨水的桶：女主走过去搜（末日以后）
     const sc = floor === 0 ? this.scavengeUnder() : null
     if (sc) { this.tapScavenge(sc); return }
@@ -2504,7 +2529,15 @@ export class World {
   /** 鸡：走两步、停下啄几下，再换个地方（游戏暂停时也停） */
   private updateChickens(dt: number): void {
     if (dt <= 0) return
-    for (const c of this.chickens) {
+    // 有人蹲在鸡圈边逗小鸡（或者喂鸡）：小鸡都跑到栏杆这边围着 TA
+    const friend = this.actors.find((a) => (a.task?.kind === 'hens' || a.task?.kind === 'feed') && a.task.phase === 'use')
+    for (const [k, c] of this.chickens.entries()) {
+      if (friend && c.t <= 0) {
+        const ang = k * 1.7
+        c.tx = Math.max(COOP.x0 + 0.25, Math.min(COOP.x1 - 0.25, friend.pos.x + Math.cos(ang) * 0.45))
+        c.tz = Math.max(COOP.z0 + 0.25, Math.min(COOP.z1 - 0.25, COOP.z1 - 0.35 + Math.sin(ang) * 0.2))
+        c.t = 0.8 + Math.random()
+      }
       c.t -= dt
       const dx = c.tx - c.x
       const dz = c.tz - c.z
@@ -2533,8 +2566,15 @@ export class World {
     return hits[0].object === this.wellHit ? 'pump' : 'feed'
   }
 
-  private tapChore(what: 'pump' | 'feed'): void {
+  private tapChore(what: 'pump' | 'feed', cx = 0, cy = 0): void {
     const who = this.mode === 'home' ? this.selected : this.heroine
+    // 鸡圈：喂鸡捡蛋，或者蹲下逗逗小鸡
+    if (what === 'feed') {
+      this.onFurnitureMenu?.({ x: cx, y: cy, title: t('world.coop.title'), who: who.name, options: [
+        { label: 'world.coop.feed', cmd: 'feed' }, { label: 'world.coop.hens', cmd: 'hens' },
+      ] })
+      return
+    }
     const r = this.life.commandChore(who, what)
     this.toast(`world.chore.${what}.${r}`, 3, { who: who.name, n: String(this.life.pumpsLeft() - (r === 'ok' && what === 'pump' ? 1 : 0)) })
   }
@@ -2666,6 +2706,25 @@ export class World {
     const r = this.life.call(id)
     this.pushLifeHud()
     return r
+  }
+
+  /** 鸡圈菜单里选了一项 */
+  menuCommand(cmd: 'feed' | 'hens'): void {
+    this.onFurnitureMenu?.(null)
+    const who = this.mode === 'home' ? this.selected : this.heroine
+    if (cmd === 'feed') {
+      const r = this.life.commandChore(who, 'feed')
+      this.toast(`world.chore.feed.${r}`, 3, { who: who.name, n: '0' })
+    } else {
+      const r = this.life.playHens(who)
+      this.toast(`world.coop.r.${r}`, 3, { who: who.name })
+    }
+  }
+
+  /** 还没走出去的那一趟：叫回来（退钱退油） */
+  cancelTrip(n: number): void {
+    if (this.life.cancelTrip(n)) this.toast('world.toast.tripCancel', 3)
+    this.pushLifeHud()
   }
 
   /** 人物菜单里选了一项：选中的人走过去跟 TA 互动 */

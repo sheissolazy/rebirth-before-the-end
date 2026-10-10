@@ -78,6 +78,7 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
       {/* 左上：特质、楼上 */}
       <div className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
         {p.trait && <span className="rounded-sm bg-[#e8c98a]/90 px-1 text-[10px] font-medium text-[#2b2117]">{p.trait}</span>}
+        {!p.gone && <span title={t('world.fitness', { n: p.fitness })} className="rounded-sm bg-black/45 px-1 text-[10px] tabular-nums text-[#efe4d0]">💪{p.fitness}</span>}
         {p.floor === 1 && !p.trip && !p.gone && <span className="rounded-sm bg-black/45 px-1 text-[10px] text-[#efe4d0]">{t('world.upstairs')}</span>}
       </div>
       {/* 底部：名字、在干什么、状态词、四条细条 */}
@@ -525,7 +526,16 @@ export default function WorldView() {
 
       <div className="absolute bottom-3 left-3 flex gap-2">
         {hud.people.map((p) => (
-          <PersonCard key={p.name} p={p} portrait={hud.portraits[p.name]} selected={p.name === hud.selected} onClick={() => world.current?.select(p.name)} />
+          <div key={p.name} className="relative">
+            {/* 还没走出去的那一趟：卡片上方一个"叫回来" */}
+            {p.trip?.leaving && (
+              <button onClick={() => world.current?.cancelTrip(p.trip!.n)}
+                className="absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#e8c98a] px-2.5 py-0.5 text-[11px] font-semibold text-[#1d1915] shadow-md hover:bg-[#f1d8a3]">
+                {t('world.trip.recall')}
+              </button>
+            )}
+            <PersonCard p={p} portrait={hud.portraits[p.name]} selected={p.name === hud.selected} onClick={() => world.current?.select(p.name)} />
+          </div>
         ))}
       </div>
 
@@ -800,7 +810,7 @@ export default function WorldView() {
         onOrder={(cart) => { const r = world.current?.placeOrder(cart) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
         onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }} />}
       {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
-        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
+        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

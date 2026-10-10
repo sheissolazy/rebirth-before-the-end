@@ -28,7 +28,7 @@ import { lt, t, t as t_, type UiKey } from '../i18n'
 export type { Where } from './walker'
 
 export type TaskKind = 'walk' | 'cook' | 'eat' | 'drink' | 'sleep' | 'relax' | 'sit' | 'stroll' | 'idle' | 'repair' | 'guard' | 'garden'
-  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build'
+  | 'company' | 'tidy' | 'wash' | 'greet' | 'pet' | 'modvan' | 'help' | 'hang' | 'fetch' | 'forage' | 'craft' | 'pump' | 'feed' | 'interact' | 'build' | 'hens' | 'run'
 
 /** 要人去干活的工程：铁门外铺钉板、砌一圈石头院墙、开菜地。BUILD_WORK 是要干几个小时（会修东西的人快三成） */
 export type BuildId = 'trap' | 'wall' | 'garden'
@@ -100,6 +100,8 @@ export class Actor extends Walker {
   carrying = false
   /** 心情低于抑郁线累计了多少游戏小时 */
   lowMood = 0
+  /** 体能（0~100）：跑步机上跑步慢慢涨；近战打得更狠、被咬掉的血少一点 */
+  fitness = 30
   /** 正和家人一起歇着/吃饭，聊着天 */
   chatting = false
   /** 头顶冒出来的一句话（迎接、喊人），hours 是还剩多久 */
@@ -288,7 +290,8 @@ export interface PersonHud {
   /** 离家出走 / 不在了 */
   gone?: 'runaway' | 'lost' | 'dead' | 'lent'
   /** 出门在外：去哪了、还有几小时回来 */
-  trip?: { id: string; left: number }
+  trip?: { id: string; left: number; n: number; leaving: boolean }
+  fitness: number
   health: number
   needs: Needs
   doing: TaskKind | 'down'
@@ -2052,6 +2055,63 @@ export class Household {
     return 'ok'
   }
 
+  // --- 撸猫、逗小鸡、跑步机 ---------------------------------------------------
+
+  /** 今天逗过几次小鸡（今天喂鸡时多捡蛋） */
+  henJoy = { day: -1, n: 0 }
+
+  /** 点鸡圈选"逗逗小鸡"：选中的人走到鸡圈边蹲下逗一会儿 */
+  playHens(a: Actor): 'ok' | 'busy' {
+    if (this.isOut(a) || a.dead || (this.siege && !this.siege.done)) return 'busy'
+    const who = this.taken.get(COOP_SPOT)
+    if (who && who !== a) return 'busy'
+    this.cancel(a)
+    this.assign(a, { kind: 'hens', spot: COOP_SPOT, phase: 'go', hours: 0.3, manual: true })
+    return (a.task as Task | null)?.kind === 'hens' ? 'ok' : 'busy'
+  }
+
+  /** 逗完小鸡：心情变好（同一天越逗越没新鲜感）；小鸡高兴了，今天喂鸡多捡蛋，第一次逗还有一半机会当场下个蛋 */
+  private finishHens(a: Actor): void {
+    const joy = this.henJoy.day === this.clock.day ? this.henJoy.n : 0
+    this.henJoy = { day: this.clock.day, n: joy + 1 }
+    a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 7 / (1 + joy)) }
+    if (joy === 0 && this.rand() < 0.5) {
+      this.eggs += 1
+      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD }
+      this.note('world.log.henEgg', { who: a.name })
+    }
+  }
+
+  /** 今天在跑步机上已经练出了多少体能（一天最多涨 4，越跑越难涨） */
+  private runGain = new Map<string, { day: number; got: number }>()
+
+  /** 跑步：每跑一小时体能 +6（当天越往后越少），精力、水掉得比干活还快 */
+  private runTick(a: Actor, hours: number): void {
+    const g = this.runGain.get(a.name)
+    const got = g && g.day === this.clock.day ? g.got : 0
+    const add = Math.max(0, Math.min(Household.RUN_MAX - got, hours * 6 * (1 - got / Household.RUN_MAX)))
+    a.fitness = Math.min(100, a.fitness + add)
+    this.runGain.set(a.name, { day: this.clock.day, got: got + add })
+    a.needs = { ...a.needs, energy: Math.max(0, a.needs.energy - hours * 10), thirst: Math.max(0, a.needs.thirst - hours * 8) }
+  }
+
+  static readonly RUN_MAX = 4
+
+  /** 还没走出去（在往街口 / 车门走）的那一趟可以叫回来：钱、油都退回来 */
+  cancelTrip(tripId: number): boolean {
+    const t = this.trips.find((x) => x.id === tripId)
+    if (!t || t.phase !== 'out') return false
+    this.money += tripCost(t.def, this.clock.day < PROLOGUE_DAYS)
+    if (t.van) this.fuel += 1
+    this.trips = this.trips.filter((x) => x !== t)
+    for (const a of t.members) {
+      a.path = []
+      a.away = false
+    }
+    this.note('world.log.tripCancel', { who: t.members.map((m) => m.name).join('、'), where: placeName(t.def.id) })
+    return true
+  }
+
   /** 砌墙时一次站着砌几段 */
   static readonly WALL_STRETCH = 4
 
@@ -2238,6 +2298,9 @@ export class Household {
     if (t.kind === 'forage') return 'stroll'
     if (t.kind === 'craft') return 'cook'
     if (t.kind === 'build') return 'cook'
+    if (t.kind === 'hens') return 'relax'
+    // 跑步：比干活还累（runTick 里另外扣精力和水）
+    if (t.kind === 'run') return 'cook'
     if (t.kind === 'pump') return 'cook'
     if (t.kind === 'feed') return 'stroll'
     if (t.kind === 'modvan') return 'cook'
@@ -2468,12 +2531,13 @@ export class Household {
   }
 
   /** 撸猫：闲着的人走到猫跟前蹲下摸一会儿（World 看到猫趴着、身边有闲人时叫） */
-  petCat(a: Actor, cat: { x: number; z: number; floor: Floor }): boolean {
+  petCat(a: Actor, cat: { x: number; z: number; floor: Floor }, manual = false): boolean {
     const free = ['idle', 'stroll', 'relax', 'tidy']
-    if (this.isOut(a) || a.dead || a.settling || (this.siege && !this.siege.done)) return false
-    // 猫溜达到院子外面了：不跟出去
-    if (cat.floor === 0 && !inRect(YARD, cat.x, cat.z)) return false
-    if (a.task ? a.task.manual || !free.includes(a.task.kind) || (a.task.kind === 'relax' && a.task.phase === 'use') : a.path.length > 0) return false
+    if (this.isOut(a) || a.dead || (!manual && a.settling) || (this.siege && !this.siege.done)) return false
+    // 猫溜达到院子外面了：不跟出去（玩家点的除外）
+    if (!manual && cat.floor === 0 && !inRect(YARD, cat.x, cat.z)) return false
+    if (!manual && (a.task ? a.task.manual || !free.includes(a.task.kind) || (a.task.kind === 'relax' && a.task.phase === 'use') : a.path.length > 0)) return false
+    if (manual) this.cancel(a)
     // 站在猫旁边 0.5 米（找一个走得到的方向），面朝猫
     for (const ang of [0, 1.6, -1.6, 3.1]) {
       const x = cat.x + Math.sin(ang) * 0.62
@@ -2482,7 +2546,7 @@ export class Household {
       const face = THREE.MathUtils.radToDeg(Math.atan2(cat.x - x, cat.z - z))
       this.release(a)
       a.task = null
-      this.assign(a, { kind: 'pet', spot: { kind: 'stroll', x, z, floor: cat.floor, face, pose: 'work' }, phase: 'go', hours: 0.12 + this.rand() * 0.1, manual: false })
+      this.assign(a, { kind: 'pet', spot: { kind: 'stroll', x, z, floor: cat.floor, face, pose: 'work' }, phase: 'go', hours: manual ? 0.3 : 0.12 + this.rand() * 0.1, manual })
       return (a.task as Task | null)?.kind === 'pet'
     }
     return false
@@ -2609,7 +2673,8 @@ export class Household {
       // 坐着吃饭、站着喝水有自己的动作
       if (t.kind === 'eat' && a.pose === 'sit') a.pose = 'sitEat'
       if (t.kind === 'drink') a.pose = 'drink'
-      if (t.kind === 'pet') a.pose = 'pet'
+      if (t.kind === 'pet' || t.kind === 'hens') a.pose = 'pet'
+      if (t.kind === 'run') a.pose = 'walk'
       if (t.kind === 'cook') this.take('food', MEAL.food)
       if (t.kind === 'drink') this.take('water', DRINK.water)
       return
@@ -2619,6 +2684,7 @@ export class Household {
     if ((t.kind === 'company' || t.kind === 'interact') && t.with) a.face(t.with.pos.x - a.pos.x, t.with.pos.z - a.pos.z, 0.05)
     if (t.kind === 'greet') this.greetTick(a, t, hours)
     if (t.kind === 'build') this.buildProgress(a, t, hours)
+    if (t.kind === 'run') this.runTick(a, hours)
     if (t.kind === 'repair' && t.layer) {
       const max = this.maxOf(t.layer)
       this.barriers[t.layer] = Math.min(max, this.barriers[t.layer] + hours * 45)
@@ -2645,6 +2711,7 @@ export class Household {
     if (t.kind === 'hang' && this.rain > 0.1) return true
     // 干工程：天黑了、下大雨、饿了渴了累了就先歇着（白天有空会自己回来接着干）
     if (t.kind === 'build' && !this.canKeepBuilding(a)) return true
+    if (t.kind === 'run' && (a.needs.energy < 12 || a.needs.thirst < 15)) return true
     // 迎接：人都进屋卸完货了（这趟结束了）就散
     if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
@@ -2684,10 +2751,19 @@ export class Household {
       this.stock = { ...this.stock, water: this.stock.water + Household.PUMP_WATER }
       this.pumpCount += 1
     }
+    // 撸完猫：心情好一点（玩家叫去的撸得久，涨得多）
+    if (t.kind === 'pet' && t.hours <= 0) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + (t.manual ? 8 : 4)) }
+    if (t.kind === 'hens' && t.hours <= 0) this.finishHens(a)
+    if (t.kind === 'run' && t.hours <= 0) {
+      a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 4) }
+      if (!this.log.some((l) => l.key === 'world.log.run')) this.note('world.log.run', { who: a.name })
+    }
     if (t.kind === 'feed' && t.hours <= 0 && this.fedDay !== this.clock.day) {
       this.fedDay = this.clock.day
-      this.eggs += 1
-      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD }
+      // 今天逗过小鸡：小鸡高兴，多下一两个蛋
+      const bonus = this.henJoy.day === this.clock.day ? Math.min(2, this.henJoy.n) : 0
+      this.eggs += 1 + bonus
+      this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD * (1 + bonus) }
       if (!this.log.some((l) => l.key === 'world.log.eggs') || this.rand() < 0.25) this.note('world.log.eggs', { who: a.name })
     }
     if (t.kind === 'craft') {
@@ -2796,6 +2872,7 @@ export class Household {
     else if (spot.kind === 'sleep') task = this.spotTask(a, spot, 'sleep', 1, true)
     else if (spot.kind === 'dine') task = this.spotTask(a, spot, 'sit', 1, true)
     else if (spot.kind === 'relax') task = this.spotTask(a, spot, 'relax', 1.5, true)
+    else if (spot.kind === 'run') task = a.needs.energy < 15 ? null : this.spotTask(a, spot, 'run', 0.5, true)
     else task = this.spotTask(a, spot, 'stroll', 0.5, true)
     if (!task) return false
     this.assign(a, task)
@@ -2813,7 +2890,8 @@ export class Household {
       health: a.health,
       trait: a.trait ? lt(survivorTraits.find((x) => x.id === a.trait)?.name ?? { zh: '' }) : undefined,
       gone: a.dead ? 'dead' : a.lost ? 'lost' : a.runaway ? 'runaway' : this.lent?.name === a.name ? 'lent' : undefined,
-      trip: (() => { const tr = this.tripOf(a); return tr ? { id: tr.def.id, left: Math.max(0, tr.back - this.absHour) } : undefined })(),
+      trip: (() => { const tr = this.tripOf(a); return tr ? { id: tr.def.id, left: Math.max(0, tr.back - this.absHour), n: tr.id, leaving: tr.phase === 'out' } : undefined })(),
+      fitness: Math.round(a.fitness),
       needs: { ...a.needs },
       doing: this.siege && !this.siege.done ? (a.pose === 'down' ? 'down' : 'guard') : a.task?.kind ?? 'idle',
       going: !!a.task && a.task.phase === 'go' && a.task.kind !== 'walk',

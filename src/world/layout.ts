@@ -136,6 +136,8 @@ export const FURNITURE: Placement[] = [
   { piece: 'bed', x: 11.1, z: -1.5, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
   { piece: 'bed', x: 11.1, z: 2.5, rot: 180, floor: 1, block: [0.5, 1.0], toonOnly: true },
   // 二楼小客厅：沙发靠着楼梯口那面墙、书架
+  // 二楼小客厅西南角一台跑步机（上去跑一会儿，体能涨一点）
+  { piece: 'treadmill', x: 4.65, z: 4.95, rot: 0, floor: 1, block: [0.35, 0.85] },
   { piece: 'sofa', x: 6.0, z: 1.15, rot: 180, floor: 1, block: [0.9, 0.45] },
   { piece: 'shelf', x: 7.6, z: 3.6, rot: -90, floor: 1 },
 ]
@@ -258,8 +260,8 @@ export const STAIR_PATH: StairPoint[] = [
 /** 二楼楼板上楼梯那一块是空的（不能走、也不铺地板） */
 export const STAIR_HOLE: Rect = { x0: 5, z0: -2.25, x1: 8, z1: -1.25 }
 
-export type SpotKind = 'cook' | 'drink' | 'dine' | 'relax' | 'stroll' | 'sleep'
-export type SpotPose = 'idle' | 'sit' | 'sleep' | 'work'
+export type SpotKind = 'cook' | 'drink' | 'dine' | 'relax' | 'stroll' | 'sleep' | 'run'
+export type SpotPose = 'idle' | 'sit' | 'sleep' | 'work' | 'walk'
 export interface Spot {
   kind: SpotKind
   /** 人在这里时 root 的位置（坐着是屁股、躺着是脚） */
@@ -275,6 +277,9 @@ export interface Spot {
   ax?: number
   az?: number
 }
+
+/** 跑步机上跑步的位置（跑带上，面朝北；从东边上下） */
+export const TREADMILL_SPOT: Spot = { kind: 'run', x: 4.65, z: 5.05, floor: 1, face: 180, pose: 'walk', y: 0.13, ax: 5.3, az: 4.95 }
 
 export const SPOTS: Spot[] = [
   // 厨房：灶台两个位置、碗柜边上拿水
@@ -299,6 +304,8 @@ export const SPOTS: Spot[] = [
   // 檐廊下站一站、二楼阳台上看看院子
   { kind: 'stroll', x: 3.0, z: 7.0, floor: 0, face: 0, pose: 'idle' },
   { kind: 'stroll', x: 9.5, z: 7.0, floor: 1, face: 0, pose: 'idle' },
+  // 跑步机：站在跑带上（面朝北边的仪表盘），从东边上去
+  TREADMILL_SPOT,
 ]
 
 /** 世外桃源画风多出来能坐的地方：堂屋的摇椅、院坝的长椅 */

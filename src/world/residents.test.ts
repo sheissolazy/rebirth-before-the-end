@@ -2024,3 +2024,74 @@ describe('建设要人去干活', () => {
     expect(life.garden.built).toBe(false)
   })
 })
+
+describe('叫回来、撸猫、逗小鸡、跑步机', () => {
+  const run = (life: Household, until: () => boolean, max = 2000) => {
+    for (let i = 0; i < max && !until(); i++) {
+      life.tick(0.05, (a) => life.isHomeBody(a))
+      for (const a of life.actors) { a.follow(0.05 * life.speed, 2.2); a.updateSettle(0.05 * life.speed) }
+    }
+  }
+
+  it('出门的人还没走出去就叫回来：钱退回，人留在家里', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    const money = life.money
+    const mom = life.actors[1]
+    expect(life.startTrip('supermarket', [mom], true)).toBe(true)
+    const fuel = life.fuel
+    const t = life.trips[0]
+    expect(life.cancelTrip(t.id)).toBe(true)
+    expect(life.money).toBe(money)
+    // 开车去的：油也退回来
+    expect(life.fuel).toBe(fuel + 1)
+    expect(life.trips.length).toBe(0)
+    expect(life.isOut(mom)).toBe(false)
+  })
+
+  it('点猫：选中的人走过去蹲下撸，心情涨', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 10 }
+    life.speed = 1
+    const hero = life.actors[0]
+    const before = hero.needs.mood
+    expect(life.petCat(hero, { x: 7.3, z: 3.8, floor: 0 }, true)).toBe(true)
+    let posed = false
+    run(life, () => { if (hero.task?.kind === 'pet' && hero.task.phase === 'use' && hero.pose === 'pet') posed = true; return !hero.task || hero.task.kind !== 'pet' })
+    expect(posed).toBe(true)
+    expect(hero.needs.mood).toBeGreaterThan(before + 4)
+  })
+
+  it('逗小鸡：心情涨，今天喂鸡多捡蛋', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.speed = 1
+    const mom = life.actors[1]
+    const mood = mom.needs.mood
+    expect(life.playHens(mom)).toBe('ok')
+    run(life, () => mom.task?.kind !== 'hens')
+    expect(mom.needs.mood).toBeGreaterThan(mood + 3)
+    const eggs = life.eggs
+    life.fedDay = -1
+    expect(life.commandChore(mom, 'feed')).toBe('ok')
+    run(life, () => mom.task?.kind !== 'feed')
+    // 平时喂一次 1 个蛋，逗过以后至少 2 个
+    expect(life.eggs - eggs).toBeGreaterThanOrEqual(2)
+  })
+
+  it('跑步机：跑半小时体能涨、精力掉；一天最多涨 4', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 10 }
+    life.speed = 1
+    const dad = life.actors[2]
+    const spot = life.allSpots.find((s) => s.kind === 'run')!
+    const fit = dad.fitness
+    const energy = dad.needs.energy
+    expect(life.commandSpot(dad, spot)).toBe(true)
+    run(life, () => dad.task?.kind !== 'run', 4000)
+    expect(dad.fitness).toBeGreaterThan(fit + 1.5)
+    expect(dad.needs.energy).toBeLessThan(energy)
+    for (let k = 0; k < 4; k++) { dad.needs = { ...dad.needs, energy: 90, thirst: 90 }; life.commandSpot(dad, spot); run(life, () => dad.task?.kind !== 'run', 4000) }
+    expect(dad.fitness - fit).toBeLessThanOrEqual(Household.RUN_MAX + 0.01)
+  })
+})

@@ -28,6 +28,7 @@ interface ActorSave {
   dead?: boolean
   runaway: { back: number } | null
   lowMood: number
+  fitness?: number
 }
 
 export interface WorldSave {
@@ -130,7 +131,7 @@ export function snapshot(life: Household): WorldSave {
       : [...life.log],
     actors: life.actors.filter((a) => !a.guest).map((a) => ({
       name: a.name, model: a.model, trait: a.trait, x: a.anchor?.x ?? a.root.position.x, z: a.anchor?.z ?? a.root.position.z, floor: a.anchor?.floor ?? a.floor,
-      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood,
+      needs: { ...a.needs }, health: a.health, away: a.away, lost: a.lost, dead: a.dead, runaway: a.runaway, lowMood: a.lowMood, fitness: a.fitness,
     })),
     trip: null,
     trips: life.trips.map((t) => ({ id: t.def.id, members: t.members.map((m) => m.name), back: t.back, van: t.van, phase: t.phase === 'shop' ? 'shop' as const : 'away' as const, shopAt: t.shopAt, shopped: t.shopped, cargo: t.cargo as Record<string, number | boolean> | undefined, spent: t.spent })),
@@ -259,6 +260,7 @@ export function restore(life: Household, s: WorldSave): void {
     a.dead = !!as.dead
     a.runaway = as.runaway
     a.lowMood = as.lowMood
+    if (as.fitness !== undefined) a.fitness = as.fitness
   }
   // 在外面的几拨人（老存档只有一拨）
   life.trips = []

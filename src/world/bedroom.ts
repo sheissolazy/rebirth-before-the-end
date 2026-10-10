@@ -110,3 +110,54 @@ export function campBed(): THREE.Group {
   shadows(g)
   return g
 }
+
+/** 跑步机：黑色底座和跑带（跑带贴一张条纹图，有人在跑时往后滚）、两边扶手、前面的仪表盘。原点在跑带中间、地面上，面朝 -z（仪表盘在北边） */
+export function treadmill(): THREE.Group {
+  const g = new THREE.Group()
+  const body = new THREE.MeshStandardMaterial({ color: '#2c2f33', roughness: 0.5, metalness: 0.3 })
+  const metal = new THREE.MeshStandardMaterial({ color: '#b9bec4', roughness: 0.35, metalness: 0.8 })
+  const accent = new THREE.MeshStandardMaterial({ color: '#d9663a', roughness: 0.6 })
+  // 跑带的条纹贴图
+  const c = typeof document !== 'undefined' ? document.createElement('canvas') : null
+  let beltMat: THREE.Material = new THREE.MeshStandardMaterial({ color: '#1a1b1d', roughness: 0.95 })
+  if (c) {
+    c.width = 16
+    c.height = 64
+    const ctx = c.getContext('2d')!
+    ctx.fillStyle = '#18191b'
+    ctx.fillRect(0, 0, 16, 64)
+    ctx.fillStyle = '#2a2c30'
+    for (let y = 0; y < 64; y += 8) ctx.fillRect(0, y, 16, 3)
+    const tex = new THREE.CanvasTexture(c)
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(1, 6)
+    beltMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 })
+    g.userData.belt = tex
+  }
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.1, 1.7), body)
+  base.position.y = 0.06
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 1.5), beltMat)
+  belt.position.set(0, 0.12, 0.05)
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.14, 0.26), accent)
+  hood.position.set(0, 0.1, -0.78)
+  g.add(base, belt, hood)
+  // 两根立柱、两根扶手、仪表盘
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.15, 8), metal)
+    post.position.set(s * 0.33, 0.68, -0.72)
+    post.rotation.x = 0.12
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), metal)
+    rail.rotation.x = Math.PI / 2
+    rail.position.set(s * 0.33, 1.0, -0.5)
+    g.add(post, rail)
+  }
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.2, 0.08), body)
+  panel.position.set(0, 1.25, -0.8)
+  panel.rotation.x = -0.5
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.1), new THREE.MeshBasicMaterial({ color: '#7fd1c1' }))
+  screen.position.set(0, 1.27, -0.755)
+  screen.rotation.x = -0.5
+  g.add(panel, screen)
+  shadows(g)
+  return g
+}

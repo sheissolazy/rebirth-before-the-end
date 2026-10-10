@@ -64,6 +64,10 @@ const WEAPONS = {
 }
 const ZOMBIE = { hp: 60, speed: 0.95, bashDmg: 5, biteDmg: 9, cool: 1.3, reach: 1.15 }
 
+/** 体能（跑步机练的）：近战每一下多打几点（体能 30 是普通人，100 多打 7 点）；被咬时躲得开一点（最多少掉四分之一） */
+export const fitBonus = (fitness: number) => Math.max(-2, Math.min(7, Math.round((fitness - 30) / 10)))
+export const fitGuard = (fitness: number) => 1 - Math.max(-0.07, Math.min(0.25, (fitness - 30) / 280))
+
 /** 铁门外铺的钉板和铁丝网：踩进去走得慢、一直掉血；每有一只丧尸在上面待一秒就磨损一点 */
 export const TRAP = { x0: 2.2, x1: 5.8, z0: 13.6, z1: 16.0, dps: 2, wear: 0.6, slow: 0.55 }
 export const inTrap = (p: Pt) => p.x > TRAP.x0 && p.x < TRAP.x1 && p.z > TRAP.z0 && p.z < TRAP.z1
@@ -434,7 +438,7 @@ export class Siege {
       z.face(prey.pos.x - z.pos.x, prey.pos.z - z.pos.z, dt)
       if (z.cool <= 0) {
         z.cool = ZOMBIE.cool
-        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (z.brute ? 1.6 : 1) * (this.o.hard ? 1.5 : 1) * (prey.helmet ? 0.5 : 1))
+        prey.health = Math.max(0, prey.health - ZOMBIE.biteDmg * (z.brute ? 1.6 : 1) * (this.o.hard ? 1.5 : 1) * (prey.helmet ? 0.5 : 1) * fitGuard(prey.fitness))
         this.o.emit({ kind: 'hit', at: prey.pos })
         if (prey.health <= 0) this.knockDown(prey)
       }
@@ -516,7 +520,7 @@ export class Siege {
     if (c > 0) { this.cool.set(a, c); return }
     this.cool.set(a, w.cool)
     // 壮实的人打得更狠，胆小的人手软
-    let dmg = w.dmg + (a.trait === 'trait_strong' ? 4 : a.trait === 'trait_coward' ? -4 : 0)
+    let dmg = w.dmg + (a.trait === 'trait_strong' ? 4 : a.trait === 'trait_coward' ? -4 : 0) + (w.range ? 0 : fitBonus(a.fitness))
     if (weapon === 'shotgun') {
       this.o.ammo.n -= 1
       dmg = bd < 3.5 ? w.dmg * 1.3 : w.dmg
