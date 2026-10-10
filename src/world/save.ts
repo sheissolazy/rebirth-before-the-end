@@ -50,6 +50,11 @@ export interface WorldSave {
   orders?: { id: number; cart: Record<string, number>; total: number; arrive: number }[]
   calls?: Record<string, number>
   phoneReminded?: number
+  /** 今天请过谁、请的人什么时候到 */
+  inviteDay?: number
+  /** 今天的菜 */
+  menu?: string
+  invited?: { id: string; at: number } | null
   /** 干到一半的工程（旧存档是一项 project，新的是 projects） */
   project?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string } | null
   projects?: { id: 'trap' | 'wall' | 'garden'; done: number; worker: string }[]
@@ -123,6 +128,9 @@ export function snapshot(life: Household): WorldSave {
     orders: [...life.orders, ...(life.courier?.order ? [{ id: 0, cart: life.courier.order.cart, total: 0, arrive: life.absHour }] : [])],
     calls: { ...life.calls },
     phoneReminded: life.phoneReminded,
+    inviteDay: life.inviteDay,
+    menu: life.menu,
+    invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),
     gateBonus: life.gateBonus,
     barriers: { ...life.barriers },
@@ -195,6 +203,9 @@ export function restore(life: Household, s: WorldSave): void {
   life.orders = (s.orders ?? []).map((o) => ({ ...o, cart: { ...o.cart } }))
   life.calls = { ...(s.calls ?? {}) }
   life.phoneReminded = s.phoneReminded ?? -1
+  life.inviteDay = s.inviteDay ?? -1
+  life.menu = s.menu ?? 'rice'
+  life.invited = s.invited ?? null
   life.projects = (s.projects ?? (s.project ? [s.project] : [])).map((p) => ({ ...p }))
   ;(s.spikes ?? []).forEach((h, k) => { if (life.spikes[k]) life.spikes[k].hits = h })
   life.gateBonus = s.gateBonus
@@ -216,7 +227,7 @@ export function restore(life: Household, s: WorldSave): void {
   life.laundryDay = s.laundryDay ?? -1
   life.noiseDay = s.noiseDay ?? -1
   life.vanAt = s.vanAt ?? null
-  life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, ...(s.affection ?? {}) }
+  life.affection = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, neighbor: 20, ...(s.affection ?? {}) }
   life.xielinNotes = s.xielinNotes ?? 0
   if (s.garden) life.garden = { ...s.garden }
   life.cameoSeen = !!s.cameoSeen

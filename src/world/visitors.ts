@@ -7,6 +7,7 @@ import { Walker } from './walker'
 import type { Pt } from './nav'
 
 export type VisitorId = 'neighbor_rice' | 'neighbor_thanks' | 'beggar' | 'scout' | 'crow_tax' | 'jiangye_meet' | 'jiangye_care' | 'shenyan_meet' | 'guchen_visit' | 'xielin_meet'
+  | 'invite_jiangye' | 'invite_shenyan' | 'invite_guchen' | 'invite_xielin' | 'invite_neighbor'
 export type VisitorModel = 'neighbor' | 'stranger' | 'jiangye' | 'shenyan' | 'guchen' | 'xielin'
 
 export interface VisitorCtx {
@@ -55,6 +56,12 @@ export interface VisitorDef {
 }
 
 const daytime = (c: VisitorCtx) => c.hour >= 9 && c.hour < 16.5
+
+/** 手机上请来家里做客的人（一天请一个）：来了有一件小事可以一起做、有收获；或者就坐坐聊聊天（感情涨得多一点）。不会自己随机来 */
+export const INVITES: VisitorDef[] = (['jiangye', 'shenyan', 'guchen', 'xielin', 'neighbor'] as const).map((m) => ({
+  id: `invite_${m}` as VisitorId, model: m as VisitorModel, icon: { jiangye: '🔥', shenyan: '🩺', guchen: '⚡', xielin: '⏳', neighbor: '👵' }[m],
+  chance: 0, when: () => false, choices: [{ id: 'task' }, { id: 'chat' }],
+}))
 
 export const VISITORS: VisitorDef[] = [
   {

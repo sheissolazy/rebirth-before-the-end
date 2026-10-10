@@ -93,11 +93,15 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
         {p.gone !== 'dead' && (
           <div className="mt-1 space-y-[3px]">
             {bars.map(([icon, label, v]) => (
-              <div key={icon} className="flex items-center gap-1" title={`${label} ${Math.round(v)}`}>
+              <div key={icon} className="group/bar relative flex items-center gap-1">
                 <span className="w-3 text-center text-[10px] leading-none text-[#efe4d0]">{icon}</span>
                 <div className="h-[6px] flex-1 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
                   <div className="h-full rounded-full" style={{ width: `${Math.max(4, Math.round(v))}%`, background: TONE[toneOf(v)] }} />
                 </div>
+                {/* 鼠标放上去：马上显示"精力：50" */}
+                <span className="pointer-events-none absolute -inset-y-[4px] left-4 right-0 z-10 hidden items-center justify-center rounded-sm bg-black/85 text-[10px] font-semibold tabular-nums text-[#f4ecdc] ring-1 ring-white/15 group-hover/bar:flex">
+                  {label}：{Math.round(v)}
+                </span>
               </div>
             ))}
           </div>
@@ -109,11 +113,11 @@ function PersonCard({ p, portrait, selected, onClick }: { p: PersonHud; portrait
 
 /** 点家具弹出的小菜单（同一套深色纸面风格） */
 function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onPick: (o: FurnitureMenu['options'][number]) => void; onClose: () => void }) {
-  const left = Math.min(menu.x + 12, window.innerWidth - 200)
-  const top = Math.min(menu.y - 10, window.innerHeight - 60 - menu.options.length * 34)
+  const left = Math.min(menu.x + 12, window.innerWidth - 236)
+  const top = Math.max(8, Math.min(menu.y - 10, window.innerHeight - 70 - menu.options.length * (menu.options.some((o) => o.text) ? 46 : 34)))
   return (
     <div className="fixed inset-0 z-30" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose() }}>
-      <div className="absolute w-44 overflow-hidden rounded-md bg-[#1b1714]/95 shadow-[0_10px_30px_rgba(0,0,0,0.55)] ring-1 ring-[#e8c98a]/40"
+      <div className="absolute w-56 overflow-hidden rounded-md bg-[#1b1714]/95 shadow-[0_10px_30px_rgba(0,0,0,0.55)] ring-1 ring-[#e8c98a]/40"
         style={{ left, top }} onClick={(e) => e.stopPropagation()}>
         <div className="pointer-events-none absolute inset-0 mix-blend-overlay" style={{ backgroundImage: GRAIN, opacity: 0.35 }} />
         <div className="relative border-b border-[#e8c98a]/20 px-3 pb-1.5 pt-2">
@@ -131,9 +135,12 @@ function FurnitureMenuView({ menu, onPick, onClose }: { menu: FurnitureMenu; onP
         </div>
         <div className="relative py-1">
           {menu.options.map((o) => (
-            <button key={o.label} onClick={() => onPick(o)}
-              className="block w-full px-3 py-1.5 text-left text-[13px] text-[#efe4d0] transition hover:bg-[#e8c98a]/15">
-              {t(o.label)}
+            <button key={o.dish ?? o.label} onClick={() => onPick(o)} disabled={o.disabled}
+              className="block w-full whitespace-pre-line px-3 py-1.5 text-left text-[13px] leading-snug text-[#efe4d0] transition hover:bg-[#e8c98a]/15 disabled:opacity-40">
+              {o.text ? <>
+                <span>{o.text.split('\n')[0]}</span>
+                <span className="block text-[11px] text-[#a99d88]">{o.text.split('\n')[1]}</span>
+              </> : t(o.label)}
             </button>
           ))}
           <button onClick={onClose} className="block w-full px-3 py-1 text-left text-[12px] text-[#a99d88] hover:bg-white/5">{t('world.use.cancel')}</button>
@@ -842,9 +849,10 @@ export default function WorldView() {
 
       {phone && <PhonePanel view={phone} onClose={() => setPhone(null)}
         onOrder={(cart) => { const r = world.current?.placeOrder(cart) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }}
-        onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }} />}
+        onCall={(id) => { const r = world.current?.callContact(id) ?? { r: 'nosignal' }; setPhone(world.current?.phoneView() ?? null); return r }}
+        onInvite={(id) => { const r = world.current?.inviteContact(id) ?? 'nosignal'; setPhone(world.current?.phoneView() ?? null); return r }} />}
       {furn && <FurnitureMenuView menu={furn} onClose={() => setFurn(null)}
-        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target); else if (o.spot) world.current?.useFurniture(o.spot) }} />}
+        onPick={(o) => { if (o.act && furn.target) world.current?.interactWith(furn.target, o.act); else if (o.cmd) world.current?.menuCommand(o.cmd, furn.target); else if (o.spot) world.current?.useFurniture(o.spot, o.dish) }} />}
 
       {diary && (
         <DiaryPanel day={hud.day} hour={hud.hour} log={diaryLog} people={diaryPeople} onClose={() => setDiary(false)} />

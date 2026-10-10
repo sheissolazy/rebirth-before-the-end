@@ -24,7 +24,7 @@ import {
   flatRoof, toon, toonify, tree,
 } from './meshes'
 import { Actor, BUILD_WORK, Household, INTERACTIONS, type BuildId, type InteractKind, type LogEntry, type NightReport, type PersonHud, type Trip } from './residents'
-import { PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
+import { DISHES, PROLOGUE_DAYS, SUNRISE, SUNSET, calendarLabel, isCrisisNight, isNight } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, TRAP, type LayerId, type Zombie, type ZombieKind } from './siege'
 import { SiegeView } from './siegeView'
 import { Sound } from './sound'
@@ -181,6 +181,8 @@ export interface PhoneView {
   orders: { id: number; what: string; total: number; day: number; hour: number }[]
   contacts: ReturnType<Household['contacts']>
   fee: number
+  /** 今天已经请过人了 */
+  invited: boolean
 }
 
 /** 点家具 / 点人物弹出的小菜单：家具的选项带 spot（去用它），人物的选项带 act（走过去互动） */
@@ -189,7 +191,7 @@ export interface FurnitureMenu {
   /** 点的是人：TA 的名字和现在的心情 */
   target?: string
   mood?: number
-  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' | 'bandage' }[]
+  options: { label: UiKey; spot?: Spot; act?: InteractKind; cmd?: 'feed' | 'hens' | 'bandage'; dish?: string; text?: string; disabled?: boolean }[]
 }
 
 /** 家具在菜单标题上叫什么 */
@@ -220,7 +222,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = `world.forage.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = `world.forage.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
@@ -506,6 +508,7 @@ export class World {
       return c
     }
     this.life.onRemind = (key) => this.toast(key as ToastKey, 6)
+    this.life.onGain = (text, who, at) => this.popText(text, who, at)
     this.life.onCourier = (c, phase) => {
       if (phase === 'drop') {
         this.sound.knock()
@@ -1400,6 +1403,8 @@ export class World {
         // 乡下的厨房：左边碗柜，右边一口砖砌的土灶（大铁锅、烟囱顺着墙上去），灶台上一把老水壶
         const stove = woodStove(this.pmats)
         stove.position.set(o.position.x + 0.55, y, o.position.z)
+        // 灶台点得到（点了弹出菜单选做什么菜）
+        stove.userData.slug = 'wood_stove'
         o.parent?.add(
           placeModel(kit, 'painted_wooden_cabinet', o.position.x - 0.7, y, o.position.z, 0),
           stove,
@@ -1459,6 +1464,9 @@ export class World {
     const mom = new Actor('妈妈', '#5aa469', '#3a2a20', 0.97, { x: 5.3, z: 4.2 }, { hunger: 78, thirst: 58, energy: 88, mood: 72 })
     const dad = new Actor('爸爸', '#4a78b5', '#262626', 1.05, { x: 7.0, z: 1.5 }, { hunger: 70, thirst: 75, energy: 85, mood: 60 })
     this.heroine.weapon = 'shotgun'
+    // 女主是异能者：精力、体能都远超常人
+    this.heroine.esper = true
+    this.heroine.fitness = 80
     this.heroine.model = 'heroine'
     mom.weapon = 'pin'
     mom.model = 'mom'
@@ -1903,6 +1911,7 @@ export class World {
     this.bubbles.update(this.actors, fighting, this.mode === 'home', this.elapsed, this.life.clock.day >= PROLOGUE_DAYS, this.life.speed === 0)
     this.updateConstruction()
     this.updateTargetRing()
+    this.updatePops(dt)
     const g = this.life.garden
     const digging = this.life.projects.find((p) => p.id === 'garden')?.done ?? -1
     this.gardenObj.visible = g.built || digging >= 0
@@ -2715,6 +2724,50 @@ export class World {
     else this.toast('world.toast.noMedkit')
   }
 
+  /** 头顶飘的字（进账：💧+0.6、🥚+2、💎+1……）：往上飘一米、慢慢淡掉 */
+  private pops: { sprite: THREE.Sprite; t: number; y0: number }[] = []
+  private popText(text: string, who: Actor | null, at?: { x: number; z: number }): void {
+    const c = document.createElement('canvas')
+    c.width = 256
+    c.height = 64
+    const g = c.getContext('2d')!
+    g.font = 'bold 34px "PingFang SC", "Songti SC", sans-serif'
+    g.textAlign = 'center'
+    g.textBaseline = 'middle'
+    g.lineWidth = 6
+    g.strokeStyle = 'rgba(20,14,8,0.85)'
+    g.strokeText(text, 128, 34)
+    g.fillStyle = '#fff3c4'
+    g.fillText(text, 128, 34)
+    const tex = new THREE.CanvasTexture(c)
+    tex.colorSpace = THREE.SRGBColorSpace
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
+    sprite.scale.set(1.6, 0.4, 1)
+    sprite.renderOrder = 11
+    const p = who ? who.root.position : new THREE.Vector3(at?.x ?? 0, 0, at?.z ?? 0)
+    const y0 = p.y + 2.1
+    sprite.position.set(p.x, y0, p.z)
+    // 好几条一起冒出来时错开一点
+    sprite.position.x += (this.pops.length % 3) * 0.25 - 0.25
+    this.scene.add(sprite)
+    this.pops.push({ sprite, t: 0, y0 })
+  }
+
+  private updatePops(dt: number): void {
+    for (let k = this.pops.length - 1; k >= 0; k--) {
+      const p = this.pops[k]
+      p.t += dt
+      p.sprite.position.y = p.y0 + Math.min(1, p.t / 1.6) * 0.9
+      ;(p.sprite.material as THREE.SpriteMaterial).opacity = p.t < 1.2 ? 1 : Math.max(0, 1 - (p.t - 1.2) / 0.8)
+      if (p.t > 2) {
+        p.sprite.removeFromParent()
+        ;(p.sprite.material as THREE.SpriteMaterial).map?.dispose()
+        p.sprite.material.dispose()
+        this.pops.splice(k, 1)
+      }
+    }
+  }
+
   /** 盯住的丧尸脚下一圈红圈 */
   private updateTargetRing(): void {
     const z = this.lineTarget
@@ -2746,7 +2799,7 @@ export class World {
   /** 点家具弹出的菜单：这件家具旁边能干的事（每种挑一个空着的位置） */
   onFurnitureMenu: ((menu: FurnitureMenu | null) => void) | null = null
 
-  private furnitureOptions(root: THREE.Object3D, floor: Floor): { label: UiKey; spot: Spot }[] {
+  private furnitureOptions(root: THREE.Object3D, floor: Floor): FurnitureMenu['options'] {
     const box = new THREE.Box3().setFromObject(root)
     const c = box.getCenter(new THREE.Vector3())
     const size = box.getSize(new THREE.Vector3())
@@ -2755,14 +2808,31 @@ export class World {
     for (const s of this.life.allSpots) {
       if (s.floor !== floor || s.kind === 'stroll') continue
       const d = Math.hypot(s.x - c.x, s.z - c.z)
-      if (d > reach) continue
+      // 灶台边的柜子、水壶点了也能选做饭（镜头里灶台常被高柜子挡住一半）
+      if (d > reach + (s.kind === 'cook' ? 0.7 : 0)) continue
       const who = this.life.whoUses(s)
       const free = !who || who === this.selected
       const cur = best.get(s.kind)
       if (!cur || (free && !cur.free) || (free === cur.free && d < cur.d)) best.set(s.kind, { spot: s, d, free })
     }
-    const order: Spot['kind'][] = ['cook', 'drink', 'dine', 'relax', 'sleep']
-    return order.filter((k) => best.has(k)).map((k) => ({ label: `world.use.${k}` as UiKey, spot: best.get(k)!.spot }))
+    const order: Spot['kind'][] = ['cook', 'drink', 'dine', 'relax', 'sleep', 'run']
+    const out: FurnitureMenu['options'] = []
+    for (const k of order) {
+      if (!best.has(k)) continue
+      const spot = best.get(k)!.spot
+      // 灶台：一道道菜列出来（用什么、加什么），家里东西不够的灰掉
+      if (k === 'cook') {
+        for (const d of DISHES) {
+          const cost = [`粮${d.food}`, d.water ? `水${d.water}` : '', d.herbs ? `草药${d.herbs}` : ''].filter(Boolean).join(' ')
+          const fx = [`饱+${d.hunger}`, d.mood ? `心情+${d.mood}` : '', d.energy ? `精力+${d.energy}` : '', d.health ? `健康+${d.health}` : ''].filter(Boolean).join(' ')
+          const mark = d.id === this.life.menu ? ' ✓' : ''
+          out.push({ label: 'world.use.cook', spot, dish: d.id, text: `${d.icon} ${t(`world.dish.${d.id}` as UiKey)}${mark}\n${cost} · ${fx}`, disabled: !this.life.canCook(d.id) })
+        }
+        continue
+      }
+      out.push({ label: `world.use.${k}` as UiKey, spot })
+    }
+    return out
   }
 
   /** 手机界面要的东西：网购能不能下单、货架（今天的价格）、钱、在路上的快递、通讯录 */
@@ -2779,11 +2849,18 @@ export class World {
       orders: l.orders.map((o) => ({ id: o.id, what: cartLabel(ONLINE_SHOP, o.cart), total: o.total, day: Math.floor(o.arrive / 24), hour: Math.floor(o.arrive % 24) })),
       contacts: l.contacts(),
       fee: ONLINE_FEE,
+      invited: l.inviteDay === day || !!l.invited,
     }
   }
 
   placeOrder(cart: Cart): string {
     const r = this.life.placeOrder(cart)
+    this.pushLifeHud()
+    return r
+  }
+
+  inviteContact(id: string): string {
+    const r = this.life.invite(id)
     this.pushLifeHud()
     return r
   }
@@ -2830,10 +2907,16 @@ export class World {
     if (r !== 'ok') this.toast(`world.act.r.${r}`, 3, { who: this.selected.name, whom: target.name })
   }
 
-  /** 菜单里选了一项：让选中的人去用 */
-  useFurniture(spot: Spot): void {
+  /** 菜单里选了一项：让选中的人去用（灶台选的是一道菜） */
+  useFurniture(spot: Spot, dish?: string): void {
     this.onFurnitureMenu?.(null)
     if (this.life.siege && !this.life.siege.done) return
+    if (dish) {
+      const r = this.life.cookDish(this.selected, spot, dish)
+      if (r === 'ok') this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
+      this.toast(`world.dish.r.${r}`, 3, { who: this.selected.name, what: t(`world.dish.${dish}` as UiKey) })
+      return
+    }
     if (this.life.commandSpot(this.selected, spot)) this.flashMarker(spot.ax ?? spot.x, spot.floor * FLOOR_H, spot.az ?? spot.z)
     else this.toast(this.life.whoUses(spot) ? 'world.toast.taken' : 'world.toast.busy')
   }
@@ -2977,7 +3060,7 @@ export class World {
     if (!def) return null
     const ctx = this.life.visitorCtx()
     // 男主用文字版的名字和身份
-    const lead = ['jiangye', 'shenyan', 'guchen', 'xielin'].find((id) => def.id.startsWith(id))
+    const lead = ['jiangye', 'shenyan', 'guchen', 'xielin'].find((id) => def.id.startsWith(id) || def.id === `invite_${id}`)
     const npc = lead ? npcs.find((n) => n.id === lead) : null
     const vars = this.life.visitVars()
     return {
@@ -2990,7 +3073,7 @@ export class World {
 
   /** 日记里"认识的人"：男主和好感 */
   diaryPeople(): { icon: string; name: string; title: string; affection: number; met: boolean; home: boolean; canStay: boolean }[] {
-    return Object.entries(this.life.affection).map(([id, v]) => {
+    return Object.entries(this.life.affection).filter(([id]) => npcs.some((x) => x.id === id)).map(([id, v]) => {
       const n = npcs.find((x) => x.id === id)
       const met = id === 'guchen' ? this.life.guchenMet : id === 'xielin' ? this.life.xielinNotes > 0 : this.life.seen[`${id}_meet`] !== undefined
       const home = (id === 'jiangye' && this.life.jiangyeHome) || (id === 'shenyan' && this.life.shenyanHome)

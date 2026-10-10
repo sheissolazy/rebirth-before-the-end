@@ -7,10 +7,11 @@ import { TONE } from './ui'
 
 type Tab = 'shop' | 'orders' | 'contacts'
 
-export function PhonePanel({ view, onOrder, onCall, onClose }: {
+export function PhonePanel({ view, onOrder, onCall, onInvite, onClose }: {
   view: PhoneView
   onOrder: (cart: Record<string, number>) => string
   onCall: (id: string) => { r: string; line?: string }
+  onInvite: (id: string) => string
   onClose: () => void
 }) {
   const [tab, setTab] = useState<Tab>('shop')
@@ -114,15 +115,24 @@ export function PhonePanel({ view, onOrder, onCall, onClose }: {
                       <div key={c.id} className="flex items-center gap-2.5 px-3 py-2.5">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f1ebe2] text-[20px]">{c.icon}</div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-[14px] font-semibold">{c.name}</div>
+                          <div className="flex items-center gap-1.5 text-[14px] font-semibold">
+                            {c.name}
+                            {c.aff !== undefined && <span className="text-[11px] font-semibold text-[#d0571f]" title={t('world.phone.aff')}>❤ {c.aff}</span>}
+                          </div>
                           <div className="truncate text-[11px] text-[#8a7f74]">{c.status}</div>
                         </div>
-                        {c.can === 'ok' ? (
-                          <button onClick={() => { const r = onCall(c.id); if (r.line) setCalling({ name: c.name, line: r.line }) }}
-                            className="rounded-full px-3 py-1.5 text-[12px] font-semibold text-white" style={{ background: TONE.good }}>📞 {t('world.phone.call')}</button>
-                        ) : (
-                          <span className="text-[11px] text-[#a99d92]">{t(c.can === 'home' ? 'world.phone.atHome' : c.can === 'done' ? 'world.phone.called' : 'world.phone.nosignal')}</span>
-                        )}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {c.can === 'ok' ? (
+                            <button onClick={() => { const r = onCall(c.id); if (r.line) setCalling({ name: c.name, line: r.line }) }}
+                              className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-white" style={{ background: TONE.good }}>📞 {t('world.phone.call')}</button>
+                          ) : (
+                            <span className="text-[11px] text-[#a99d92]">{t(c.can === 'home' ? 'world.phone.atHome' : c.can === 'done' ? 'world.phone.called' : 'world.phone.nosignal')}</span>
+                          )}
+                          {!c.id.startsWith('fam:') && c.can !== 'home' && c.can !== 'nosignal' && (
+                            <button disabled={view.invited} onClick={() => { const r = onInvite(c.id); setMsg({ text: t(`world.invite.r.${r}` as UiKey, { who: c.name }), ok: r === 'ok' }) }}
+                              className="rounded-full bg-[#e2793a] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-35">🏠 {t('world.phone.invite')}</button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -131,6 +141,10 @@ export function PhonePanel({ view, onOrder, onCall, onClose }: {
             </div>
           )}
 
+          {/* 联系人页的提示（请了谁、什么时候到） */}
+          {signal && tab === 'contacts' && msg && (
+            <div className="border-t border-black/5 bg-white px-4 py-2 text-[12px] font-semibold" style={{ color: msg.ok ? '#3f8a2c' : TONE.bad }}>{msg.text}</div>
+          )}
           {/* 网购的结账条 */}
           {signal && tab === 'shop' && (
             <div className="border-t border-black/5 bg-white px-4 py-2.5">

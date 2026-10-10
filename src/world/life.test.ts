@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DAY_SECONDS, DRINK, MEAL, PROLOGUE_DAYS, advance, calendarLabel, chooseWant, decayNeeds, isCrisisNight, isNight, shouldWake,
+  DAY_SECONDS, DRINK, MEAL, PROLOGUE_DAYS, advance, calendarLabel, chooseWant, decayNeeds, dishOf, isCrisisNight, isNight, shouldWake,
   type Needs,
 } from './life'
 
@@ -29,12 +29,21 @@ describe('时钟', () => {
 })
 
 describe('需求', () => {
-  it('饿和渴都掉得慢：醒着 16 小时，两三顿饭、一两次水就补得回来（一人一天大约一份吃的、半份多水）', () => {
+  it('一天吃一顿、喝一次就够：醒 16 小时睡 8 小时，一顿饭、一次水补得回来（一人一天一份吃的、0.6 份水）', () => {
     let n = { ...full }
     for (let h = 0; h < 16; h++) n = decayNeeds(n, 1, 'idle')
-    expect(100 - n.hunger).toBeLessThanOrEqual(MEAL.hunger * 2 + 5)
-    expect(100 - n.thirst).toBeLessThanOrEqual(DRINK.thirst * 1.1)
-    expect(MEAL.food * 2.5).toBeCloseTo(1, 0)
+    for (let h = 0; h < 8; h++) n = decayNeeds(n, 1, 'sleep')
+    expect(100 - n.hunger).toBeLessThanOrEqual(MEAL.hunger + 1)
+    expect(100 - n.thirst).toBeLessThanOrEqual(DRINK.thirst + 1)
+    expect(MEAL.food).toBe(1)
+  })
+
+  it('菜不一样加的东西不一样：红烧肉加心情、鸡汤加精力、草药粥加健康', () => {
+    expect(dishOf('pork').mood).toBeGreaterThan(10)
+    expect(dishOf('chicken').energy).toBeGreaterThan(20)
+    expect(dishOf('porridge').health).toBeGreaterThan(10)
+    expect(dishOf('porridge').herbs).toBe(1)
+    expect(dishOf('nope').id).toBe('rice')
   })
 
   it('正常过日子心情掉得很慢；饿着渴着才掉得快', () => {
@@ -68,14 +77,15 @@ describe('自主行动', () => {
     expect(chooseWant({ ...full, energy: 60 }, { day: 0, hour: 23 }, stock, 0.9)).toBe('sleep')
   })
 
-  it('到饭点不太饿也会去吃，不是饭点就不急', () => {
-    expect(chooseWant({ ...full, hunger: 80 }, { day: 0, hour: 12.2 }, stock, 0.9)).toBe('eat')
-    expect(chooseWant({ ...full, hunger: 80 }, { day: 0, hour: 15 }, stock, 0.9)).toBe('idle')
+  it('一天一顿：晚饭时间有点饿就去吃，别的时候不太饿就不吃', () => {
+    expect(chooseWant({ ...full, hunger: 55 }, { day: 0, hour: 18.2 }, stock, 0.9)).toBe('eat')
+    expect(chooseWant({ ...full, hunger: 55 }, { day: 0, hour: 12.2 }, stock, 0.9)).toBe('idle')
+    expect(chooseWant({ ...full, hunger: 80 }, { day: 0, hour: 18.2 }, stock, 0.9)).toBe('idle')
   })
 
   it('睡前口渴先喝水，累垮了就直接睡', () => {
-    expect(chooseWant({ ...full, energy: 50, thirst: 50 }, { day: 0, hour: 22.5 }, stock, 0.9)).toBe('drink')
-    expect(chooseWant({ ...full, energy: 5, thirst: 50 }, { day: 0, hour: 22.5 }, stock, 0.9)).toBe('sleep')
+    expect(chooseWant({ ...full, energy: 50, thirst: 30 }, { day: 0, hour: 22.5 }, stock, 0.9)).toBe('drink')
+    expect(chooseWant({ ...full, energy: 5, thirst: 30 }, { day: 0, hour: 22.5 }, stock, 0.9)).toBe('sleep')
   })
 
   it('没吃的就不会去吃', () => {

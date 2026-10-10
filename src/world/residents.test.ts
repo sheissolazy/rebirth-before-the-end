@@ -68,10 +68,12 @@ describe('一家人自己过日子', () => {
       for (const s of stats) {
         const st = s as unknown as Record<string, unknown>
         st.debug = `meals ${s.meals} drinks ${s.drinks}`
-        expect(s.meals, String(st.debug)).toBeGreaterThanOrEqual(4)
+        // 一天吃一顿（晚饭）、喝一次水（老板 2026-10-09）
+        expect(s.meals, String(st.debug)).toBeGreaterThanOrEqual(2)
+        expect(s.meals, String(st.debug)).toBeLessThanOrEqual(3)
         expect(s.chats).toBeGreaterThan(0) // 饭桌上会聊天
-        // 渴得慢了：两天喝两三次水就够（以前一天喝三四次，老板说"光喝水了"）
-        expect(s.drinks).toBeGreaterThanOrEqual(2)
+        expect(s.drinks, String(st.debug)).toBeGreaterThanOrEqual(1)
+        expect(s.drinks, String(st.debug)).toBeLessThanOrEqual(3)
         expect(s.sleptUpstairs).toBeGreaterThanOrEqual(1)
         expect(s.minFood).toBeGreaterThan(20)
         // 妈妈白天要压水、喂鸡，偶尔累到 7 左右才去睡（能睡下就行，不是卡住）
@@ -391,6 +393,9 @@ describe('出门', () => {
     life.clock = { day: 0, hour: 9.5 }
     life.speed = 3
     const [hero, mom, dad] = life.actors
+    // 女主现在也会自己去干家务：先把今天的鸡喂了、水缸压满，让她闲着
+    life.fedDay = 0
+    life.stock = { ...life.stock, water: 60 }
     life.startTrip('supermarket', [mom, dad], true)
     let greeted = false
     let waved = false
@@ -491,7 +496,7 @@ describe('出门', () => {
     life.startTrip('gasstation', [life.actors[2]])
     run(life, 4)
     expect(life.fuel).toBe(3)
-    expect(life.money).toBe(18000 - 450)
+    expect(life.money).toBe(18000 - 3 * 70)
     life.onShop = null
     life.clock = { day: PROLOGUE_DAYS, hour: 9 }
     const money = life.money
@@ -621,6 +626,9 @@ describe('卖东西', () => {
     life.speed = 3
     life.cores = 1
     life.stock = { food: 12, water: 2 }
+    // 家里人会自己去压水：今天先压满三次，水就不会多起来
+    life.pumpDay = life.clock.day
+    life.pumpCount = 3
     const ammo0 = life.ammo.n
     let tried = false
     life.onShop = (t) => {

@@ -53,10 +53,10 @@ export type Needs = Record<NeedKey, number>
 
 export type Activity = 'idle' | 'walk' | 'eat' | 'drink' | 'sleep' | 'relax' | 'stroll' | 'cook'
 
-/** 每个游戏小时的变化。2026-10-09 老板："食水掉太快，每天光喝水了，什么都干不了"——饿和渴都放慢到一半左右 */
+/** 每个游戏小时的变化。2026-10-09 老板："食水掉太快，每天光喝水了"、"每天只吃喝一次就好了"——一天吃一顿、喝一次 */
 export const RATES = {
-  hunger: -3.0,
-  thirst: -2.9,
+  hunger: -3.5,
+  thirst: -3.0,
   energyAwake: -4.5,
   energySleep: 13,
   /** 心情往上靠的速度（歇着、干完活有成就感） */
@@ -67,9 +67,34 @@ export const RATES = {
   moodCrash: 6,
 }
 
-/** 一顿饭、一次喝水：吃一顿顶得久了，一顿用的粮食也多一点（不然囤的东西吃不完） */
-export const MEAL = { hunger: 28, food: 0.38 }
-export const DRINK = { thirst: 45, water: 0.45 }
+/** 一顿饭（最普通的白米饭）、一次喝水：一天一顿、一次就够 */
+export const MEAL = { hunger: 75, food: 1 }
+export const DRINK = { thirst: 72, water: 0.6 }
+
+/** 做饭可以选菜：不同的菜用不同的东西、加不同的状态（一人份）。做饭的人在灶台边选，选了就是"今天的菜"，家里人做饭都做这个 */
+export interface Dish {
+  id: string
+  icon: string
+  /** 一人份用几份粮、几份水、几份草药 */
+  food: number
+  water: number
+  herbs: number
+  /** 做多久（游戏小时） */
+  hours: number
+  hunger: number
+  mood: number
+  energy: number
+  health: number
+}
+export const DISHES: Dish[] = [
+  { id: 'rice', icon: '🍚', food: 1, water: 0, herbs: 0, hours: 0.45, hunger: 75, mood: 0, energy: 0, health: 0 },
+  { id: 'noodles', icon: '🍜', food: 0.8, water: 0.15, herbs: 0, hours: 0.2, hunger: 65, mood: 2, energy: 0, health: 0 },
+  { id: 'pork', icon: '🥘', food: 1.5, water: 0, herbs: 0, hours: 0.8, hunger: 85, mood: 14, energy: 0, health: 0 },
+  { id: 'chicken', icon: '🍲', food: 1.3, water: 0.3, herbs: 0, hours: 0.9, hunger: 78, mood: 4, energy: 30, health: 5 },
+  { id: 'porridge', icon: '🌿', food: 0.9, water: 0.3, herbs: 1, hours: 0.6, hunger: 70, mood: 0, energy: 5, health: 18 },
+  { id: 'feast', icon: '🍱', food: 2.2, water: 0.3, herbs: 0, hours: 1.2, hunger: 95, mood: 22, energy: 12, health: 6 },
+]
+export const dishOf = (id: string | undefined): Dish => DISHES.find((d) => d.id === id) ?? DISHES[0]
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 
@@ -110,9 +135,9 @@ export interface Stock { food: number; water: number }
 
 export type Want = 'sleep' | 'drink' | 'eat' | 'relax' | 'stroll' | 'idle'
 
-/** 一家人习惯一起吃三顿：早 7 点、中午 12 点、晚 6 点 */
+/** 一天一顿：一家人习惯晚上 6 点一起吃晚饭 */
 export function isMealTime(hour: number): boolean {
-  return (hour >= 7 && hour < 8.5) || (hour >= 12 && hour < 13.5) || (hour >= 18 && hour < 19.5)
+  return hour >= 17.5 && hour < 19.5
 }
 
 /** 一个人空闲时下一步想干什么（像模拟人生：最急的需求优先） */
@@ -122,14 +147,13 @@ export function chooseWant(n: Needs, c: Clock, stock: Stock, roll: number): Want
   const food = stock.food >= MEAL.food
   if (n.energy < 18 || (late && n.energy < 90)) {
     // 还撑得住的话，睡前先喝口水、垫点东西，不然半夜渴醒
-    if (n.energy >= 10 && n.thirst < 60 && water) return 'drink'
-    if (n.energy >= 10 && n.hunger < 45 && food) return 'eat'
+    if (n.energy >= 10 && n.thirst < 35 && water) return 'drink'
+    if (n.energy >= 10 && n.hunger < 30 && food) return 'eat'
     return 'sleep'
   }
-  if (n.thirst < 40 && water) return 'drink'
-  if (food && (n.hunger < 40 || (isMealTime(c.hour) && n.hunger < 85))) return 'eat'
-  // 饭点刚过、又没赶上那顿的人：补吃一口，别饿着肚子干活
-  if (food && n.hunger < 65 && isMealTime(c.hour - 1)) return 'eat'
+  // 一天喝一次：渴了才喝；一天吃一顿：晚饭时间饿了就吃，实在饿得不行了才另外吃
+  if (n.thirst < 35 && water) return 'drink'
+  if (food && (n.hunger < 30 || (isMealTime(c.hour) && n.hunger < 60))) return 'eat'
   if (n.mood < 55) return roll < 0.5 ? 'relax' : 'stroll'
   if (roll < 0.25) return 'stroll'
   if (roll < 0.45) return 'relax'

@@ -7,7 +7,7 @@ import { Walker, type Where } from './walker'
 import { PoseDriver, type PoseState } from './people'
 import { person } from './meshes'
 import {
-  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
+  DAYS_PER_MONTH, DAY_SECONDS, DEPRESSED, DRINK, MEAL, PROLOGUE_DAYS, dishOf, SUNRISE, advance, chooseWant, decayNeeds, isCrisisNight, isMealTime, isNight, shouldWake,
   type Activity, type Clock, type Needs, type Stock,
 } from './life'
 import { LAYERS, SPIKE, SPIKE_ROWS, Siege, fullBarriers, type Barriers, type LayerId, type SiegeEvent, type SpikeRow, type Zombie, type ZombieKind } from './siege'
@@ -19,7 +19,7 @@ import { survivorNames, survivorTraits } from '../content/survivors'
 import { memoriesYear1 } from '../content/memories'
 import type { CrisisKind } from '../engine/types'
 import { rainAt } from './weather'
-import { Courier, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
+import { Courier, INVITES, STRANGER_MODELS, VISITORS, Visitor, isFemaleModel, type CourierId, type VisitorCtx, type VisitorDef } from './visitors'
 import { FISHING, SCAVENGE_COOLDOWN_DAYS, rollLoot, type ScavengeSpot } from './scavenge'
 import { DELIVERY_HOUR, ONLINE_SHOP, capacity, cartGives, cartLabel, cartTotal, orderTotal, sellTotal, shopFor, type Cart, type SellCart, type ShopItem } from './shop'
 import { FORAGE, FORAGE_HOURS, HERBS_PER_MEDKIT, harvest, ripe, standAt, type ForageSpot, type ForageYield } from './forage'
@@ -71,6 +71,8 @@ interface Task {
   act?: InteractKind
   /** 砌墙：正在砌第几段 */
   piece?: number
+  /** 做饭 / 吃饭：哪道菜 */
+  dish?: string
 }
 
 
@@ -79,6 +81,9 @@ const rad = THREE.MathUtils.degToRad
 
 /** 院子里削竹尖刺的地方（铁门东边的空地上） */
 const CRAFT_SPOT = { x: 8.6, z: 11.4 }
+
+/** 飘字里的数：整数就不带小数 */
+const fmt = (n: number) => (Math.abs(n - Math.round(n)) < 0.05 ? String(Math.round(n)) : n.toFixed(1))
 
 function shortestAngle(from: number, to: number): number {
   const d = to - from
@@ -104,6 +109,8 @@ export class Actor extends Walker {
   fitness = 30
   /** 重伤到什么时候（游戏绝对小时；0 = 没受重伤）：躺着养伤，不能干活、不能出门、不能守夜 */
   injured = 0
+  /** 异能者（女主）：精力掉得慢、睡一会儿就满，体能远超常人 */
+  esper = false
   /** 正和家人一起歇着/吃饭，聊着天 */
   chatting = false
   /** 头顶冒出来的一句话（迎接、喊人），hours 是还剩多久 */
@@ -374,7 +381,7 @@ export class Household {
   seen: Record<string, number> = {}
   helpedNeighbor = false
   /** 男主好感（江野是青梅竹马，一开始就有 40） */
-  affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0 }
+  affection: Record<string, number> = { jiangye: 40, guchen: 0, shenyan: 0, xielin: 0, neighbor: 20 }
   /** 谢临塞进来的第几张纸条 */
   xielinNotes = 0
   /** 院子砌了石头院墙：铁门更结实，隔着栏杆被抓伤的事也没了 */
@@ -503,7 +510,15 @@ export class Household {
     for (const a of this.actors) {
       if (a.dead) continue
       // 出门在外（去公司、去店里、借给顾沉……画面上看不见的时候）：吃的喝的不掉，回来还是走的时候那样
-      if (!(a.away && (this.onTrip(a) || this.lent?.name === a.name))) a.needs = decayNeeds(a.needs, hours, this.activity(a), this.isInjured(a))
+      if (!(a.away && (this.onTrip(a) || this.lent?.name === a.name))) {
+        const e0 = a.needs.energy
+        a.needs = decayNeeds(a.needs, hours, this.activity(a), this.isInjured(a))
+        // 异能者：醒着精力只掉四成，睡觉恢复快一倍半
+        if (a.esper) {
+          const d = a.needs.energy - e0
+          a.needs = { ...a.needs, energy: Math.max(0, Math.min(100, e0 + (d < 0 ? d * 0.4 : d * 1.6))) }
+        }
+      }
       // 伤慢慢好：睡觉时好得快；伤得重又有急救包就用掉一个
       a.health = Math.min(100, a.health + hours * (a.task?.kind === 'sleep' ? 2.5 : 0.6) * (nurse ? 2 : 1))
       if (!fighting && !a.away && a.health < 45 && this.medkits > 0) {
@@ -538,6 +553,13 @@ export class Household {
 
   private visitorTick(): void {
     const v = this.visitor
+    // 请来做客的人到点了：上门（打丧尸时、门口有别人时等一等）
+    const inv = this.invited
+    if (!v && inv && this.absHour >= inv.at && this.spawnVisitor && !(this.siege && !this.siege.done)) {
+      const def = INVITES.find((d) => d.id === `invite_${inv.id}`)
+      this.invited = null
+      if (def) { this.startVisit(def); return }
+    }
     if (!v) {
       // 每个游戏小时掷一次：一天最多来一个
       const hour = Math.floor(this.absHour)
@@ -705,6 +727,8 @@ export class Household {
   phoneReminded = -1
   /** 要在界面上弹一句提醒（World 接成小字条） */
   onRemind: ((key: UiKey) => void) | null = null
+  /** 有进账：在这个人（或者这个地方）头顶飘一行字，比如"💧+0.6" */
+  onGain: ((text: string, who: Actor | null, at?: Pt) => void) | null = null
 
   /** 末日后没信号；末日前一天快递停运（第二天就是末日，送不到了） */
   orderState(): 'ok' | 'closed' | 'nosignal' {
@@ -746,7 +770,7 @@ export class Household {
   }
 
   /** 手机通讯录：江野、王阿姨一开始就有；别的男主见过才有；出门在外、离家出走的家人 */
-  contacts(): { id: string; name: string; icon: string; status: string; can: 'ok' | 'done' | 'nosignal' | 'home' }[] {
+  contacts(): { id: string; name: string; icon: string; status: string; can: 'ok' | 'done' | 'nosignal' | 'home'; aff?: number }[] {
     const signal = this.clock.day < PROLOGUE_DAYS
     const can = (id: string) => (!signal ? 'nosignal' : this.calls[id] === this.clock.day ? 'done' : 'ok') as 'ok' | 'done' | 'nosignal'
     const out: ReturnType<Household['contacts']> = []
@@ -761,7 +785,7 @@ export class Household {
     const lead = (id: string, name: string, icon: string, known: boolean) => {
       if (!known) return
       const home = this.actors.some((a) => a.model === id && !a.dead && !a.lost)
-      out.push({ id, name, icon, status: t_(home ? 'world.phone.st.home' : `world.phone.st.${id}` as UiKey), can: home ? 'home' : can(id) })
+      out.push({ id, name, icon, status: t_(home ? 'world.phone.st.home' : `world.phone.st.${id}` as UiKey), can: home ? 'home' : can(id), aff: Math.round(this.affection[id] ?? 0) })
     }
     lead('jiangye', '江野', '🔥', true)
     lead('neighbor', '王阿姨', '👵', true)
@@ -796,8 +820,30 @@ export class Household {
       return { r: 'ok', line: t_(`world.phone.line.trip${n}` as UiKey) }
     }
     cheer(6)
-    if (id in this.affection) this.affection[id] = Math.min(100, this.affection[id] + 4)
+    // 打电话聊聊天：感情涨一点
+    this.affection[id] = Math.min(100, (this.affection[id] ?? 0) + 4)
     return { r: 'ok', line: t_(`world.phone.line.${id}${n}` as UiKey) }
+  }
+
+  /** 今天请过人了（一天只能请一个） */
+  inviteDay = -1
+  /** 请了谁、什么时候到（游戏绝对小时） */
+  invited: { id: string; at: number } | null = null
+
+  /** 手机上请人来家里做客：一两个小时后到（太晚了就明天上午来）；末日后没信号 */
+  invite(id: string): 'ok' | 'done' | 'nosignal' | 'home' | 'none' {
+    const c = this.contacts().find((x) => x.id === id)
+    if (!c || id.startsWith('fam:')) return 'none'
+    if (c.can === 'nosignal') return 'nosignal'
+    if (c.can === 'home') return 'home'
+    if (this.inviteDay === this.clock.day || this.invited) return 'done'
+    this.inviteDay = this.clock.day
+    const h = this.clock.hour
+    // 白天 9 点到下午 4 点半才上门
+    const at = h < 8 ? this.clock.day * 24 + 9.5 : h < 15 ? this.absHour + 1 + this.rand() : (this.clock.day + 1) * 24 + 9.5
+    this.invited = { id, at }
+    this.note('world.invite.log', { who: c.name })
+    return 'ok'
   }
 
   /** 最多住 5 个人 */
@@ -1114,10 +1160,55 @@ export class Household {
       v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
       return
     }
+    if (def.id.startsWith('invite_')) this.answerInvite(def.id.slice(7), choice)
     this.note(`world.visit.${def.id}.log.${choice}`, this.visitVars())
     this.talking = null
     v.phase = 'leave'
     v.setPath(route(this.navs, v.pos, { ...v.home, floor: 0 }) ?? [])
+  }
+
+  /** 请来做客的人：一起做一件小事（各有各的收获），或者坐着聊聊天（感情涨得多、全家心情好） */
+  private answerInvite(id: string, choice: string): void {
+    const love = (n: number) => { this.affection[id] = Math.min(100, (this.affection[id] ?? 0) + n) }
+    const gate = { x: 4, z: 13.2 }
+    if (choice === 'chat') {
+      love(8)
+      for (const a of this.actors) if (!this.isOut(a) && !a.dead) a.needs = { ...a.needs, mood: Math.min(100, a.needs.mood + 6) }
+      this.onGain?.('❤+8', null, gate)
+      return
+    }
+    love(5)
+    if (id === 'jiangye') {
+      // 帮忙把铁门再加固一遍
+      this.gateBonus = Math.min(120, this.gateBonus + 30)
+      this.barriers.gate = Math.min(this.maxOf('gate'), this.barriers.gate + 30)
+      this.onGain?.('🔩 铁门+30', null, gate)
+    } else if (id === 'shenyan') {
+      // 给全家检查身体：伤好一点，重伤的少躺一天，还留下几味草药
+      for (const a of this.actors) {
+        if (this.isOut(a) || a.dead) continue
+        a.health = Math.min(100, a.health + 25)
+        if (this.isInjured(a)) a.injured = Math.max(this.absHour + 1, a.injured - 24)
+      }
+      this.herbs += 2
+      this.onGain?.('✚+25 🌿+2', null, gate)
+    } else if (id === 'guchen') {
+      // 带来一盒子弹，顺便教大家几招格斗
+      this.ammo.n += 8
+      for (const a of this.actors) if (!this.isOut(a) && !a.dead) a.fitness = Math.min(100, a.fitness + 2)
+      this.onGain?.('🔫+8 💪+2', null, gate)
+    } else if (id === 'xielin') {
+      // 说一句"未来"的话：下一个危机夜是什么；再给一颗晶核
+      this.cores += 1
+      const next = PROLOGUE_DAYS + DAYS_PER_MONTH - 1 + Math.max(0, Math.floor((this.clock.day - PROLOGUE_DAYS) / DAYS_PER_MONTH)) * DAYS_PER_MONTH
+      const kind = Household.crisisKind({ day: next, hour: 21 })
+      this.note('world.invite.xielinHint', { day: next + 1, what: t_(`crisisKind.${kind ?? 'horde'}` as UiKey) })
+      this.onGain?.('💎+1', null, gate)
+    } else if (id === 'neighbor') {
+      // 送来一大盘饺子
+      this.stock = { ...this.stock, food: this.stock.food + 1.5 }
+      this.onGain?.('🥟+1.5', null, gate)
+    }
   }
 
   // --- 空间异能 ---------------------------------------------------------------
@@ -1972,8 +2063,8 @@ export class Household {
     else if (e.kind === 'down') this.note('world.log.down', { who: e.who })
     else if (e.kind === 'kill') {
       // 丧尸掉晶核；黑鸦的人身上能搜出子弹
-      if (e.raider) this.ammo.n += 2
-      else this.cores += e.brute ? 3 : 1
+      if (e.raider) { this.ammo.n += 2; this.onGain?.('🔫+2', null, e.at) }
+      else { this.cores += e.brute ? 3 : 1; this.onGain?.(`💎+${e.brute ? 3 : 1}`, null, e.at) }
       this.kills++
       if (this.before && e.by === 'trap') this.before.trapKills++
       if (this.before && e.by === 'fire') this.before.fireKills++
@@ -2040,7 +2131,7 @@ export class Household {
   /** 去压水井压一桶水（自己找事时只在家里水不多时去；点了压水井就一定去） */
   private pumpTask(manual: boolean): Task | null {
     if (this.pumpsLeft() <= 0 || this.taken.has(WELL_SPOT)) return null
-    if (!manual && this.available.water >= 12) return null
+    if (!manual && this.available.water >= 30) return null
     return { kind: 'pump', spot: WELL_SPOT, phase: 'go', hours: 0.35, manual }
   }
 
@@ -2121,6 +2212,7 @@ export class Household {
     if (joy === 0 && this.rand() < 0.5) {
       this.eggs += 1
       this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD }
+      this.onGain?.('🥚+1', a)
       this.note('world.log.henEgg', { who: a.name })
     }
   }
@@ -2327,6 +2419,7 @@ export class Household {
     if (g.growth >= 1) {
       g.growth = 0
       this.stock = { ...this.stock, food: this.stock.food + 3 }
+      this.onGain?.('🥬+3', null, { x: (GARDEN.x0 + GARDEN.x1) / 2, z: (GARDEN.z0 + GARDEN.z1) / 2 })
       this.note('world.log.harvest')
     } else if (g.watered !== this.clock.day) {
       this.take('water', 0.3)
@@ -2405,9 +2498,10 @@ export class Household {
     // 手上有没干完的工程（之前派给 TA 的）：白天有空就回去接着干
     if (!task && !night && this.projectOf(a.name) && this.canKeepBuilding(a) && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.buildTask(a)
     // 白天有空的人去照料菜地：没浇水就浇水，熟了就收
-    if (!task && !night && a !== this.actors[0] && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
+    if (!task && !night && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.gardenTask()
     // 白天有空：喂鸡捡蛋、去压水井压水（家里水不多的时候）
-    if (!task && !night && a !== this.actors[0] && !a.guest && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.feedTask() ?? this.pumpTask(false)
+    // 家里有空的人（女主也算）会自己去干：喂鸡捡蛋、压水、种地
+    if (!task && !night && !a.guest && (want === 'idle' || want === 'stroll' || want === 'relax')) task = this.feedTask() ?? this.pumpTask(false)
     // 闲着的时候找点事：凑到家人身边说说话，或者收拾收拾屋子（不再一个人原地发呆）
     // （晚上 9 点以后、累了就不折腾了，该准备睡觉）
     const late = this.clock.hour >= 21 || this.clock.hour < 6 || a.needs.energy < 35
@@ -2667,16 +2761,45 @@ export class Household {
   }
 
   /** 做饭再吃：先去灶台，做好了找把椅子坐下吃 */
-  private eatTask(a: Actor, manual = false, at?: Spot): Task | null {
-    if (this.available.food < MEAL.food) return null
+  /** 今天的菜（灶台边选的）；家里人自己做饭都做这个，东西不够就退回白米饭 */
+  menu = 'rice'
+
+  /** 这道菜家里的东西够不够做一份 */
+  canCook(id: string): boolean {
+    const d = dishOf(id)
+    return this.available.food >= d.food && this.available.water >= d.water && this.herbs >= d.herbs
+  }
+
+  private eatTask(a: Actor, manual = false, at?: Spot, dishId?: string): Task | null {
+    const want = dishId ?? this.menu
+    const dish = this.canCook(want) ? dishOf(want) : this.canCook('rice') ? dishOf('rice') : null
+    if (!dish) return null
     const stove = at ?? this.nearest(a, this.freeSpots('cook'))
     if (!stove) return null
-    const cook = this.spotTask(a, stove, 'cook', 0.45, manual)
+    const cook = this.spotTask(a, stove, 'cook', dish.hours, manual)
     if (!cook) return null
+    cook.dish = dish.id
     // 椅子都有人坐就站在灶台边吃
-    cook.then = () => this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'eat', 0.5, manual)
-      ?? { kind: 'eat', spot: null, phase: 'use', hours: 0.5, manual }
+    cook.then = () => {
+      const eat = this.spotTask(a, this.nearest(a, this.freeSpots('dine')), 'eat', 0.5, manual) ?? { kind: 'eat' as const, spot: null, phase: 'use' as const, hours: 0.5, manual }
+      eat.dish = dish.id
+      return eat
+    }
     return cook
+  }
+
+  /** 灶台菜单里选了一道菜：选中的人去做（做完自己吃），以后家里人做饭也做这个 */
+  cookDish(a: Actor, spot: Spot, id: string): 'ok' | 'short' | 'busy' {
+    if (!this.canCook(id)) return 'short'
+    if (this.isOut(a)) return 'busy'
+    const who = this.taken.get(spot)
+    if (who && who !== a) return 'busy'
+    this.menu = id
+    this.cancel(a)
+    const task = this.eatTask(a, true, spot, id)
+    if (!task) return 'busy'
+    this.assign(a, task)
+    return 'ok'
   }
 
   private assign(a: Actor, task: Task): void {
@@ -2743,7 +2866,12 @@ export class Household {
       if (t.kind === 'drink') a.pose = 'drink'
       if (t.kind === 'pet' || t.kind === 'hens') a.pose = 'pet'
       if (t.kind === 'run') a.pose = 'walk'
-      if (t.kind === 'cook') this.take('food', MEAL.food)
+      if (t.kind === 'cook') {
+        const d = dishOf(t.dish)
+        this.take('food', d.food)
+        if (d.water) this.take('water', d.water)
+        if (d.herbs) this.herbs = Math.max(0, this.herbs - d.herbs)
+      }
       if (t.kind === 'drink') this.take('water', DRINK.water)
       return
     }
@@ -2784,7 +2912,7 @@ export class Household {
     if (t.kind === 'greet' && !this.trips.some((x) => x.phase === 'back') && this.vanMove?.dir !== 'in') return true
     if (!t.manual && (t.kind === 'relax' || t.kind === 'stroll' || t.kind === 'idle' || t.kind === 'company' || t.kind === 'tidy' || t.kind === 'wash' || t.kind === 'greet' || t.kind === 'pet')) {
       // 饭点到了、有点饿了：放下手里的事去吃饭（一家人一起吃）
-      if (isMealTime(this.clock.hour) && n.hunger < 75 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
+      if (isMealTime(this.clock.hour) && n.hunger < 60 && this.available.food >= MEAL.food && t.kind !== 'greet' && this.freeSpots('cook').length > 0) return true
       return n.energy < 18 || (n.thirst < 30 && this.available.water >= DRINK.water) || (n.hunger < 30 && this.available.food >= MEAL.food)
     }
     return false
@@ -2811,13 +2939,22 @@ export class Household {
       this.say(a, 'morning')
       this.saidMorning = this.clock.day
     }
-    if (t.kind === 'eat') a.needs = { ...a.needs, hunger: Math.min(100, a.needs.hunger + MEAL.hunger), mood: Math.min(100, a.needs.mood + 3) }
+    // 吃饭：按吃的哪道菜加饱腹、心情、精力、健康
+    if (t.kind === 'eat') {
+      const d = dishOf(t.dish)
+      const c = (v: number) => Math.max(0, Math.min(100, v))
+      a.needs = { ...a.needs, hunger: c(a.needs.hunger + d.hunger), mood: c(a.needs.mood + 3 + d.mood), energy: c(a.needs.energy + d.energy) }
+      if (d.health) a.health = Math.min(100, a.health + d.health)
+      const fx = [d.mood ? `♥+${d.mood}` : '', d.energy ? `☾+${d.energy}` : '', d.health ? `✚+${d.health}` : ''].filter(Boolean).join(' ')
+      if (fx) this.onGain?.(`${d.icon} ${fx}`, a)
+    }
     if (t.kind === 'drink') a.needs = { ...a.needs, thirst: Math.min(100, a.needs.thirst + DRINK.thirst) }
     if (t.kind === 'garden') this.finishGarden()
     if (t.kind === 'forage' && t.hours <= 0 && t.forage) this.pickForage(a, t.forage)
     if (t.kind === 'pump' && t.hours <= 0) {
       this.stock = { ...this.stock, water: this.stock.water + Household.PUMP_WATER }
       this.pumpCount += 1
+      this.onGain?.(`💧+${fmt(Household.PUMP_WATER)}`, a)
     }
     // 干完一件正经活有成就感：心情涨一点（做饭、种地、修门、削尖刺、压水、喂鸡、晾收衣服、改车、收拾屋子）
     const pride = Household.PRIDE[t.kind]
@@ -2835,6 +2972,7 @@ export class Household {
       const bonus = this.henJoy.day === this.clock.day ? Math.min(2, this.henJoy.n) : 0
       this.eggs += 1 + bonus
       this.stock = { ...this.stock, food: this.stock.food + Household.EGGS_FOOD * (1 + bonus) }
+      this.onGain?.(`🥚+${1 + bonus}`, a)
       if (!this.log.some((l) => l.key === 'world.log.eggs') || this.rand() < 0.25) this.note('world.log.eggs', { who: a.name })
     }
     if (t.kind === 'craft') {
@@ -2915,6 +3053,8 @@ export class Household {
     if (y.sting) a.health = Math.max(1, a.health - y.sting)
     this.herbs += y.herbs
     this.bamboo += y.bamboo
+    const got = [y.food ? `🍚+${fmt(y.food)}` : '', y.herbs ? `🌿+${y.herbs}` : '', y.bamboo ? `🎋+${y.bamboo}` : ''].filter(Boolean).join(' ')
+    if (got) this.onGain?.(got, a)
     let medkit = false
     if (this.herbs >= HERBS_PER_MEDKIT) {
       this.herbs -= HERBS_PER_MEDKIT
