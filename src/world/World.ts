@@ -135,7 +135,7 @@ export interface Hud {
   /** 阳台机枪架好了没有 */
   mg: boolean
   /** 地雷：埋过没有、还剩几颗 */
-  mines: { laid: boolean; left: number }
+  mines: { laid: boolean; left: number; cost: [number, number] }
   light: boolean
   /** 气温：外面、屋里，空调开着没有、火炉在取暖没有 */
   temp: { out: number; in: number; ac: boolean; stove: boolean }
@@ -294,7 +294,7 @@ function darkCoat(model: THREE.Object3D): void {
 }
 const TMP_TIP = new THREE.Vector3()
 
-type ToastKey = 'world.toast.mine' | `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
+type ToastKey = 'world.toast.mine' | 'world.space.grainOnly' | `world.plot.${string}` | `world.tv.${string}` | `world.cook.${string}` | `world.eat.${string}` | `world.forage.${string}` | `world.mg.${string}` | `world.dish.${string}` | `world.bandage.${string}` | `world.fire.${string}` | `world.toast.newKind.${string}` | `world.coop.${string}` | 'world.toast.goPet' | 'world.toast.tripCancel' | `world.act.r.${string}` | `world.build.${string}` | `world.phone.${string}` | 'world.courier.express' | 'world.toast.pickCard' | `world.chore.${string}` | `world.search.${string}` | `world.spikes.${string}` | 'world.toast.taken' | 'world.toast.cat' | 'world.toast.parked' | 'world.toast.nightExit' | 'world.toast.noExit' | 'world.toast.drive' | 'world.toast.driveHint' | 'world.toast.stopFirst' | 'world.toast.noDrive' | 'world.toast.moveIn' | 'world.toast.duskRaid' | 'world.toast.siegeTip' | 'world.toast.downTip' | 'world.toast.lowWater' | 'world.toast.lowFood' | 'world.toast.crisisDay' | 'world.toast.dusk' | 'world.toast.duskLowAmmo' | 'world.toast.brute' | 'world.toast.dying' | 'world.toast.died' | 'world.toast.trap' | 'world.courier.guchen' | 'world.courier.shenyan' | 'world.courier.xielin' | 'world.toast.busy' | 'world.toast.fighting' | 'world.toast.noMedkit' | 'world.toast.wall' | 'world.toast.garden' | 'world.toast.guest' | 'world.toast.fish' | 'world.toast.siege' | 'world.toast.crisis' | 'world.toast.won'
   | 'world.toast.lost' | 'world.log.broken.gate' | 'world.log.broken.door' | 'world.log.broken.stairs'
 
 const HEAT_TINT = new THREE.Color('#f3c98a')
@@ -306,7 +306,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export const EMPTY_HUD: Hud = {
   portraits: {},
   loading: true, mode: 'home', floor: 0, selected: '林知夏', time: '', night: false, rain: 0, crisis: false, crisisKind: null, speed: 1,
-  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0 }, light: false, temp: { out: 20, in: 20, ac: false, stove: false },
+  food: 0, water: 0, people: [], toast: '', toastVars: null, ammo: 0, cores: 0, siege: null, log: [], muted: false, music: true, day: 0, hour: 0, money: 0, medkits: 0, fuel: 0, prologue: true, report: null, visit: null, intro: false, space: { food: 0, water: 0, cap: 6 }, molotovs: 0, search: null, garden: { built: false, growth: 0, n: 0, max: 4, plots: [] }, build: [], goals: null, wall: false, hard: false, doom: false, life: 1, over: null, trap: 0, herbs: 0, daysLeft: 0, bamboo: 0, spikes: [0, 0], spikeNext: 0, fishing: { active: false, near: false, caught: 0 }, sleepSkip: false, mg: false, mines: { laid: false, left: 0, cost: [3000, 3] }, light: false, temp: { out: 20, in: 20, ac: false, stove: false },
 }
 
 export class World {
@@ -3534,7 +3534,7 @@ export class World {
     if (this.life.siege && !this.life.siege.done) { this.toast('world.toast.fighting'); return }
     const m = kind === 'heat' ? 6 : kind === 'cold' ? 10 : 11
     let day = PROLOGUE_DAYS + m * 4
-    while (day < this.life.clock.day) day += 48
+    while (day < this.life.clock.day || (day === this.life.clock.day && this.life.clock.hour >= 9)) day += 48
     this.life.clock = { day, hour: 9 }
     this.life.resetNight()
     this.applySky()
@@ -3724,7 +3724,7 @@ export class World {
     if (this.life.moveToSpace(kind, n)) {
       this.siegeView.sparkle(this.heroine.root.position)
       this.sound.squelch()
-    }
+    } else if (kind === 'food' && n > 0 && this.life.ingHave('grain') - this.life.space.food < 1) this.toast('world.space.grainOnly', 3)
     this.pushLifeHud()
   }
 
@@ -3832,7 +3832,7 @@ export class World {
       search: this.searchHud(),
       garden: { built: this.life.garden.built, growth: this.life.garden.growth, n: this.life.plots.filter((p) => p.built).length, max: MAX_PLOTS, plots: this.life.plots.filter((p) => p.built).map((p) => ({ icon: cropOf(p.crop)?.icon ?? '🟫', name: cropOf(p.crop)?.name ?? '空地', p: Math.round(p.growth * 100), ripe: !!p.crop && p.growth >= 1 })) },
       mg: this.life.mg,
-      mines: { laid: this.life.mines.length > 0, left: this.life.mines.filter((m) => m.armed).length },
+      mines: { laid: this.life.mines.length > 0, left: this.life.mines.filter((m) => m.armed).length, cost: this.life.buildCost('mines') },
       light: this.life.light,
       temp: { out: this.life.outTemp, in: this.life.inTemp, ac: this.life.acOn, stove: this.life.stoveHeat },
       build: this.life.projects.map((p) => ({

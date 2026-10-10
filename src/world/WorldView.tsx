@@ -448,8 +448,8 @@ export default function WorldView() {
                 )}
                 {hud.mg && <div className={BUILD_DONE}>{t('world.mg.done')}</div>}
                 {!hud.build.some((b) => b.id === 'mines') && (!hud.mines.laid || hud.mines.left < 4) && (
-                  <button onClick={() => world.current?.buildMines()} disabled={hud.prologue ? hud.money < 3000 : hud.cores < 3} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
-                    {hud.mines.laid ? t('world.mines.rebuild', { n: hud.mines.left }) : t(hud.prologue ? 'world.mines.build' : 'world.mines.buildCores')}
+                  <button onClick={() => world.current?.buildMines()} disabled={hud.prologue ? hud.money < hud.mines.cost[0] : hud.cores < hud.mines.cost[1]} className={BUILD} title={t('world.build.hours', { h: 1.5 })}>
+                    {hud.mines.laid ? t('world.mines.rebuild', { n: hud.mines.left, price: hud.prologue ? `${hud.mines.cost[0]} 元` : `${hud.mines.cost[1]} 颗晶核` }) : t(hud.prologue ? 'world.mines.build' : 'world.mines.buildCores')}
                   </button>
                 )}
                 {hud.mines.laid && hud.mines.left === 4 && <div className={BUILD_DONE}>{t('world.mines.left', { n: hud.mines.left })}</div>}

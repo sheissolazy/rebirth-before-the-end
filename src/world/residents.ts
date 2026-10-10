@@ -2592,6 +2592,16 @@ export class Household {
     return !this.isOut(a) && !a.dead && !this.isInjured(a) && a.pose !== 'down' && !(a.task?.kind === 'sleep' && a.task.phase === 'use')
   }
 
+  /** 这项工程要多少钱 / 晶核：补埋地雷按炸掉了几颗算 */
+  buildCost(id: BuildId): [number, number] {
+    const [money, cores] = BUILD_COST[id]
+    if (id === 'mines' && this.mines.length) {
+      const gone = this.mines.filter((m) => !m.armed).length
+      return [Math.round((money * gone) / 4), Math.max(1, Math.ceil((cores * gone) / 4))]
+    }
+    return [money, cores]
+  }
+
   /** 点"建设"里的按钮：付钱，派人（选中的人能干就是 TA，不然找家里会修东西的大人）走过去干 */
   startBuild(id: BuildId, who: Actor): 'ok' | 'money' | 'cores' | 'busy' | 'done' | 'fight' | 'van' | 'nobody' {
     if (this.siege && !this.siege.done) return 'fight'
@@ -2604,7 +2614,7 @@ export class Household {
     const worker = this.freeForBuild(who) ? who
       : this.actors.find((a) => a.handy && this.freeForBuild(a)) ?? this.actors.find((a) => this.freeForBuild(a))
     if (!worker) return 'nobody'
-    const [money, cores] = BUILD_COST[id]
+    const [money, cores] = this.buildCost(id)
     if (this.clock.day < PROLOGUE_DAYS) {
       if (this.money < money) return 'money'
       this.money -= money
@@ -2832,6 +2842,8 @@ export class Household {
     if (!p?.built) return
     if (t.crop) {
       if ((this.seeds[t.crop] ?? 0) <= 0) return
+      // 家里人自己去种的：地里已经有菜了（别人先种上了）就不动；玩家点的"改种"才换掉
+      if (p.crop && !t.manual) return
       // 改种：原来那茬熟了就先收了再种；没熟就拔掉
       if (p.crop && p.growth >= 1) this.harvestPlot(i)
       this.seeds[t.crop] = (this.seeds[t.crop] ?? 0) - 1
@@ -2888,6 +2900,8 @@ export class Household {
       if (!p.crop || p.growth >= 1) return 'none'
       if (this.available.water < 0.3) return 'water'
     }
+    // 别人正在去这块地（家里人自己去种、浇水）：叫回来，听玩家的
+    for (const o of this.actors) if (o !== a && o.task?.kind === 'garden' && o.task.plot === i) this.cancel(o)
     this.cancel(a)
     this.assign(a, { kind: 'garden', spot: plotSpot(i), phase: 'go', hours: act === 'harvest' ? 0.6 : act === 'plant' ? 0.5 : 0.4, manual: true, plot: i, crop: act === 'plant' ? crop : undefined })
     return 'ok'
@@ -3012,8 +3026,11 @@ export class Household {
       if (nap) return nap
     }
     // 夜里十点以后没别的事：上床睡觉（精神好的人——比如异能者——也别在屋里干站着到半夜）
+    // 夜里十点以后：天冷、火炉烧着、有空板凳就去烤会儿火；不然上床睡觉（别在沙发上坐到半夜）
     const bedtime = h >= 22 || h < 5
-    if (bedtime && !this.freeSpots('relax', (x) => x.near === 'fire').length) {
+    if (bedtime) {
+      const stool = this.stoveHeat ? this.pick(this.freeSpots('relax', (x) => x.near === 'fire')) : undefined
+      if (stool) return this.spotTask(a, stool, 'relax', 0.6)
       const bed = this.sleepTask(a, false)
       if (bed) return bed
     }
@@ -3412,7 +3429,7 @@ export class Household {
   }
 
   /** 存档用的吃的：正在做的那锅已经付了的食材算回去、拿在手里没吃的那份放回冰柜（读档后人不在灶台、饭桌边了） */
-  foodForSave(): { stock: Stock; larder: Record<Ing, number>; herbs: number; fridge: { dish: string; left: number }[] } {
+  foodForSave(): { stock: Stock; larder: Record<Ing, number>; herbs: number; fridge: { dish: string; left: number }[]; warned: boolean } {
     this.syncLarder()
     const stock = { ...this.stock }
     const larder = { ...this.larder }
@@ -3437,7 +3454,7 @@ export class Household {
         else fridge.push({ dish: t.dish, left: 1 })
       }
     }
-    return { stock, larder, herbs, fridge }
+    return { stock, larder, herbs, fridge, warned: this.fridgeWarned && fridge.length === this.fridge.length && fridge.every((p, k) => p.left === this.fridge[k].left) }
   }
 
   /** 从冰柜拿一份（先拿早做的那锅）；拿完了提醒一句 */

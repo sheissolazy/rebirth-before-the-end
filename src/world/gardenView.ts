@@ -275,7 +275,7 @@ export class GardenView {
       const pk = p.crop ? `${p.crop}|${step}` : ''
       if (pk !== b.plantKey) {
         b.plantKey = pk
-        for (const c of b.plants.children) (c as THREE.Mesh).geometry?.dispose()
+        b.plants.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose() })
         b.plants.clear()
         if (p.crop) {
           const r = PLOT_SLOTS[i]

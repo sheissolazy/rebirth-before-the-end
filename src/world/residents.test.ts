@@ -2952,3 +2952,54 @@ describe('探照灯', () => {
     expect(back.light).toBe(true)
   })
 })
+
+describe('第三轮审查（10-10 凌晨）', () => {
+  const run = (life: Household, hours: number, auto: (a: Actor) => boolean = () => false, until?: () => boolean) => {
+    const dt = 0.1
+    const steps = (hours * DAY_SECONDS) / 24 / (dt * life.speed)
+    for (let i = 0; i < steps && !life.over && !until?.(); i++) {
+      life.tick(dt, auto)
+      for (const a of life.actors) { a.follow(dt * life.speed, 2.2); a.updateSettle(dt * life.speed) }
+    }
+  }
+
+  it('玩家点了改种：去同一块地的家里人被叫回来，不会先种上又被拔掉、白费一包种子', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    life.money = 5000
+    life.speed = 3
+    life.buildGarden()
+    life.seeds = { bokchoy: 1, tomato: 1 }
+    const [, mom, dad] = life.actors
+    for (const a of life.actors) a.needs = { hunger: 95, thirst: 95, energy: 95, mood: 95 }
+    // 妈妈自己去种小白菜
+    run(life, 2, (a) => a === mom, () => mom.task?.kind === 'garden')
+    expect(mom.task?.crop).toBe('bokchoy')
+    // 玩家让爸爸去种番茄：妈妈被叫回来
+    expect(life.commandPlot(dad, 0, 'plant', 'tomato')).toBe('ok')
+    expect(mom.task?.kind).not.toBe('garden')
+    run(life, 2, () => false, () => life.plots[0].crop === 'tomato')
+    expect(life.plots[0].crop).toBe('tomato')
+    expect(life.seeds).toEqual({ bokchoy: 1, tomato: 0 })
+  })
+
+  it('夜里十点半精神还好、天不冷：闲着的人上床睡觉，不在沙发上坐到半夜', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 1, hour: 22.3 }
+    life.speed = 3
+    for (const a of life.actors) { a.esper = true; a.needs = { hunger: 95, thirst: 95, energy: 100, mood: 90 }; life.cancel(a) }
+    run(life, 1, (a) => life.isHomeBody(a))
+    expect(life.actors.filter((a) => a.task?.kind === 'sleep').length).toBe(3)
+  })
+
+  it('补埋地雷：炸了几颗付几颗的钱', () => {
+    const { life } = simulate('paradise', 0)
+    life.clock = { day: 0, hour: 9 }
+    expect(life.buildCost('mines')).toEqual([3000, 3])
+    life.mines = [{ x: 4.1, z: 12.5, armed: false }, { x: 4.9, z: 10.5, armed: true }, { x: 6.4, z: 10.3, armed: true }, { x: 5.8, z: 8, armed: true }]
+    expect(life.buildCost('mines')).toEqual([750, 1])
+    life.money = 1000
+    expect(life.startBuild('mines', life.actors[2])).toBe('ok')
+    expect(life.money).toBe(250)
+  })
+})

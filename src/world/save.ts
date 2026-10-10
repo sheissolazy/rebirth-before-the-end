@@ -176,7 +176,7 @@ export function snapshot(life: Household): WorldSave {
     lotteryClaimed: life.lotteryClaimed,
     larder: food.larder,
     fridge: food.fridge,
-    fridgeWarned: life.fridgeWarned,
+    fridgeWarned: food.warned,
     invited: life.invited,
     projects: life.projects.map((p) => ({ ...p })),
     gateBonus: life.gateBonus,
